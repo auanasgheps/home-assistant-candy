@@ -2,7 +2,7 @@ from abc import abstractmethod
 from collections.abc import Mapping
 from typing import Any, cast
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
@@ -39,7 +39,15 @@ from .const import (
     UNIQUE_ID_TUMBLE_DRYER,
     UNIQUE_ID_TUMBLE_REMAINING_TIME,
     UNIQUE_ID_WASH_CYCLE_STATUS,
+    UNIQUE_ID_WASH_DELAY,
+    UNIQUE_ID_WASH_ERROR,
+    UNIQUE_ID_WASH_FILL_PERCENT,
+    UNIQUE_ID_WASH_MOTOR_FREQ,
+    UNIQUE_ID_WASH_NTC_DRUM,
+    UNIQUE_ID_WASH_NTC_WATER,
     UNIQUE_ID_WASH_REMAINING_TIME,
+    UNIQUE_ID_WASH_SPIN_SPEED,
+    UNIQUE_ID_WASH_TEMPERATURE,
     UNIQUE_ID_WASHING_MACHINE,
 )
 
@@ -53,13 +61,26 @@ async def async_setup_entry(
     coordinator = hass.data[DOMAIN][config_id][DATA_KEY_COORDINATOR]
 
     if isinstance(coordinator.data, WashingMachineStatus):
-        async_add_entities(
-            [
-                CandyWashingMachineSensor(coordinator, config_id),
-                CandyWashCycleStatusSensor(coordinator, config_id),
-                CandyWashRemainingTimeSensor(coordinator, config_id),
-            ]
-        )
+        status = coordinator.data
+        entities: list[CandyBaseSensor] = [
+            CandyWashingMachineSensor(coordinator, config_id),
+            CandyWashCycleStatusSensor(coordinator, config_id),
+            CandyWashRemainingTimeSensor(coordinator, config_id),
+            CandyWashTemperatureSensor(coordinator, config_id),
+            CandyWashSpinSpeedSensor(coordinator, config_id),
+            CandyWashErrorSensor(coordinator, config_id),
+        ]
+        if status.fill_percent is not None:
+            entities.append(CandyWashFillPercentSensor(coordinator, config_id))
+        if status.delay_value is not None:
+            entities.append(CandyWashDelaySensor(coordinator, config_id))
+        if status.ntc_water is not None:
+            entities.append(CandyWashNtcWaterSensor(coordinator, config_id))
+        if status.ntc_drum is not None:
+            entities.append(CandyWashNtcDrumSensor(coordinator, config_id))
+        if status.motor_speed_freq is not None:
+            entities.append(CandyWashMotorFreqSensor(coordinator, config_id))
+        async_add_entities(entities)
     elif isinstance(coordinator.data, TumbleDryerStatus):
         async_add_entities(
             [
@@ -210,6 +231,238 @@ class CandyWashRemainingTimeSensor(CandyBaseSensor):
     @property
     def icon(self) -> str:
         return "mdi:progress-clock"
+
+
+class CandyWashTemperatureSensor(CandyBaseSensor):
+    """Set temperature selected on the washing machine."""
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_WASHING_MACHINE
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def name(self) -> str:
+        return "Wash temperature"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_TEMPERATURE.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        return cast(WashingMachineStatus, self.coordinator.data).temp
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        return UnitOfTemperature.CELSIUS
+
+    @property
+    def device_class(self) -> str:
+        return SensorDeviceClass.TEMPERATURE
+
+    @property
+    def icon(self) -> str:
+        return "mdi:thermometer"
+
+
+class CandyWashSpinSpeedSensor(CandyBaseSensor):
+    """Spin speed selected on the washing machine."""
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_WASHING_MACHINE
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def name(self) -> str:
+        return "Wash spin speed"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_SPIN_SPEED.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        return cast(WashingMachineStatus, self.coordinator.data).spin_speed
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        return "rpm"
+
+    @property
+    def icon(self) -> str:
+        return "mdi:rotate-right"
+
+
+class CandyWashFillPercentSensor(CandyBaseSensor):
+    """Water fill level in the drum (0-100%)."""
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_WASHING_MACHINE
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def name(self) -> str:
+        return "Wash fill level"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_FILL_PERCENT.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        return cast(WashingMachineStatus, self.coordinator.data).fill_percent
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        return "%"
+
+    @property
+    def icon(self) -> str:
+        return "mdi:water-percent"
+
+
+class CandyWashErrorSensor(CandyBaseSensor):
+    """Error code reported by the washing machine (0 = no error)."""
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_WASHING_MACHINE
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def name(self) -> str:
+        return "Wash error code"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_ERROR.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        return cast(WashingMachineStatus, self.coordinator.data).error
+
+    @property
+    def icon(self) -> str:
+        return "mdi:alert-circle-outline"
+
+
+class CandyWashDelaySensor(CandyBaseSensor):
+    """Delay start value set on the washing machine."""
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_WASHING_MACHINE
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def name(self) -> str:
+        return "Wash delay start"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_DELAY.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        return cast(WashingMachineStatus, self.coordinator.data).delay_value
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        return UnitOfTime.HOURS
+
+    @property
+    def icon(self) -> str:
+        return "mdi:timer-sand"
+
+
+class CandyWashNtcWaterSensor(CandyBaseSensor):
+    """Raw NTC water temperature sensor reading."""
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_WASHING_MACHINE
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def name(self) -> str:
+        return "Wash NTC water"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_NTC_WATER.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        return cast(WashingMachineStatus, self.coordinator.data).ntc_water
+
+    @property
+    def icon(self) -> str:
+        return "mdi:thermometer-water"
+
+
+class CandyWashNtcDrumSensor(CandyBaseSensor):
+    """Raw NTC drum temperature sensor reading."""
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_WASHING_MACHINE
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def name(self) -> str:
+        return "Wash NTC drum"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_NTC_DRUM.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        return cast(WashingMachineStatus, self.coordinator.data).ntc_drum
+
+    @property
+    def icon(self) -> str:
+        return "mdi:thermometer"
+
+
+class CandyWashMotorFreqSensor(CandyBaseSensor):
+    """Motor APS frequency reported by the washing machine."""
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_WASHING_MACHINE
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def name(self) -> str:
+        return "Wash motor frequency"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_MOTOR_FREQ.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        return cast(WashingMachineStatus, self.coordinator.data).motor_speed_freq
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        return "Hz"
+
+    @property
+    def icon(self) -> str:
+        return "mdi:sine-wave"
 
 
 class CandyTumbleDryerSensor(CandyBaseSensor):

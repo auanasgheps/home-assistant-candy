@@ -1,11 +1,22 @@
+# Minimal dev configuration - loads only what's needed for candy integration
+# This avoids Bluetooth, zeroconf, alerts and other components
+# that fail or block on macOS outside of a devcontainer.
 
-# Loads default set of integrations. Do not remove.
-default_config:
+homeassistant:
+  name: "Candy Dev"
+  unit_system: metric
+  time_zone: Europe/Rome
 
-# Load frontend themes from the themes folder
-frontend:
-  themes: !include_dir_merge_named themes
+# HTTP server - explicit port to avoid conflicts
+http:
+  server_port: 8123
 
-automation: !include automations.yaml
-script: !include scripts.yaml
-scene: !include scenes.yaml
+# Logger - keep it focused on candy
+logger:
+  default: warning
+  logs:
+    custom_components.candy: debug
+    homeassistant.loader: warning
+
+# Disable the default integration bundle (it loads Bluetooth, alerts, etc.)
+# default_config:

@@ -8,18 +8,28 @@ cd "$(dirname "$0")/.."
 if [ -d "venv" ]; then
     source venv/bin/activate
 elif [ -z "$VIRTUAL_ENV" ]; then
-    echo "⚠️  Virtual environment not found. Please run 'scripts/setup' first."
+    echo "⚠️  Virtual environment not found. Please run 'make setup' first."
     exit 1
 fi
 
-# Create config dir if not present
+# Kill any process already using port 8123
+HA_PORT=8123
+PID=$(lsof -ti tcp:${HA_PORT} 2>/dev/null || true)
+if [ -n "$PID" ]; then
+    echo "⚠️  Port ${HA_PORT} is in use by PID ${PID}. Killing it..."
+    kill -9 ${PID}
+    sleep 1
+    echo "✅ Port ${HA_PORT} is now free."
+fi
+
+# Create config dir if not present and initialise it
 if [[ ! -d "${PWD}/config" ]]; then
     mkdir -p "${PWD}/config"
     hass --config "${PWD}/config" --script ensure_config
 fi
 
 # Set the path to custom_components
-## This let's us have the structure we want <root>/custom_components/candy
+## This lets us have the structure we want <root>/custom_components/candy
 ## while at the same time have Home Assistant configuration inside <root>/config
 ## without resulting to symlinks.
 export PYTHONPATH="${PYTHONPATH}:${PWD}/custom_components"
@@ -27,4 +37,7 @@ export PYTHONPATH="${PYTHONPATH}:${PWD}/custom_components"
 ./scripts/clean
 
 # Start Home Assistant
+echo "🌐 Dev instance available at http://localhost:${HA_PORT}"
+echo "ℹ️  NOTE: 'make develop' is designed for VS Code Dev Container (Linux/Docker)."
+echo "        On macOS you may see warnings for inotify/Bluetooth — these are harmless."
 hass --config "${PWD}/config" --debug

@@ -20,10 +20,11 @@ if ! [ -x "$(command -v uv)" ]; then
   python -m pip install uv
 fi
 
-# Install test and development dependencies
-python -m pip install --requirement requirements_test.txt
+# Install runtime + test + dev dependencies
+python -m pip install --requirement requirements.test.txt
+python -m pip install --requirement requirements-dev.txt
 
-# There are no pre-commit configurations for candy, but we leave the hook ready if one gets added
+# Install pre-commit hooks
 if [ -f ".pre-commit-config.yaml" ]; then
     pre-commit install
 fi

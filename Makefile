@@ -1,6 +1,6 @@
 # Makefile for Candy Simply-Fi Home Assistant Integration
 
-.PHONY: help setup test test-coverage lint format clean install-dev
+.PHONY: help setup test test-coverage lint lint-ruff lint-mypy format format-ruff pre-commit-install pre-commit-uninstall pre-commit-run clean install-dev install develop check ci
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -66,14 +66,14 @@ clean: ## Clean up temporary files
 
 install-dev: ## Install in development mode
 	@echo "📦 Installing in development mode..."
-	@bash -c "source venv/bin/activate && pip install -e ."
+	@bash -c "source venv/bin/activate && python -m pip install -e ."
 
 install: ## Install the package
 	@echo "📦 Installing package..."
-	@bash -c "source venv/bin/activate && pip install ."
+	@bash -c "source venv/bin/activate && python -m pip install ."
 
-develop: ## Start development server
-	@echo "🔧 Starting development server..."
+develop: ## Start Home Assistant with this integration loaded (requires HA installed)
+	@echo "🔧 Starting Home Assistant in development mode..."
 	@./scripts/develop
 
 check: lint-ruff test ## Run all checks (lint + test)

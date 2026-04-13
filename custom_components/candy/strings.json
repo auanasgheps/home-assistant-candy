@@ -14,5 +14,63 @@
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
     }
+  },
+  "entity": {
+    "sensor": {
+      "washing_machine": {
+        "name": "Washing machine"
+      },
+      "wash_cycle_status": {
+        "name": "Wash cycle status"
+      },
+      "wash_remaining_time": {
+        "name": "Wash cycle remaining time"
+      },
+      "wash_temperature": {
+        "name": "Wash temperature"
+      },
+      "wash_spin_speed": {
+        "name": "Wash spin speed"
+      },
+      "wash_fill_level": {
+        "name": "Wash fill level"
+      },
+      "wash_error_code": {
+        "name": "Wash error code"
+      },
+      "wash_delay_start": {
+        "name": "Wash delay start"
+      },
+      "wash_ntc_water": {
+        "name": "Wash NTC water"
+      },
+      "wash_ntc_drum": {
+        "name": "Wash NTC drum"
+      },
+      "wash_motor_frequency": {
+        "name": "Wash motor frequency"
+      },
+      "tumble_dryer": {
+        "name": "Tumble dryer"
+      },
+      "tumble_cycle_status": {
+        "name": "Tumble cycle status"
+      },
+      "tumble_remaining_time": {
+        "name": "Tumble cycle remaining time"
+      },
+      "oven": {
+        "name": "Oven"
+      },
+      "oven_temperature": {
+        "name": "Oven temperature"
+      },
+      "dishwasher": {
+        "name": "Dishwasher"
+      },
+      "dishwasher_remaining_time": {
+        "name": "Dishwasher remaining time"
+      }
+    }
   }
 }

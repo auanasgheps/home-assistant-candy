@@ -56,6 +56,30 @@ This is incredibly useful for validating your appliance network reachability or 
 
 ---
 
+## 🔍 Finding Your Appliance on the Network
+
+Not sure what IP address your Candy appliance has? Run this one-liner from any terminal on the **same local network** as your device.
+
+> **Prerequisite:** replace `192.168.1` with your actual subnet if different (check your router settings).
+
+```bash
+# Scan the entire subnet for Candy Simply-Fi appliances
+for i in $(seq 1 254); do
+  result=$(curl -s --max-time 1 "http://192.168.1.$i/http-read.json?encrypted=0" 2>/dev/null)
+  [ -n "$result" ] && echo "192.168.1.$i: $result"
+done
+```
+
+The script probes every host on the subnet for the Candy local API endpoint. Any appliance that responds will print its IP address alongside its raw JSON status — for example:
+
+```
+192.168.1.79: { "statusLavatrice": { "WiFiStatus": "1", ... } }
+```
+
+Use that IP when configuring the integration in Home Assistant.
+
+---
+
 ## 🙋 My device isn't supported. Can you help?
 
 Absolutely! If you have an appliance that is not supported yet (or you notice odd readings), head over to the [Discussions section](https://github.com/bigmoby/home-assistant-candy/discussions/categories/device-support-improvements). Open a new thread or comment to an existing one with the following information:

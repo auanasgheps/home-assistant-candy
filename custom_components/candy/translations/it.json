@@ -4,13 +4,72 @@
       "already_configured": "Il dispositivo è già configurato"
     },
     "error": {
-      "unknown": "Errore sconosciuto"
+      "unknown": "Errore sconosciuto",
+      "detect_encryption": "Rilevamento crittografia fallito, controlla i log"
     },
     "step": {
       "user": {
         "data": {
           "ip_address": "Indirizzo IP del dispositivo"
         }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "washing_machine": {
+        "name": "Lavatrice"
+      },
+      "wash_cycle_status": {
+        "name": "Stato ciclo di lavaggio"
+      },
+      "wash_remaining_time": {
+        "name": "Tempo rimanente ciclo"
+      },
+      "wash_temperature": {
+        "name": "Temperatura lavaggio"
+      },
+      "wash_spin_speed": {
+        "name": "Velocità centrifuga"
+      },
+      "wash_fill_level": {
+        "name": "Livello acqua cesto"
+      },
+      "wash_error_code": {
+        "name": "Codice errore"
+      },
+      "wash_delay_start": {
+        "name": "Ritardo partenza"
+      },
+      "wash_ntc_water": {
+        "name": "NTC acqua"
+      },
+      "wash_ntc_drum": {
+        "name": "NTC cesto"
+      },
+      "wash_motor_frequency": {
+        "name": "Frequenza motore"
+      },
+      "tumble_dryer": {
+        "name": "Asciugatrice"
+      },
+      "tumble_cycle_status": {
+        "name": "Stato ciclo asciugatrice"
+      },
+      "tumble_remaining_time": {
+        "name": "Tempo rimanente asciugatrice"
+      },
+      "oven": {
+        "name": "Forno"
+      },
+      "oven_temperature": {
+        "name": "Temperatura forno"
+      },
+      "dishwasher": {
+        "name": "Lavastoviglie"
+      },
+      "dishwasher_remaining_time": {
+        "name": "Tempo rimanente lavastoviglie"
       }
     }
   },

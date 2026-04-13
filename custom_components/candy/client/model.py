@@ -54,6 +54,16 @@ class WashingMachineStatus:
     remaining_minutes: int
     remote_control: bool
     fill_percent: int | None  # 0...100
+    # Extended fields
+    error: int | None  # Err — 0 means no error
+    delay_value: int | None  # DelVal — delay start value in hours
+    ntc_water: int | None  # NtcW — water NTC sensor (raw ADC)
+    ntc_drum: int | None  # NtcD — drum NTC sensor (raw ADC)
+    motor_speed_freq: int | None  # APSfreq — motor frequency
+    motor_state: int | None  # motS — motor state
+    unbalance_fault: int | None  # unbF — unbalance fault count
+    unbalance_count: int | None  # unbC — unbalance count
+    fault_count: int | None  # numF — total fault count
 
     @classmethod
     def from_json(cls, json):
@@ -67,6 +77,15 @@ class WashingMachineStatus:
             remaining_minutes=round(int(json["RemTime"]) / 60),
             remote_control=json["WiFiStatus"] == "1",
             fill_percent=int(json["FillR"]) if "FillR" in json else None,
+            error=int(json["Err"]) if "Err" in json else None,
+            delay_value=int(json["DelVal"]) if "DelVal" in json else None,
+            ntc_water=int(json["NtcW"]) if "NtcW" in json else None,
+            ntc_drum=int(json["NtcD"]) if "NtcD" in json else None,
+            motor_speed_freq=int(json["APSfreq"]) if "APSfreq" in json else None,
+            motor_state=int(json["motS"]) if "motS" in json else None,
+            unbalance_fault=int(json["unbF"]) if "unbF" in json else None,
+            unbalance_count=int(json["unbC"]) if "unbC" in json else None,
+            fault_count=int(json["numF"]) if "numF" in json else None,
         )
 
 

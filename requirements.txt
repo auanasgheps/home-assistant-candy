@@ -1,0 +1,5 @@
+# Runtime dependencies for Candy Simply-Fi Home Assistant Integration
+
+homeassistant>=2025.10.0
+backoff~=2.2.1
+aiolimiter~=1.2.1
