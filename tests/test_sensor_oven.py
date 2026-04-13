@@ -1,14 +1,16 @@
-"""Tests for various sensors"""
+"""Tests for various sensors."""
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_registry
-from pytest_homeassistant_custom_component.common import (load_fixture)
-from pytest_homeassistant_custom_component.test_util.aiohttp import \
-    AiohttpClientMocker
+from pytest_homeassistant_custom_component.common import load_fixture
+from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from .common import init_integration
 
 
-async def test_main_sensor_idle(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def test_main_sensor_idle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
     await init_integration(hass, aioclient_mock, load_fixture("oven/idle.json"))
 
     state = hass.states.get("sensor.oven")
@@ -23,11 +25,13 @@ async def test_main_sensor_idle(hass: HomeAssistant, aioclient_mock: AiohttpClie
         "program_length_minutes": 0,
         "remote_control": False,
         "friendly_name": "Oven",
-        "icon": "mdi:stove"
+        "icon": "mdi:stove",
     }
 
 
-async def test_main_sensor_heating(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def test_main_sensor_heating(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
     await init_integration(hass, aioclient_mock, load_fixture("oven/heating.json"))
 
     state = hass.states.get("sensor.oven")
@@ -42,11 +46,13 @@ async def test_main_sensor_heating(hass: HomeAssistant, aioclient_mock: AiohttpC
         "program_length_minutes": 0,
         "remote_control": False,
         "friendly_name": "Oven",
-        "icon": "mdi:stove"
+        "icon": "mdi:stove",
     }
 
 
-async def test_main_sensor_no_timeprogr(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def test_main_sensor_no_timeprogr(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
     await init_integration(hass, aioclient_mock, load_fixture("oven/no_timeprogr.json"))
 
     state = hass.states.get("sensor.oven")
@@ -60,11 +66,13 @@ async def test_main_sensor_no_timeprogr(hass: HomeAssistant, aioclient_mock: Aio
         "temperature_reached": False,
         "remote_control": False,
         "friendly_name": "Oven",
-        "icon": "mdi:stove"
+        "icon": "mdi:stove",
     }
 
 
-async def test_temp_sensor_heating(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def test_temp_sensor_heating(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
     await init_integration(hass, aioclient_mock, load_fixture("oven/heating.json"))
 
     state = hass.states.get("sensor.oven_temperature")
@@ -74,11 +82,13 @@ async def test_temp_sensor_heating(hass: HomeAssistant, aioclient_mock: AiohttpC
     assert state.attributes == {
         "friendly_name": "Oven temperature",
         "icon": "mdi:thermometer",
-        "unit_of_measurement": '°C'
+        "unit_of_measurement": "°C",
     }
 
 
-async def test_main_sensor_device_info(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def test_main_sensor_device_info(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
     await init_integration(hass, aioclient_mock, load_fixture("oven/idle.json"))
 
     entity_reg = entity_registry.async_get(hass)
@@ -92,7 +102,9 @@ async def test_main_sensor_device_info(hass: HomeAssistant, aioclient_mock: Aioh
     assert device.suggested_area == "Kitchen"
 
 
-async def test_sensors_device_info(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def test_sensors_device_info(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
     await init_integration(hass, aioclient_mock, load_fixture("oven/idle.json"))
 
     entity_reg = entity_registry.async_get(hass)

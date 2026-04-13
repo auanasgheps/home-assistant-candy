@@ -1,19 +1,19 @@
 """The Candy integration."""
+
 from __future__ import annotations
 
-import logging
 from datetime import timedelta
+import logging
 
 import async_timeout
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from .client import CandyClient, WashingMachineStatus
 
-from .const import *
+from .client import CandyClient
+from .const import CONF_KEY_USE_ENCRYPTION, DATA_KEY_COORDINATOR, DOMAIN, PLATFORMS
 
 _LOGGER = logging.getLogger(__name__)
 

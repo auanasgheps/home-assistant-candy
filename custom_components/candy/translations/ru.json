@@ -1,21 +1,19 @@
 {
-    "config": {
-        "abort": {
-            "already_configured": "Устройство уже настроено"
-        },
-        "error": {
-            "unknown": "Неожиданная ошибка",
-            "detect_encryption": "Не удалось обнаружить шифрование, проверьте логи"
-        },
-        "step": {
-            "user": {
-                "data": {
-                    "ip_address": "IP-адрес устройства",
-                    "password": "Ключ шифрования",
-                    "use_encryption": "Используйте ключ шифрования"
-                }
-            }
-        }
+  "config": {
+    "abort": {
+      "already_configured": "Устройство уже настроено"
     },
-    "title": "Candy"
+    "error": {
+      "unknown": "Неожиданная ошибка",
+      "detect_encryption": "Не удалось обнаружить шифрование, проверьте логи"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "ip_address": "IP-адрес устройства"
+        }
+      }
+    }
+  },
+  "title": "Candy"
 }

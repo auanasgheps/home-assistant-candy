@@ -4,4 +4,26 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-python3 -m pip install --requirement requirements_test.txt
+if [ -d "venv" ]; then
+  source venv/bin/activate
+else
+  if [ -x "$(command -v uv)" ]; then
+    uv venv venv
+  else
+    python3 -m venv venv
+  fi
+  source venv/bin/activate
+  python -m ensurepip --upgrade
+fi
+
+if ! [ -x "$(command -v uv)" ]; then
+  python -m pip install uv
+fi
+
+# Install test and development dependencies
+python -m pip install --requirement requirements_test.txt
+
+# There are no pre-commit configurations for candy, but we leave the hook ready if one gets added
+if [ -f ".pre-commit-config.yaml" ]; then
+    pre-commit install
+fi

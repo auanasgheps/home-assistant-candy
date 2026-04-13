@@ -2,7 +2,7 @@ from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.candy import DOMAIN, CONF_KEY_USE_ENCRYPTION
+from custom_components.candy import CONF_KEY_USE_ENCRYPTION, DOMAIN
 
 TEST_IP = "192.168.0.66"
 TEST_ENCRYPTION_KEY_EMPTY = ""
@@ -23,10 +23,12 @@ async def init_integration(hass: HomeAssistant, aioclient_mock, status_response:
             CONF_IP_ADDRESS: "192.168.0.66",
             CONF_KEY_USE_ENCRYPTION: False,
             CONF_PASSWORD: "",
-        }
+        },
     )
 
-    aioclient_mock.get(f"http://{TEST_IP}/http-read.json?encrypted=0", text=status_response)
+    aioclient_mock.get(
+        f"http://{TEST_IP}/http-read.json?encrypted=0", text=status_response
+    )
 
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)

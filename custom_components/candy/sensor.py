@@ -1,55 +1,89 @@
 from abc import abstractmethod
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any, cast
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    UnitOfTime,
-    UnitOfTemperature,
-)
+from homeassistant.const import UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.typing import StateType
-from homeassistant.helpers.update_coordinator import (CoordinatorEntity,
-                                                      DataUpdateCoordinator)
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+)
 
 from .client import WashingMachineStatus
-from .client.model import (DishwasherState, DishwasherStatus,
-                           DryerProgramState, MachineState, OvenStatus,
-                           TumbleDryerStatus)
-from .const import *
+from .client.model import (
+    DishwasherState,
+    DishwasherStatus,
+    DryerProgramState,
+    MachineState,
+    OvenStatus,
+    TumbleDryerStatus,
+)
+from .const import (
+    DATA_KEY_COORDINATOR,
+    DEVICE_NAME_DISHWASHER,
+    DEVICE_NAME_OVEN,
+    DEVICE_NAME_TUMBLE_DRYER,
+    DEVICE_NAME_WASHING_MACHINE,
+    DOMAIN,
+    SUGGESTED_AREA_BATHROOM,
+    SUGGESTED_AREA_KITCHEN,
+    UNIQUE_ID_DISHWASHER,
+    UNIQUE_ID_DISHWASHER_REMAINING_TIME,
+    UNIQUE_ID_OVEN,
+    UNIQUE_ID_OVEN_TEMP,
+    UNIQUE_ID_TUMBLE_CYCLE_STATUS,
+    UNIQUE_ID_TUMBLE_DRYER,
+    UNIQUE_ID_TUMBLE_REMAINING_TIME,
+    UNIQUE_ID_WASH_CYCLE_STATUS,
+    UNIQUE_ID_WASH_REMAINING_TIME,
+    UNIQUE_ID_WASHING_MACHINE,
+)
 
 
-async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities
+):
     """Set up the Candy sensors from config entry."""
 
     config_id = config_entry.entry_id
     coordinator = hass.data[DOMAIN][config_id][DATA_KEY_COORDINATOR]
 
     if isinstance(coordinator.data, WashingMachineStatus):
-        async_add_entities([
-            CandyWashingMachineSensor(coordinator, config_id),
-            CandyWashCycleStatusSensor(coordinator, config_id),
-            CandyWashRemainingTimeSensor(coordinator, config_id)
-        ])
+        async_add_entities(
+            [
+                CandyWashingMachineSensor(coordinator, config_id),
+                CandyWashCycleStatusSensor(coordinator, config_id),
+                CandyWashRemainingTimeSensor(coordinator, config_id),
+            ]
+        )
     elif isinstance(coordinator.data, TumbleDryerStatus):
-        async_add_entities([
-            CandyTumbleDryerSensor(coordinator, config_id),
-            CandyTumbleStatusSensor(coordinator, config_id),
-            CandyTumbleRemainingTimeSensor(coordinator, config_id)
-        ])
+        async_add_entities(
+            [
+                CandyTumbleDryerSensor(coordinator, config_id),
+                CandyTumbleStatusSensor(coordinator, config_id),
+                CandyTumbleRemainingTimeSensor(coordinator, config_id),
+            ]
+        )
     elif isinstance(coordinator.data, OvenStatus):
-        async_add_entities([
-            CandyOvenSensor(coordinator, config_id),
-            CandyOvenTempSensor(coordinator, config_id)
-        ])
+        async_add_entities(
+            [
+                CandyOvenSensor(coordinator, config_id),
+                CandyOvenTempSensor(coordinator, config_id),
+            ]
+        )
     elif isinstance(coordinator.data, DishwasherStatus):
-        async_add_entities([
-            CandyDishwasherSensor(coordinator, config_id),
-            CandyDishwasherRemainingTimeSensor(coordinator, config_id)
-        ])
+        async_add_entities(
+            [
+                CandyDishwasherSensor(coordinator, config_id),
+                CandyDishwasherRemainingTimeSensor(coordinator, config_id),
+            ]
+        )
     else:
-        raise Exception(f"Unable to determine machine type: {coordinator.data}")
+        raise TypeError(f"Unable to determine machine type: {coordinator.data}")
 
 
 class CandyBaseSensor(CoordinatorEntity, SensorEntity):
@@ -76,7 +110,6 @@ class CandyBaseSensor(CoordinatorEntity, SensorEntity):
 
 
 class CandyWashingMachineSensor(CandyBaseSensor):
-
     def device_name(self) -> str:
         return DEVICE_NAME_WASHING_MACHINE
 
@@ -92,8 +125,8 @@ class CandyWashingMachineSensor(CandyBaseSensor):
         return UNIQUE_ID_WASHING_MACHINE.format(self.config_id)
 
     @property
-    def state(self) -> StateType:
-        status: WashingMachineStatus = self.coordinator.data
+    def native_value(self) -> StateType:
+        status = cast(WashingMachineStatus, self.coordinator.data)
         return str(status.machine_state)
 
     @property
@@ -102,14 +135,15 @@ class CandyWashingMachineSensor(CandyBaseSensor):
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any]:
-        status: WashingMachineStatus = self.coordinator.data
+        status = cast(WashingMachineStatus, self.coordinator.data)
 
         attributes = {
             "program": status.program,
             "temperature": status.temp,
             "spin_speed": status.spin_speed,
-            "remaining_minutes": status.remaining_minutes if status.machine_state in [MachineState.RUNNING,
-                                                                                      MachineState.PAUSED] else 0,
+            "remaining_minutes": status.remaining_minutes
+            if status.machine_state in [MachineState.RUNNING, MachineState.PAUSED]
+            else 0,
             "remote_control": status.remote_control,
         }
 
@@ -123,7 +157,6 @@ class CandyWashingMachineSensor(CandyBaseSensor):
 
 
 class CandyWashCycleStatusSensor(CandyBaseSensor):
-
     def device_name(self) -> str:
         return DEVICE_NAME_WASHING_MACHINE
 
@@ -139,8 +172,8 @@ class CandyWashCycleStatusSensor(CandyBaseSensor):
         return UNIQUE_ID_WASH_CYCLE_STATUS.format(self.config_id)
 
     @property
-    def state(self) -> StateType:
-        status: WashingMachineStatus = self.coordinator.data
+    def native_value(self) -> StateType:
+        status = cast(WashingMachineStatus, self.coordinator.data)
         return str(status.program_state)
 
     @property
@@ -149,7 +182,6 @@ class CandyWashCycleStatusSensor(CandyBaseSensor):
 
 
 class CandyWashRemainingTimeSensor(CandyBaseSensor):
-
     def device_name(self) -> str:
         return DEVICE_NAME_WASHING_MACHINE
 
@@ -165,15 +197,14 @@ class CandyWashRemainingTimeSensor(CandyBaseSensor):
         return UNIQUE_ID_WASH_REMAINING_TIME.format(self.config_id)
 
     @property
-    def state(self) -> StateType:
-        status: WashingMachineStatus = self.coordinator.data
+    def native_value(self) -> StateType:
+        status = cast(WashingMachineStatus, self.coordinator.data)
         if status.machine_state in [MachineState.RUNNING, MachineState.PAUSED]:
             return status.remaining_minutes
-        else:
-            return 0
+        return 0
 
     @property
-    def unit_of_measurement(self) -> str:
+    def native_unit_of_measurement(self) -> str:
         return UnitOfTime.MINUTES
 
     @property
@@ -182,7 +213,6 @@ class CandyWashRemainingTimeSensor(CandyBaseSensor):
 
 
 class CandyTumbleDryerSensor(CandyBaseSensor):
-
     def device_name(self) -> str:
         return DEVICE_NAME_TUMBLE_DRYER
 
@@ -198,8 +228,8 @@ class CandyTumbleDryerSensor(CandyBaseSensor):
         return UNIQUE_ID_TUMBLE_DRYER.format(self.config_id)
 
     @property
-    def state(self) -> StateType:
-        status: TumbleDryerStatus = self.coordinator.data
+    def native_value(self) -> StateType:
+        status = cast(TumbleDryerStatus, self.coordinator.data)
         return str(status.machine_state)
 
     @property
@@ -208,7 +238,7 @@ class CandyTumbleDryerSensor(CandyBaseSensor):
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any]:
-        status: TumbleDryerStatus = self.coordinator.data
+        status = cast(TumbleDryerStatus, self.coordinator.data)
 
         attributes = {
             "program": status.program,
@@ -226,7 +256,6 @@ class CandyTumbleDryerSensor(CandyBaseSensor):
 
 
 class CandyTumbleStatusSensor(CandyBaseSensor):
-
     def device_name(self) -> str:
         return DEVICE_NAME_TUMBLE_DRYER
 
@@ -242,12 +271,11 @@ class CandyTumbleStatusSensor(CandyBaseSensor):
         return UNIQUE_ID_TUMBLE_CYCLE_STATUS.format(self.config_id)
 
     @property
-    def state(self) -> StateType:
-        status: TumbleDryerStatus = self.coordinator.data
+    def native_value(self) -> StateType:
+        status = cast(TumbleDryerStatus, self.coordinator.data)
         if status.program_state in [DryerProgramState.STOPPED]:
             return str(status.cycle_state)
-        else:
-            return str(status.program_state)
+        return str(status.program_state)
 
     @property
     def icon(self) -> str:
@@ -255,7 +283,6 @@ class CandyTumbleStatusSensor(CandyBaseSensor):
 
 
 class CandyTumbleRemainingTimeSensor(CandyBaseSensor):
-
     def device_name(self) -> str:
         return DEVICE_NAME_TUMBLE_DRYER
 
@@ -271,15 +298,14 @@ class CandyTumbleRemainingTimeSensor(CandyBaseSensor):
         return UNIQUE_ID_TUMBLE_REMAINING_TIME.format(self.config_id)
 
     @property
-    def state(self) -> StateType:
-        status: TumbleDryerStatus = self.coordinator.data
+    def native_value(self) -> StateType:
+        status = cast(TumbleDryerStatus, self.coordinator.data)
         if status.machine_state in [MachineState.RUNNING, MachineState.PAUSED]:
             return status.remaining_minutes
-        else:
-            return 0
+        return 0
 
     @property
-    def unit_of_measurement(self) -> str:
+    def native_unit_of_measurement(self) -> str:
         return UnitOfTime.MINUTES
 
     @property
@@ -288,7 +314,6 @@ class CandyTumbleRemainingTimeSensor(CandyBaseSensor):
 
 
 class CandyOvenSensor(CandyBaseSensor):
-
     def device_name(self) -> str:
         return DEVICE_NAME_OVEN
 
@@ -304,8 +329,8 @@ class CandyOvenSensor(CandyBaseSensor):
         return UNIQUE_ID_OVEN.format(self.config_id)
 
     @property
-    def state(self) -> StateType:
-        status: OvenStatus = self.coordinator.data
+    def native_value(self) -> StateType:
+        status = cast(OvenStatus, self.coordinator.data)
         return str(status.machine_state)
 
     @property
@@ -314,7 +339,7 @@ class CandyOvenSensor(CandyBaseSensor):
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any]:
-        status: OvenStatus = self.coordinator.data
+        status = cast(OvenStatus, self.coordinator.data)
 
         attributes = {
             "program": status.program,
@@ -331,7 +356,6 @@ class CandyOvenSensor(CandyBaseSensor):
 
 
 class CandyOvenTempSensor(CandyBaseSensor):
-
     def device_name(self) -> str:
         return DEVICE_NAME_OVEN
 
@@ -347,12 +371,12 @@ class CandyOvenTempSensor(CandyBaseSensor):
         return UNIQUE_ID_OVEN_TEMP.format(self.config_id)
 
     @property
-    def state(self) -> StateType:
-        status: OvenStatus = self.coordinator.data
+    def native_value(self) -> StateType:
+        status = cast(OvenStatus, self.coordinator.data)
         return status.temp
 
     @property
-    def unit_of_measurement(self) -> str:
+    def native_unit_of_measurement(self) -> str:
         return UnitOfTemperature.CELSIUS
 
     @property
@@ -361,7 +385,6 @@ class CandyOvenTempSensor(CandyBaseSensor):
 
 
 class CandyDishwasherSensor(CandyBaseSensor):
-
     def device_name(self) -> str:
         return DEVICE_NAME_DISHWASHER
 
@@ -377,8 +400,8 @@ class CandyDishwasherSensor(CandyBaseSensor):
         return UNIQUE_ID_DISHWASHER.format(self.config_id)
 
     @property
-    def state(self) -> StateType:
-        status: DishwasherStatus = self.coordinator.data
+    def native_value(self) -> StateType:
+        status = cast(DishwasherStatus, self.coordinator.data)
         return str(status.machine_state)
 
     @property
@@ -387,17 +410,18 @@ class CandyDishwasherSensor(CandyBaseSensor):
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any]:
-        status: DishwasherStatus = self.coordinator.data
+        status = cast(DishwasherStatus, self.coordinator.data)
 
         attributes = {
             "program": status.program,
-            "remaining_minutes": 0 if status.machine_state in
-                                      [DishwasherState.IDLE, DishwasherState.FINISHED] else status.remaining_minutes,
+            "remaining_minutes": 0
+            if status.machine_state in [DishwasherState.IDLE, DishwasherState.FINISHED]
+            else status.remaining_minutes,
             "remote_control": status.remote_control,
             "door_open": status.door_open,
             "eco_mode": status.eco_mode,
             "salt_empty": status.salt_empty,
-            "rinse_aid_empty": status.rinse_aid_empty
+            "rinse_aid_empty": status.rinse_aid_empty,
         }
 
         if status.door_open_allowed is not None:
@@ -410,7 +434,6 @@ class CandyDishwasherSensor(CandyBaseSensor):
 
 
 class CandyDishwasherRemainingTimeSensor(CandyBaseSensor):
-
     def device_name(self) -> str:
         return DEVICE_NAME_DISHWASHER
 
@@ -426,15 +449,14 @@ class CandyDishwasherRemainingTimeSensor(CandyBaseSensor):
         return UNIQUE_ID_DISHWASHER_REMAINING_TIME.format(self.config_id)
 
     @property
-    def state(self) -> StateType:
+    def native_value(self) -> StateType:
         status: DishwasherStatus = self.coordinator.data
         if status.machine_state in [DishwasherState.IDLE, DishwasherState.FINISHED]:
             return 0
-        else:
-            return status.remaining_minutes
+        return status.remaining_minutes
 
     @property
-    def unit_of_measurement(self) -> str:
+    def native_unit_of_measurement(self) -> str:
         return UnitOfTime.MINUTES
 
     @property

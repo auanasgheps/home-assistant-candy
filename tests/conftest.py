@@ -1,4 +1,5 @@
 """Global fixtures for integration_blueprint integration."""
+
 # Fixtures allow you to replace functions with a Mock object. You can perform
 # many options via the Mock to reflect a particular behavior from the original
 # function that you want to see without going through the function's actual logic.
@@ -14,9 +15,13 @@
 #
 # See here for more info: https://docs.pytest.org/en/latest/fixture.html (note that
 # pytest includes fixtures OOB which you can use as defined on this page)
-from unittest.mock import patch
-from aiolimiter import AsyncLimiter
+from __future__ import annotations
 
+from collections.abc import Generator
+from typing import Any
+from unittest.mock import patch
+
+from aiolimiter import AsyncLimiter
 import pytest
 
 pytest_plugins = "pytest_homeassistant_custom_component"
@@ -25,22 +30,27 @@ pytest_plugins = "pytest_homeassistant_custom_component"
 # This fixture enables loading custom integrations in all tests.
 # Remove to enable selective use of this fixture
 @pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):
-    yield
+def auto_enable_custom_integrations(  # noqa: PT004
+    enable_custom_integrations: Any,
+) -> None:
+    """Enable custom integrations."""
 
 
 # This fixture is used to prevent HomeAssistant from attempting to create and dismiss persistent
 # notifications. These calls would fail without this fixture since the persistent_notification
 # integration is never loaded during a test.
 @pytest.fixture(name="skip_notifications", autouse=True)
-def skip_notifications_fixture():
+def _skip_notifications_fixture() -> Generator[None, None, None]:
     """Skip notification calls."""
-    with patch("homeassistant.components.persistent_notification.async_create"), patch(
-        "homeassistant.components.persistent_notification.async_dismiss"
+    with (
+        patch("homeassistant.components.persistent_notification.async_create"),
+        patch("homeassistant.components.persistent_notification.async_dismiss"),
     ):
         yield
 
+
 @pytest.fixture(name="disable_api_rate_limiter", autouse=True)
-def disable_api_rate_limiter():
+def disable_api_rate_limiter() -> Generator[AsyncLimiter, None, None]:
+    """Disable API rate limiter for tests."""
     with patch("custom_components.candy.client._LIMITER"):
         yield AsyncLimiter(max_rate=1000, time_period=1)

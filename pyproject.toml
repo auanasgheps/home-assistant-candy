@@ -1,0 +1,279 @@
+[build-system]
+requires = ["setuptools==80.9.0", "wheel~=0.45.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name        = "home-assistant-candy"
+version     = "1.1.0"
+license     = {text = "MIT License"}
+description = "Candy Simply-Fi integration for Home Assistant"
+readme      = "README.md"
+authors     = [
+    {name = "Fabio Bigmoby Mauro", email = "bigmoby@example.com"}
+]
+keywords    = ["home", "automation", "candy"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Candy heat pump controller integration",
+]
+requires-python = ">=3.13.0"
+dependencies = [
+    "backoff>=2.2.1",
+    "aiolimiter>=1.2.1",
+    "aiohttp>=3.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+    "pytest-cov>=7.0.0",
+    "pytest-mypy>=1.0.1",
+    "ruff>=0.13.3",
+    "mypy>=1.18.2",
+    "pylint>=3.3.8",
+    "pre-commit>=4.3.0",
+    "black>=24.10.0",
+    "flake8>=7.1.1",
+    "isort>=5.13.2",
+    "pydocstyle>=6.3.0",
+    "coverage>=7.6.8",
+    "freezegun>=1.5.1",
+    "requests-mock>=1.12.1",
+    "respx>=0.22.0",
+    "syrupy>=4.9.1",
+]
+test = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+    "pytest-cov>=7.0.0",
+    "coverage>=7.6.8",
+    "freezegun>=1.5.1",
+    "requests-mock>=1.12.1",
+    "respx>=0.22.0",
+    "syrupy>=4.9.1",
+]
+lint = [
+    "ruff>=0.13.3",
+    "mypy>=1.18.2",
+    "pylint>=3.3.8",
+    "black>=24.10.0",
+    "flake8>=7.1.1",
+    "isort>=5.13.2",
+    "pydocstyle>=6.3.0",
+]
+
+[project.urls]
+"Homepage"    = "https://github.com/bigmoby/home-assistant-candy"
+"Source Code" = "https://github.com/bigmoby/home-assistant-candy"
+"Bug Reports" = "https://github.com/bigmoby/home-assistant-candy/issues"
+
+[tool.setuptools]
+packages = ["custom_components"]
+platforms = ["any"]
+zip-safe  = false
+include-package-data = true
+
+[tool.pylint.MAIN]
+# Configured for minimum Python version >=3.13.0
+py-version = "3.13"
+ignore = [
+    "tests",
+]
+jobs = 2
+init-hook = """\
+    from pathlib import Path; \
+    import sys; \
+    from pylint.config import find_default_config_files; \
+    sys.path.append( \
+        str(Path(next(find_default_config_files())).parent.joinpath('pylint/plugins')) \
+    ) \
+    """
+load-plugins = [
+    "pylint.extensions.code_style",
+    "pylint.extensions.typing",
+    "pylint_per_file_ignores",
+]
+persistent = false
+extension-pkg-allow-list = [
+    "av.audio.stream",
+    "av.logging",
+    "av.stream",
+    "ciso8601",
+    "orjson",
+    "cv2",
+]
+fail-on = [
+    "I",
+]
+
+[tool.pylint.BASIC]
+class-const-naming-style = "any"
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = [
+    "format",
+    "abstract-method",
+    "cyclic-import",
+    "duplicate-code",
+    "inconsistent-return-statements",
+    "locally-disabled",
+    "not-context-manager",
+    "too-few-public-methods",
+    "too-many-ancestors",
+    "too-many-arguments",
+    "too-many-instance-attributes",
+    "too-many-lines",
+    "too-many-locals",
+    "too-many-public-methods",
+    "too-many-boolean-expressions",
+    "wrong-import-order",
+    "consider-using-f-string",
+    "consider-using-namedtuple-or-dataclass",
+    "consider-using-assignment-expr",
+    "await-outside-async",
+    "bad-str-strip-call",
+    "bad-string-format-type",
+    "bidirectional-unicode",
+    "continue-in-finally",
+    "duplicate-bases",
+    "format-needs-mapping",
+    "function-redefined",
+    "invalid-all-object",
+    "invalid-character-backspace",
+    "invalid-character-esc",
+    "invalid-character-nul",
+    "invalid-character-sub",
+    "invalid-character-zero-width-space",
+    "logging-too-few-args",
+    "logging-too-many-args",
+    "missing-format-string-key",
+    "mixed-format-string",
+    "no-method-argument",
+    "no-self-argument",
+    "nonexistent-operator",
+    "nonlocal-without-binding",
+    "not-in-loop",
+    "notimplemented-raised",
+    "return-in-init",
+    "return-outside-function",
+    "syntax-error",
+    "too-few-format-args",
+    "too-many-format-args",
+    "too-many-star-expressions",
+    "truncated-format-string",
+    "undefined-all-variable",
+    "undefined-variable",
+    "used-prior-global-declaration",
+    "yield-inside-async-function",
+    "yield-outside-function",
+]
+enable = [
+    "use-symbolic-message-instead",
+]
+per-file-ignores = [
+    "/tests/:hass-component-root-import,protected-access,redefined-outer-name",
+]
+
+[tool.pylint.REPORTS]
+score = false
+
+[tool.pylint.TYPECHECK]
+ignored-classes = [
+    "_CountingAttr",
+]
+mixin-class-rgx = ".*[Mm]ix[Ii]n"
+
+[tool.pylint.FORMAT]
+expected-line-ending-format = "LF"
+
+[tool.pylint.EXCEPTIONS]
+overgeneral-exceptions = [
+    "builtins.BaseException",
+    "builtins.Exception",
+]
+
+[tool.pylint.TYPING]
+runtime-typing = false
+
+[tool.pylint.CODE_STYLE]
+max-line-length-suggestions = 72
+
+[tool.ruff]
+required-version = ">=0.3.4"
+exclude = ["tools/simplyfi.py"]
+
+[tool.ruff.lint]
+select = [
+    "B002", "B005", "B007", "B014", "B015", "B018", "B023", "B026", "B032",
+    "B904", "C", "COM818", "D", "DTZ003", "DTZ004", "E", "F", "G", "I", "ISC",
+    "ICN001", "LOG", "N804", "N805", "N815", "PERF", "PGH004", "PIE", "PL",
+    "PT", "RET", "RSE", "RUF005", "RUF006", "S102", "S103", "S108", "S306",
+    "S307", "S313", "S314", "S315", "S316", "S317", "S318", "S319", "S601",
+    "S602", "S604", "S608", "S609", "SIM", "T100", "T20", "TID251", "TRY", "UP", "W"
+]
+ignore = [
+    "D202", "D203", "D205", "D213", "D406", "D407", "E501", "E731", "PLC1901",
+    "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR2004", "PLW2901", "PT011",
+    "PT012", "PT018", "SIM102", "SIM108", "SIM115", "TRY003", "TRY400", "UP006",
+    "UP007", "UP040", "W191", "E111", "E114", "E117", "D206", "D300", "Q",
+    "COM812", "COM819", "ISC001", "PLE0605", "PT019", "RET504", "RET503",
+    "RET502", "RET501", "TRY002", "TRY301", "RUF005", "C901", "PERF401", "D101",
+    "D102", "D103", "D104", "D105", "D107", "D100"
+]
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+combine-as-imports = true
+split-on-trailing-comma = false
+
+[tool.ruff.lint.mccabe]
+max-complexity = 25
+
+[tool.mypy]
+python_version = "3.13"
+exclude = ["tools/simplyfi.py"]
+plugins = ["pydantic.mypy"]
+pretty = true
+show_error_codes = true
+follow_imports = "silent"
+ignore_missing_imports = true
+strict_concatenate = false
+check_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_subclassing_any = false
+disallow_untyped_calls = false
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+warn_return_any = false
+warn_unreachable = false
+
+[[tool.mypy.overrides]]
+module = "custom_components.*"
+check_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_subclassing_any = false
+disallow_untyped_calls = false
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+warn_return_any = false
+warn_unreachable = false
+no_implicit_reexport = false
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true

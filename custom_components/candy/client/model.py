@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class StatusCode(Enum):
@@ -49,12 +48,12 @@ class WashingMachineStatus:
     machine_state: MachineState
     program_state: WashProgramState
     program: int
-    program_code: Optional[int]
+    program_code: int | None
     temp: int
     spin_speed: int
     remaining_minutes: int
     remote_control: bool
-    fill_percent: Optional[int]  # 0...100
+    fill_percent: int | None  # 0...100
 
     @classmethod
     def from_json(cls, json):
@@ -67,7 +66,7 @@ class WashingMachineStatus:
             spin_speed=int(json["SpinSp"]) * 100,
             remaining_minutes=round(int(json["RemTime"]) / 60),
             remote_control=json["WiFiStatus"] == "1",
-            fill_percent=int(json["FillR"]) if "FillR" in json else None
+            fill_percent=int(json["FillR"]) if "FillR" in json else None,
         )
 
 
@@ -119,9 +118,7 @@ class TumbleDryerStatus:
 
 
 class DishwasherState(StatusCode):
-    """
-    Dishwashers have a single state combining the machine state and program state
-    """
+    """Dishwashers have a single state combining the machine state and program state."""
 
     IDLE = (0, "Idle")
     PRE_WASH = (1, "Pre-wash")
@@ -136,9 +133,9 @@ class DishwasherStatus:
     machine_state: DishwasherState
     program: str
     remaining_minutes: int
-    delayed_start_hours: Optional[int]
+    delayed_start_hours: int | None
     door_open: bool
-    door_open_allowed: Optional[bool]
+    door_open_allowed: bool | None
     eco_mode: bool
     remote_control: bool
     salt_empty: bool
@@ -150,30 +147,31 @@ class DishwasherStatus:
             machine_state=DishwasherState.from_code(int(json["StatoDWash"])),
             program=DishwasherStatus.parse_program(json),
             remaining_minutes=int(json["RemTime"]),
-            delayed_start_hours=int(json["DelayStart"]) if json["DelayStart"] != "0" else None,
+            delayed_start_hours=int(json["DelayStart"])
+            if json["DelayStart"] != "0"
+            else None,
             door_open=json["OpenDoor"] != "0",
-            door_open_allowed=json["OpenDoorOpt"] == "1" if "OpenDoorOpt" in json else None,
+            door_open_allowed=json["OpenDoorOpt"] == "1"
+            if "OpenDoorOpt" in json
+            else None,
             eco_mode=json["Eco"] != "0",
             remote_control=json["StatoWiFi"] == "1",
             salt_empty=json["MissSalt"] == "1",
-            rinse_aid_empty=json["MissRinse"] == "1"
+            rinse_aid_empty=json["MissRinse"] == "1",
         )
 
     @staticmethod
     def parse_program(json) -> str:
-        """
-        Parse final program label, like P1, P1+, P1-
-        """
+        """Parse final program label, like P1, P1+, P1-."""
         program = json["Program"]
         # Some dishwashers don't include the OpzProg field
         option = json.get("OpzProg")
         if option == "p":
             return program + "+"
-        elif option == "m":
+        if option == "m":
             return program + "-"
-        else:
-            # Third OpzProg value is 0
-            return program
+        # Third OpzProg value is 0
+        return program
 
 
 class OvenState(StatusCode):
@@ -188,7 +186,7 @@ class OvenStatus:
     selection: int
     temp: float
     temp_reached: bool
-    program_length_minutes: Optional[int]
+    program_length_minutes: int | None
     remote_control: bool
 
     @classmethod
@@ -199,7 +197,9 @@ class OvenStatus:
             selection=int(json["Selettore"]),
             temp=round(fahrenheit_to_celsius(int(json["TempRead"]))),
             temp_reached=json["TempSetRaggiunta"] == "1",
-            program_length_minutes=int(json["TimeProgr"]) if "TimeProgr" in json else None,
+            program_length_minutes=int(json["TimeProgr"])
+            if "TimeProgr" in json
+            else None,
             remote_control=json["StatoWiFi"] == "1",
         )
 

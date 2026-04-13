@@ -1,21 +1,19 @@
 {
-    "config": {
-        "abort": {
-            "already_configured": "El dispositiu ja està configurat"
-        },
-        "error": {
-            "unknown": "Error inesperat",
-            "detect_encryption": "No s'ha pogut detectar el xifratge, comproveu els registres"
-        },
-        "step": {
-            "user": {
-                "data": {
-                    "ip_address": "Adreça IP del dispositiu",
-                    "password": "Clau de xifratge",
-                    "use_encryption": "Utilitzeu la clau de xifratge"
-                }
-            }
-        }
+  "config": {
+    "abort": {
+      "already_configured": "El dispositiu ja està configurat"
     },
-    "title": "Candy"
+    "error": {
+      "unknown": "Error inesperat",
+      "detect_encryption": "No s'ha pogut detectar el xifratge, comproveu els registres"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "ip_address": "Adreça IP del dispositiu"
+        }
+      }
+    }
+  },
+  "title": "Candy"
 }

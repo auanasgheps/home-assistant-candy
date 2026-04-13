@@ -3,9 +3,7 @@
     "step": {
       "user": {
         "data": {
-          "ip_address": "Device IP address",
-          "password": "Encryption key",
-          "use_encryption": "Use encryption key"
+          "ip_address": "Device IP address"
         }
       }
     },

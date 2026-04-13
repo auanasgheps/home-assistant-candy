@@ -1,10 +1,10 @@
 from unittest.mock import patch
 
-import pytest
 from homeassistant import config_entries, data_entry_flow
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
+import pytest
 
-from custom_components.candy import DOMAIN, CONF_KEY_USE_ENCRYPTION
+from custom_components.candy import CONF_KEY_USE_ENCRYPTION, DOMAIN
 from custom_components.candy.client import Encryption
 
 
@@ -12,52 +12,51 @@ from custom_components.candy.client import Encryption
 # since we only want to test the config flow. We test the
 # actual functionality of the integration in other test modules.
 @pytest.fixture(autouse=True)
-def bypass_setup_fixture():
+def _bypass_setup_fixture():  # noqa: PT004
     """Prevent setup."""
     with patch(
-            "custom_components.candy.async_setup_entry",
-            return_value=True,
+        "custom_components.candy.async_setup_entry",
+        return_value=True,
     ):
         yield
 
 
 @pytest.fixture(name="detect_no_encryption", autouse=False)
-def detect_no_encryption_fixture():
+def _detect_no_encryption_fixture():  # noqa: PT004
     with patch(
-            "custom_components.candy.config_flow.detect_encryption",
-            return_value=(Encryption.NO_ENCRYPTION, None)
+        "custom_components.candy.config_flow.detect_encryption",
+        return_value=(Encryption.NO_ENCRYPTION, None),
     ):
         yield
 
 
 @pytest.fixture(name="detect_encryption_find_key", autouse=False)
-def detect_encryption_find_key_fixture():
+def _detect_encryption_find_key_fixture():  # noqa: PT004
     with patch(
-            "custom_components.candy.config_flow.detect_encryption",
-            return_value=(Encryption.ENCRYPTION, "testkey")
+        "custom_components.candy.config_flow.detect_encryption",
+        return_value=(Encryption.ENCRYPTION, "testkey"),
     ):
         yield
 
 
 @pytest.fixture(name="detect_encryption_key_not_found", autouse=False)
-def detect_encryption_key_not_found_fixture():
+def _detect_encryption_key_not_found_fixture():  # noqa: PT004
     with patch(
-            "custom_components.candy.config_flow.detect_encryption",
-            side_effect=ValueError
+        "custom_components.candy.config_flow.detect_encryption", side_effect=ValueError
     ):
         yield
 
 
 @pytest.fixture(name="detect_encryption_without_key", autouse=False)
-def detect_encryption_without_key_fixture():
+def _detect_encryption_without_key_fixture():  # noqa: PT004
     with patch(
-            "custom_components.candy.config_flow.detect_encryption",
-            return_value=(Encryption.ENCRYPTION_WITHOUT_KEY, None)
+        "custom_components.candy.config_flow.detect_encryption",
+        return_value=(Encryption.ENCRYPTION_WITHOUT_KEY, None),
     ):
         yield
 
 
-async def test_no_encryption_detected(hass, detect_no_encryption): # pylint: disable=unused-argument
+async def test_no_encryption_detected(hass, detect_no_encryption):  # pylint: disable=unused-argument
     """Test a successful config flow when detected encryption is no encryption."""
 
     # Initialize a config flow
@@ -84,7 +83,7 @@ async def test_no_encryption_detected(hass, detect_no_encryption): # pylint: dis
     assert result["result"]
 
 
-async def test_detected_encryption_and_key_found(hass, detect_encryption_find_key): # pylint: disable=unused-argument
+async def test_detected_encryption_and_key_found(hass, detect_encryption_find_key):  # pylint: disable=unused-argument
     """Test a successful config flow when encryption is detected and key is found."""
 
     # Initialize a config flow
@@ -107,12 +106,14 @@ async def test_detected_encryption_and_key_found(hass, detect_encryption_find_ke
     assert result["data"] == {
         CONF_IP_ADDRESS: "192.168.0.66",
         CONF_KEY_USE_ENCRYPTION: True,
-        CONF_PASSWORD: "testkey"
+        CONF_PASSWORD: "testkey",
     }
     assert result["result"]
 
 
-async def test_detected_encryption_and_key_not_found(hass, detect_encryption_key_not_found): # pylint: disable=unused-argument
+async def test_detected_encryption_and_key_not_found(
+    hass, detect_encryption_key_not_found
+):  # pylint: disable=unused-argument
     """Test a failing config flow when encryption is detected and key is not found."""
     # Initialize a config flow
     result = await hass.config_entries.flow.async_init(
@@ -132,7 +133,7 @@ async def test_detected_encryption_and_key_not_found(hass, detect_encryption_key
     assert result["errors"] == {"base": "detect_encryption"}
 
 
-async def test_detected_encryption_without_key(hass, detect_encryption_without_key): # pylint: disable=unused-argument
+async def test_detected_encryption_without_key(hass, detect_encryption_without_key):  # pylint: disable=unused-argument
     """Test a successful config flow when encryption is detected without using a key."""
     # Initialize a config flow
     result = await hass.config_entries.flow.async_init(
@@ -154,6 +155,6 @@ async def test_detected_encryption_without_key(hass, detect_encryption_without_k
     assert result["data"] == {
         CONF_IP_ADDRESS: "192.168.0.66",
         CONF_KEY_USE_ENCRYPTION: True,
-        CONF_PASSWORD: ""
+        CONF_PASSWORD: "",
     }
     assert result["result"]

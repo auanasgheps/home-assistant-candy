@@ -1,14 +1,16 @@
-"""Tests for various sensors"""
+"""Tests for various sensors."""
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_registry
 from pytest_homeassistant_custom_component.common import load_fixture
-from pytest_homeassistant_custom_component.test_util.aiohttp import \
-    AiohttpClientMocker
+from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from .common import init_integration
 
 
-async def test_main_sensor_idle(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def test_main_sensor_idle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
     await init_integration(hass, aioclient_mock, load_fixture("dishwasher/idle.json"))
 
     state = hass.states.get("sensor.dishwasher")
@@ -24,11 +26,13 @@ async def test_main_sensor_idle(hass: HomeAssistant, aioclient_mock: AiohttpClie
         "salt_empty": False,
         "rinse_aid_empty": False,
         "friendly_name": "Dishwasher",
-        "icon": "mdi:glass-wine"
+        "icon": "mdi:glass-wine",
     }
 
 
-async def test_main_sensor_wash(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def test_main_sensor_wash(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
     await init_integration(hass, aioclient_mock, load_fixture("dishwasher/wash.json"))
 
     state = hass.states.get("sensor.dishwasher")
@@ -44,12 +48,16 @@ async def test_main_sensor_wash(hass: HomeAssistant, aioclient_mock: AiohttpClie
         "salt_empty": True,
         "rinse_aid_empty": True,
         "friendly_name": "Dishwasher",
-        "icon": "mdi:glass-wine"
+        "icon": "mdi:glass-wine",
     }
 
 
-async def test_main_sensor_wash_no_opzprog(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
-    await init_integration(hass, aioclient_mock, load_fixture("dishwasher/wash_no_opzprog.json"))
+async def test_main_sensor_wash_no_opzprog(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    await init_integration(
+        hass, aioclient_mock, load_fixture("dishwasher/wash_no_opzprog.json")
+    )
 
     state = hass.states.get("sensor.dishwasher")
 
@@ -64,12 +72,16 @@ async def test_main_sensor_wash_no_opzprog(hass: HomeAssistant, aioclient_mock: 
         "salt_empty": False,
         "rinse_aid_empty": False,
         "friendly_name": "Dishwasher",
-        "icon": "mdi:glass-wine"
+        "icon": "mdi:glass-wine",
     }
 
 
-async def test_main_sensor_drying_optional_params(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
-    await init_integration(hass, aioclient_mock, load_fixture("dishwasher/drying_optional_params.json"))
+async def test_main_sensor_drying_optional_params(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    await init_integration(
+        hass, aioclient_mock, load_fixture("dishwasher/drying_optional_params.json")
+    )
 
     state = hass.states.get("sensor.dishwasher")
 
@@ -86,11 +98,13 @@ async def test_main_sensor_drying_optional_params(hass: HomeAssistant, aioclient
         "salt_empty": False,
         "rinse_aid_empty": True,
         "friendly_name": "Dishwasher",
-        "icon": "mdi:glass-wine"
+        "icon": "mdi:glass-wine",
     }
 
 
-async def test_remaining_time_sensor_idle(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def test_remaining_time_sensor_idle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
     await init_integration(hass, aioclient_mock, load_fixture("dishwasher/idle.json"))
 
     state = hass.states.get("sensor.dishwasher_remaining_time")
@@ -104,7 +118,9 @@ async def test_remaining_time_sensor_idle(hass: HomeAssistant, aioclient_mock: A
     }
 
 
-async def test_remaining_time_sensor_wash(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def test_remaining_time_sensor_wash(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
     await init_integration(hass, aioclient_mock, load_fixture("dishwasher/wash.json"))
 
     state = hass.states.get("sensor.dishwasher_remaining_time")
@@ -118,7 +134,9 @@ async def test_remaining_time_sensor_wash(hass: HomeAssistant, aioclient_mock: A
     }
 
 
-async def test_main_sensor_device_info(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def test_main_sensor_device_info(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
     await init_integration(hass, aioclient_mock, load_fixture("dishwasher/idle.json"))
 
     entity_reg = entity_registry.async_get(hass)
@@ -132,7 +150,9 @@ async def test_main_sensor_device_info(hass: HomeAssistant, aioclient_mock: Aioh
     assert device.suggested_area == "Kitchen"
 
 
-async def test_sensors_device_info(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def test_sensors_device_info(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
     await init_integration(hass, aioclient_mock, load_fixture("dishwasher/idle.json"))
 
     entity_reg = entity_registry.async_get(hass)
