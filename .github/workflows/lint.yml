@@ -1,0 +1,55 @@
+name: "Lint"
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    branches:
+      - "main"
+
+jobs:
+  lint:
+    name: "Lint, Format and Test"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Checkout the repository"
+        uses: "actions/checkout@v4"
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: "Install dependencies"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -r requirements.test.txt
+
+      - name: "Run Ruff Check"
+        run: python -m ruff check .
+
+      - name: "Run Ruff Format Check"
+        run: python -m ruff format --check .
+
+      - name: "Run mypy"
+        run: python -m mypy custom_components/candy
+
+      - name: "Run pytest"
+        run: |
+          python -m pytest \
+            --asyncio-mode=auto \
+            --cov-report term-missing \
+            --cov-report xml \
+            --cov=custom_components.candy
+
+      - name: "Upload coverage to Codecov"
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: "Hassfest validation"
+        uses: home-assistant/actions/hassfest@master

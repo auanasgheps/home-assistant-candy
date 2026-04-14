@@ -160,7 +160,6 @@ venv/*
 .ruff_cache/*
 .vscode/*
 .devcontainer/*
-.github/*
 .husky/*
 .prettierignore
 .prettierrc
