@@ -1,6 +1,6 @@
 # Candy Home Assistant Component
 
-[![Run tests](https://github.com/bigmoby/home-assistant-candy/actions/workflows/test.yml/badge.svg)](https://github.com/bigmoby/home-assistant-candy/actions/workflows/test.yml)
+[![Run tests](https://github.com/bigmoby/home-assistant-candy/actions/workflows/lint.yml/badge.svg)](https://github.com/bigmoby/home-assistant-candy/actions/workflows/lint.yml)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![codecov](https://codecov.io/gh/bigmoby/home-assistant-candy/branch/main/graph/badge.svg?token=HE0AIQOGAD)](https://codecov.io/gh/bigmoby/home-assistant-candy)
 
