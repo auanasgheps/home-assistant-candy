@@ -7,6 +7,8 @@ from homeassistant.helpers import device_registry, entity_registry
 from pytest_homeassistant_custom_component.common import load_fixture
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
+from custom_components.candy.const import DATA_KEY_COORDINATOR, DOMAIN
+
 from .common import init_integration
 
 
@@ -211,8 +213,6 @@ async def test_main_sensor_off_after_finished(
 
     # Now simulate device going offline (TimeoutError on next poll)
     # aioclient_mock doesn't support per-call side effects easily, so we patch the client method
-    from custom_components.candy.const import DATA_KEY_COORDINATOR, DOMAIN
-
     config_entries = hass.config_entries.async_entries(DOMAIN)
     assert config_entries
     entry_id = config_entries[0].entry_id
