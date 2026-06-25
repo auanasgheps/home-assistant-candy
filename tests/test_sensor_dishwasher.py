@@ -30,6 +30,21 @@ async def test_main_sensor_idle(
     }
 
 
+async def test_program_sensor_idle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    await init_integration(hass, aioclient_mock, load_fixture("dishwasher/idle.json"))
+
+    state = hass.states.get("sensor.dishwasher_program")
+
+    assert state
+    assert state.state == "P1+"
+    assert state.attributes == {
+        "friendly_name": "Dishwasher program",
+        "icon": "mdi:glass-wine",
+    }
+
+
 async def test_main_sensor_wash(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):

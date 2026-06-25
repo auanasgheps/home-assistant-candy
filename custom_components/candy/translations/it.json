@@ -57,6 +57,9 @@
       "wash_motor_frequency": {
         "name": "Frequenza motore"
       },
+      "wash_program": {
+        "name": "Programma di lavaggio"
+      },
       "tumble_dryer": {
         "name": "Asciugatrice"
       },
@@ -66,17 +69,26 @@
       "tumble_remaining_time": {
         "name": "Tempo rimanente asciugatrice"
       },
+      "tumble_program": {
+        "name": "Programma asciugatrice"
+      },
       "oven": {
         "name": "Forno"
       },
       "oven_temperature": {
         "name": "Temperatura forno"
       },
+      "oven_program": {
+        "name": "Programma forno"
+      },
       "dishwasher": {
         "name": "Lavastoviglie"
       },
       "dishwasher_remaining_time": {
         "name": "Tempo rimanente lavastoviglie"
+      },
+      "dishwasher_program": {
+        "name": "Programma lavastoviglie"
       }
     }
   },

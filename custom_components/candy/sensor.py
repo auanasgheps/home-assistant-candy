@@ -32,11 +32,14 @@ from .const import (
     SUGGESTED_AREA_BATHROOM,
     SUGGESTED_AREA_KITCHEN,
     UNIQUE_ID_DISHWASHER,
+    UNIQUE_ID_DISHWASHER_PROGRAM,
     UNIQUE_ID_DISHWASHER_REMAINING_TIME,
     UNIQUE_ID_OVEN,
+    UNIQUE_ID_OVEN_PROGRAM,
     UNIQUE_ID_OVEN_TEMP,
     UNIQUE_ID_TUMBLE_CYCLE_STATUS,
     UNIQUE_ID_TUMBLE_DRYER,
+    UNIQUE_ID_TUMBLE_PROGRAM,
     UNIQUE_ID_TUMBLE_REMAINING_TIME,
     UNIQUE_ID_WASH_CYCLE_STATUS,
     UNIQUE_ID_WASH_DELAY,
@@ -45,6 +48,7 @@ from .const import (
     UNIQUE_ID_WASH_MOTOR_FREQ,
     UNIQUE_ID_WASH_NTC_DRUM,
     UNIQUE_ID_WASH_NTC_WATER,
+    UNIQUE_ID_WASH_PROGRAM,
     UNIQUE_ID_WASH_REMAINING_TIME,
     UNIQUE_ID_WASH_SPIN_SPEED,
     UNIQUE_ID_WASH_TEMPERATURE,
@@ -64,6 +68,7 @@ async def async_setup_entry(
         status = coordinator.data
         entities: list[CandyBaseSensor] = [
             CandyWashingMachineSensor(coordinator, config_id),
+            CandyWashProgramSensor(coordinator, config_id),
             CandyWashCycleStatusSensor(coordinator, config_id),
             CandyWashRemainingTimeSensor(coordinator, config_id),
             CandyWashTemperatureSensor(coordinator, config_id),
@@ -85,6 +90,7 @@ async def async_setup_entry(
         async_add_entities(
             [
                 CandyTumbleDryerSensor(coordinator, config_id),
+                CandyTumbleProgramSensor(coordinator, config_id),
                 CandyTumbleStatusSensor(coordinator, config_id),
                 CandyTumbleRemainingTimeSensor(coordinator, config_id),
             ]
@@ -93,6 +99,7 @@ async def async_setup_entry(
         async_add_entities(
             [
                 CandyOvenSensor(coordinator, config_id),
+                CandyOvenProgramSensor(coordinator, config_id),
                 CandyOvenTempSensor(coordinator, config_id),
             ]
         )
@@ -100,6 +107,7 @@ async def async_setup_entry(
         async_add_entities(
             [
                 CandyDishwasherSensor(coordinator, config_id),
+                CandyDishwasherProgramSensor(coordinator, config_id),
                 CandyDishwasherRemainingTimeSensor(coordinator, config_id),
             ]
         )
@@ -175,6 +183,38 @@ class CandyWashingMachineSensor(CandyBaseSensor):
             attributes["program_code"] = status.program_code
 
         return attributes
+
+
+class CandyWashProgramSensor(CandyBaseSensor):
+    def device_name(self) -> str:
+        return DEVICE_NAME_WASHING_MACHINE
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def name(self) -> str:
+        return "Wash program"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_PROGRAM.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        status = cast(WashingMachineStatus, self.coordinator.data)
+        return status.program
+
+    @property
+    def extra_state_attributes(self) -> Mapping[str, Any]:
+        status = cast(WashingMachineStatus, self.coordinator.data)
+        if status.program_code is not None:
+            return {"program_code": status.program_code}
+        return {}
+
+    @property
+    def icon(self) -> str:
+        return "mdi:washing-machine"
 
 
 class CandyWashCycleStatusSensor(CandyBaseSensor):
@@ -508,6 +548,31 @@ class CandyTumbleDryerSensor(CandyBaseSensor):
         return attributes
 
 
+class CandyTumbleProgramSensor(CandyBaseSensor):
+    def device_name(self) -> str:
+        return DEVICE_NAME_TUMBLE_DRYER
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def name(self) -> str:
+        return "Dryer program"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_PROGRAM.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        status = cast(TumbleDryerStatus, self.coordinator.data)
+        return status.program
+
+    @property
+    def icon(self) -> str:
+        return "mdi:tumble-dryer"
+
+
 class CandyTumbleStatusSensor(CandyBaseSensor):
     def device_name(self) -> str:
         return DEVICE_NAME_TUMBLE_DRYER
@@ -608,6 +673,36 @@ class CandyOvenSensor(CandyBaseSensor):
         return attributes
 
 
+class CandyOvenProgramSensor(CandyBaseSensor):
+    def device_name(self) -> str:
+        return DEVICE_NAME_OVEN
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_KITCHEN
+
+    @property
+    def name(self) -> str:
+        return "Oven program"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_OVEN_PROGRAM.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        status = cast(OvenStatus, self.coordinator.data)
+        return status.program
+
+    @property
+    def extra_state_attributes(self) -> Mapping[str, Any]:
+        status = cast(OvenStatus, self.coordinator.data)
+        return {"selection": status.selection}
+
+    @property
+    def icon(self) -> str:
+        return "mdi:stove"
+
+
 class CandyOvenTempSensor(CandyBaseSensor):
     def device_name(self) -> str:
         return DEVICE_NAME_OVEN
@@ -684,6 +779,31 @@ class CandyDishwasherSensor(CandyBaseSensor):
             attributes["delayed_start_hours"] = status.delayed_start_hours
 
         return attributes
+
+
+class CandyDishwasherProgramSensor(CandyBaseSensor):
+    def device_name(self) -> str:
+        return DEVICE_NAME_DISHWASHER
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_KITCHEN
+
+    @property
+    def name(self) -> str:
+        return "Dishwasher program"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_DISHWASHER_PROGRAM.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        status = cast(DishwasherStatus, self.coordinator.data)
+        return status.program
+
+    @property
+    def icon(self) -> str:
+        return "mdi:glass-wine"
 
 
 class CandyDishwasherRemainingTimeSensor(CandyBaseSensor):

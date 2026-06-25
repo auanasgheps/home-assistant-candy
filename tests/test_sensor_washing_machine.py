@@ -32,6 +32,24 @@ async def test_main_sensor_idle(
     }
 
 
+async def test_program_sensor_idle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    await init_integration(
+        hass, aioclient_mock, load_fixture("washing_machine/idle.json")
+    )
+
+    state = hass.states.get("sensor.wash_program")
+
+    assert state
+    assert state.state == "1"
+    assert state.attributes == {
+        "program_code": 136,
+        "friendly_name": "Wash program",
+        "icon": "mdi:washing-machine",
+    }
+
+
 async def test_cycle_sensor_idle(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):

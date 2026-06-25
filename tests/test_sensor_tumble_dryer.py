@@ -32,6 +32,21 @@ async def test_main_sensor_idle(
     }
 
 
+async def test_program_sensor_idle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    await init_integration(hass, aioclient_mock, load_fixture("tumble_dryer/idle.json"))
+
+    state = hass.states.get("sensor.dryer_program")
+
+    assert state
+    assert state.state == "1"
+    assert state.attributes == {
+        "friendly_name": "Dryer program",
+        "icon": "mdi:tumble-dryer",
+    }
+
+
 async def test_main_sensor_running(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):

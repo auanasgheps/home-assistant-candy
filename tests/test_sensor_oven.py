@@ -29,6 +29,22 @@ async def test_main_sensor_idle(
     }
 
 
+async def test_program_sensor_idle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    await init_integration(hass, aioclient_mock, load_fixture("oven/idle.json"))
+
+    state = hass.states.get("sensor.oven_program")
+
+    assert state
+    assert state.state == "2"
+    assert state.attributes == {
+        "selection": 1,
+        "friendly_name": "Oven program",
+        "icon": "mdi:stove",
+    }
+
+
 async def test_main_sensor_heating(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
