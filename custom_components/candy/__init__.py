@@ -306,7 +306,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             update_interval=timedelta(hours=1),
             update_method=update_statistics,
         )
-        await stats_coordinator.async_refresh()
+        if last_known_statistics is not None:
+            # Seed the coordinator with the restored value so we skip the initial
+            # network fetch (which would retry 3× against an offline machine).
+            stats_coordinator.async_set_updated_data(last_known_statistics)
+        else:
+            await stats_coordinator.async_refresh()
         if stats_coordinator.last_update_success:
             hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_STATS_COORDINATOR] = (
                 stats_coordinator
