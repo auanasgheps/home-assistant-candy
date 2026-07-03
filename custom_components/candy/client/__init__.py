@@ -1,7 +1,7 @@
 import asyncio
 import json
-from json import JSONDecodeError
 import logging
+from json import JSONDecodeError
 from typing import Union
 
 import aiohttp
