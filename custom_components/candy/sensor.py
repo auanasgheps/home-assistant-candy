@@ -564,7 +564,8 @@ class CandyWashCheckUpSensor(CandyBaseSensor):
         return "mdi:wrench-check"
 
 
-class CandyWashTotalCyclesSensor(CandyBaseSensor):    """Total number of wash cycles completed by the washing machine."""
+class CandyWashTotalCyclesSensor(CandyBaseSensor):
+    """Total number of wash cycles completed by the washing machine."""
 
     def device_name(self) -> str:
         return DEVICE_NAME_WASHING_MACHINE
