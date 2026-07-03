@@ -243,16 +243,21 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     async def update_status():
         nonlocal last_known_status
+        prev_state = getattr(last_known_status, "machine_state", None)
+        can_infer_off = (
+            prev_state in _OFF_INFERRED_STATES or prev_state == MachineState.OFF
+        )
+        # Use a single attempt (no backoff) when we can fall back to a cached Off status —
+        # retrying a connection error against an offline device just wastes time at startup.
+        fetch = client.status() if can_infer_off else client.status_with_retry()
         try:
             async with async_timeout.timeout(40):
-                status = await client.status_with_retry()
+                status = await fetch
                 _LOGGER.debug("Fetched status: %s", status)
                 last_known_status = status
                 return status
         except (TimeoutError, aiohttp.ClientError) as err:
-            # Network / timeout error: check if we can infer "Off" from last known state
-            prev_state = getattr(last_known_status, "machine_state", None)
-            if prev_state in _OFF_INFERRED_STATES or prev_state == MachineState.OFF:
+            if can_infer_off:
                 _LOGGER.warning(
                     "Device at %s is unreachable (last state: %s). "
                     "Assuming it was powered off.",
