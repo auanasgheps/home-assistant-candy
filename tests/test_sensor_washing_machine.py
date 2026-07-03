@@ -195,6 +195,69 @@ async def test_sensors_device_info(
     assert main_device == cycle_device == time_device
 
 
+async def test_check_up_sensor_ok(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    await init_integration(
+        hass, aioclient_mock, load_fixture("washing_machine/idle.json")
+    )
+
+    state = hass.states.get("sensor.wash_maintenance")
+
+    assert state
+    assert state.state == "Ok"
+    assert state.attributes == {
+        "friendly_name": "Wash maintenance",
+        "icon": "mdi:wrench-check",
+    }
+
+
+async def test_check_up_sensor_service_due(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    service_due_fixture = load_fixture("washing_machine/idle.json").replace(
+        '"CheckUpState": "0"', '"CheckUpState": "1"'
+    )
+    await init_integration(hass, aioclient_mock, service_due_fixture)
+
+    state = hass.states.get("sensor.wash_maintenance")
+
+    assert state
+    assert state.state == "Service due"
+
+
+async def test_total_cycles_sensor(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    await init_integration(
+        hass,
+        aioclient_mock,
+        load_fixture("washing_machine/idle.json"),
+        statistics_response=load_fixture("washing_machine/statistics.json"),
+    )
+
+    state = hass.states.get("sensor.wash_total_cycles")
+
+    assert state
+    assert state.state == "40"
+    assert state.attributes == {
+        "friendly_name": "Wash total cycles",
+        "icon": "mdi:counter",
+    }
+
+
+async def test_total_cycles_sensor_absent_without_statistics(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    await init_integration(
+        hass, aioclient_mock, load_fixture("washing_machine/idle.json")
+    )
+
+    state = hass.states.get("sensor.wash_total_cycles")
+
+    assert state is None
+
+
 async def test_main_sensor_off_after_finished(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):

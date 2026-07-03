@@ -15,7 +15,12 @@ TEST_UNENCRYPTED_HEX_RESPONSE = """
 """
 
 
-async def init_integration(hass: HomeAssistant, aioclient_mock, status_response: str):
+async def init_integration(
+    hass: HomeAssistant,
+    aioclient_mock,
+    status_response: str,
+    statistics_response: str | None = None,
+):
     entry = MockConfigEntry(
         domain=DOMAIN,
         unique_id="123-456",
@@ -29,6 +34,11 @@ async def init_integration(hass: HomeAssistant, aioclient_mock, status_response:
     aioclient_mock.get(
         f"http://{TEST_IP}/http-read.json?encrypted=0", text=status_response
     )
+    if statistics_response is not None:
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-getStatistics.json?encrypted=0",
+            text=statistics_response,
+        )
 
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
