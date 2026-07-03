@@ -143,6 +143,7 @@ def _offline_washing_machine() -> WashingMachineStatus:
         unbalance_fault=None,
         unbalance_count=None,
         fault_count=None,
+        check_up_state=None,
     )
 
 
