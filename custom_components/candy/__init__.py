@@ -287,7 +287,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             nonlocal last_known_statistics
             try:
                 async with async_timeout.timeout(40):
-                    stats = await client.statistics_with_retry()
+                    stats = await client.fetch_statistics()
                     last_known_statistics = stats
                     return stats
             except Exception as err:
