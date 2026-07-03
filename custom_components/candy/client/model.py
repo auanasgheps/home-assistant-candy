@@ -91,7 +91,9 @@ class WashingMachineStatus:
             unbalance_fault=int(json["unbF"]) if "unbF" in json else None,
             unbalance_count=int(json["unbC"]) if "unbC" in json else None,
             fault_count=int(json["numF"]) if "numF" in json else None,
-            check_up_state=int(json["CheckUpState"]) if "CheckUpState" in json else None,
+            check_up_state=int(json["CheckUpState"])
+            if "CheckUpState" in json
+            else None,
         )
 
 
@@ -236,9 +238,7 @@ class WashingMachineStatistics:
     @classmethod
     def from_json(cls, json):
         total = sum(
-            int(v)
-            for k, v in json.items()
-            if k.startswith("Program") and v.isdigit()
+            int(v) for k, v in json.items() if k.startswith("Program") and v.isdigit()
         )
         return cls(total_cycles=total)
 
