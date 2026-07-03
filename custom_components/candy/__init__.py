@@ -40,6 +40,7 @@ from .const import (
     UNIQUE_ID_DISHWASHER,
     UNIQUE_ID_OVEN,
     UNIQUE_ID_TUMBLE_DRYER,
+    UNIQUE_ID_WASH_TOTAL_CYCLES,
     UNIQUE_ID_WASHING_MACHINE,
 )
 
@@ -120,6 +121,31 @@ def _restore_last_known_status(
             return factory()
 
     return None
+
+
+def _restore_last_known_statistics(
+    hass: HomeAssistant,
+    config_entry_id: str,
+) -> WashingMachineStatistics | None:
+    """Read the persisted total-cycles value from HA's state machine.
+
+    Returns a WashingMachineStatistics populated from the last known sensor state,
+    or None if the entity was never registered or its state is not a valid integer.
+    """
+    registry = er.async_get(hass)
+    unique_id = UNIQUE_ID_WASH_TOTAL_CYCLES.format(config_entry_id)
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+    if entity_id is None:
+        return None
+    state = hass.states.get(entity_id)
+    if state is None or not state.state.isdigit():
+        return None
+    _LOGGER.debug(
+        "Restored total_cycles from HA state machine: %s = %s",
+        entity_id,
+        state.state,
+    )
+    return WashingMachineStatistics(total_cycles=int(state.state))
 
 
 def _offline_washing_machine() -> WashingMachineStatus:
@@ -254,11 +280,24 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     if isinstance(coordinator.data, WashingMachineStatus):
 
+        last_known_statistics = _restore_last_known_statistics(
+            hass, config_entry.entry_id
+        )
+
         async def update_statistics() -> WashingMachineStatistics:
+            nonlocal last_known_statistics
             try:
                 async with async_timeout.timeout(40):
-                    return await client.statistics_with_retry()
+                    stats = await client.statistics_with_retry()
+                    last_known_statistics = stats
+                    return stats
             except Exception as err:
+                if last_known_statistics is not None:
+                    _LOGGER.warning(
+                        "Failed to fetch statistics (%s); returning last known value.",
+                        repr(err),
+                    )
+                    return last_known_statistics
                 raise UpdateFailed(f"Error fetching statistics: {repr(err)}") from err
 
         stats_coordinator = DataUpdateCoordinator(
