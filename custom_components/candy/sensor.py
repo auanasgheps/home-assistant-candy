@@ -4,7 +4,7 @@ from typing import Any, cast
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature, UnitOfTime
+from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.typing import StateType
@@ -383,6 +383,10 @@ class CandyWashErrorSensor(CandyBaseSensor):
         return SUGGESTED_AREA_BATHROOM
 
     @property
+    def entity_category(self) -> EntityCategory:
+        return EntityCategory.DIAGNOSTIC
+
+    @property
     def name(self) -> str:
         return "Wash error code"
 
@@ -407,6 +411,10 @@ class CandyWashDelaySensor(CandyBaseSensor):
 
     def suggested_area(self) -> str:
         return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def entity_category(self) -> EntityCategory:
+        return EntityCategory.DIAGNOSTIC
 
     @property
     def name(self) -> str:
@@ -439,6 +447,10 @@ class CandyWashNtcWaterSensor(CandyBaseSensor):
         return SUGGESTED_AREA_BATHROOM
 
     @property
+    def entity_category(self) -> EntityCategory:
+        return EntityCategory.DIAGNOSTIC
+
+    @property
     def name(self) -> str:
         return "Wash NTC water"
 
@@ -465,6 +477,10 @@ class CandyWashNtcDrumSensor(CandyBaseSensor):
         return SUGGESTED_AREA_BATHROOM
 
     @property
+    def entity_category(self) -> EntityCategory:
+        return EntityCategory.DIAGNOSTIC
+
+    @property
     def name(self) -> str:
         return "Wash NTC drum"
 
@@ -489,6 +505,10 @@ class CandyWashMotorFreqSensor(CandyBaseSensor):
 
     def suggested_area(self) -> str:
         return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def entity_category(self) -> EntityCategory:
+        return EntityCategory.DIAGNOSTIC
 
     @property
     def name(self) -> str:
@@ -519,6 +539,10 @@ class CandyWashTotalCyclesSensor(CandyBaseSensor):
 
     def suggested_area(self) -> str:
         return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def entity_category(self) -> EntityCategory:
+        return EntityCategory.DIAGNOSTIC
 
     @property
     def name(self) -> str:
