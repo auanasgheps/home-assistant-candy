@@ -68,6 +68,7 @@ class WashingMachineStatus:
     unbalance_fault: int | None  # unbF — unbalance fault count
     unbalance_count: int | None  # unbC — unbalance count
     fault_count: int | None  # numF — total fault count
+    check_up_state: int | None  # CheckUpState — 0 = ok, non-zero = service due
 
     @classmethod
     def from_json(cls, json):
@@ -90,6 +91,7 @@ class WashingMachineStatus:
             unbalance_fault=int(json["unbF"]) if "unbF" in json else None,
             unbalance_count=int(json["unbC"]) if "unbC" in json else None,
             fault_count=int(json["numF"]) if "numF" in json else None,
+            check_up_state=int(json["CheckUpState"]) if "CheckUpState" in json else None,
         )
 
 

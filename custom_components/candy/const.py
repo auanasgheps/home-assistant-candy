@@ -22,6 +22,7 @@ UNIQUE_ID_WASH_NTC_WATER = "{0}-wash_ntc_water"
 UNIQUE_ID_WASH_NTC_DRUM = "{0}-wash_ntc_drum"
 UNIQUE_ID_WASH_MOTOR_FREQ = "{0}-wash_motor_freq"
 UNIQUE_ID_WASH_TOTAL_CYCLES = "{0}-wash_total_cycles"
+UNIQUE_ID_WASH_CHECK_UP = "{0}-wash_check_up"
 
 UNIQUE_ID_TUMBLE_DRYER = "{0}-tumble_dryer"
 UNIQUE_ID_TUMBLE_PROGRAM = "{0}-tumble_program"

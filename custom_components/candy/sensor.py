@@ -54,6 +54,7 @@ from .const import (
     UNIQUE_ID_WASH_REMAINING_TIME,
     UNIQUE_ID_WASH_SPIN_SPEED,
     UNIQUE_ID_WASH_TEMPERATURE,
+    UNIQUE_ID_WASH_CHECK_UP,
     UNIQUE_ID_WASH_TOTAL_CYCLES,
     UNIQUE_ID_WASHING_MACHINE,
 )
@@ -88,6 +89,8 @@ async def async_setup_entry(
             entities.append(CandyWashNtcDrumSensor(coordinator, config_id))
         if status.motor_speed_freq is not None:
             entities.append(CandyWashMotorFreqSensor(coordinator, config_id))
+        if status.check_up_state is not None:
+            entities.append(CandyWashCheckUpSensor(coordinator, config_id))
         stats_coordinator = hass.data[DOMAIN][config_id].get(DATA_KEY_STATS_COORDINATOR)
         if stats_coordinator is not None:
             entities.append(CandyWashTotalCyclesSensor(stats_coordinator, config_id))
@@ -531,8 +534,37 @@ class CandyWashMotorFreqSensor(CandyBaseSensor):
         return "mdi:sine-wave"
 
 
-class CandyWashTotalCyclesSensor(CandyBaseSensor):
-    """Total number of wash cycles completed by the washing machine."""
+class CandyWashCheckUpSensor(CandyBaseSensor):
+    """Check-up state reported by the washing machine (0 = ok, non-zero = service due)."""
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_WASHING_MACHINE
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def entity_category(self) -> EntityCategory:
+        return EntityCategory.DIAGNOSTIC
+
+    @property
+    def name(self) -> str:
+        return "Wash check-up state"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_CHECK_UP.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        return cast(WashingMachineStatus, self.coordinator.data).check_up_state
+
+    @property
+    def icon(self) -> str:
+        return "mdi:wrench-check"
+
+
+class CandyWashTotalCyclesSensor(CandyBaseSensor):    """Total number of wash cycles completed by the washing machine."""
 
     def device_name(self) -> str:
         return DEVICE_NAME_WASHING_MACHINE
