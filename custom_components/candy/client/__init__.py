@@ -1,7 +1,7 @@
 import asyncio
 import json
-import logging
 from json import JSONDecodeError
+import logging
 from typing import Union
 
 import aiohttp
@@ -10,7 +10,13 @@ from aiolimiter import AsyncLimiter
 import backoff
 
 from .decryption import Encryption, decrypt, find_key
-from .model import DishwasherStatus, OvenStatus, TumbleDryerStatus, WashingMachineStatistics, WashingMachineStatus
+from .model import (
+    DishwasherStatus,
+    OvenStatus,
+    TumbleDryerStatus,
+    WashingMachineStatistics,
+    WashingMachineStatus,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
