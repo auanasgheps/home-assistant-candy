@@ -282,7 +282,7 @@ async def test_main_sensor_off_after_finished(
     coordinator = hass.data[DOMAIN][entry_id][DATA_KEY_COORDINATOR]
 
     with patch(
-        "custom_components.candy.client.CandyClient.status_with_retry",
+        "custom_components.candy.client.CandyClient.status",
         side_effect=TimeoutError,
     ):
         await coordinator.async_refresh()
