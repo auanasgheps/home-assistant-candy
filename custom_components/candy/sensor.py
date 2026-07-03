@@ -416,10 +416,6 @@ class CandyWashDelaySensor(CandyBaseSensor):
         return SUGGESTED_AREA_BATHROOM
 
     @property
-    def entity_category(self) -> EntityCategory:
-        return EntityCategory.DIAGNOSTIC
-
-    @property
     def name(self) -> str:
         return "Wash delay start"
 
@@ -549,7 +545,7 @@ class CandyWashCheckUpSensor(CandyBaseSensor):
 
     @property
     def name(self) -> str:
-        return "Wash check-up state"
+        return "Wash maintenance"
 
     @property
     def unique_id(self) -> str:
@@ -557,7 +553,10 @@ class CandyWashCheckUpSensor(CandyBaseSensor):
 
     @property
     def native_value(self) -> StateType:
-        return cast(WashingMachineStatus, self.coordinator.data).check_up_state
+        state = cast(WashingMachineStatus, self.coordinator.data).check_up_state
+        if state is None:
+            return None
+        return "Ok" if state == 0 else "Service due"
 
     @property
     def icon(self) -> str:
