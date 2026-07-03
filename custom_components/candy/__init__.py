@@ -268,10 +268,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             update_interval=timedelta(hours=1),
             update_method=update_statistics,
         )
-        await stats_coordinator.async_config_entry_first_refresh()
-        hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_STATS_COORDINATOR] = (
-            stats_coordinator
-        )
+        await stats_coordinator.async_refresh()
+        if stats_coordinator.last_update_success:
+            hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_STATS_COORDINATOR] = (
+                stats_coordinator
+            )
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
