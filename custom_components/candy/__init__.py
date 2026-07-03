@@ -27,12 +27,14 @@ from .client.model import (
     OvenState,
     OvenStatus,
     TumbleDryerStatus,
+    WashingMachineStatistics,
     WashingMachineStatus,
     WashProgramState,
 )
 from .const import (
     CONF_KEY_USE_ENCRYPTION,
     DATA_KEY_COORDINATOR,
+    DATA_KEY_STATS_COORDINATOR,
     DOMAIN,
     PLATFORMS,
     UNIQUE_ID_DISHWASHER,
@@ -248,6 +250,24 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = {
         DATA_KEY_COORDINATOR: coordinator
     }
+
+    if isinstance(coordinator.data, WashingMachineStatus):
+        async def update_statistics() -> WashingMachineStatistics:
+            try:
+                async with async_timeout.timeout(40):
+                    return await client.statistics_with_retry()
+            except Exception as err:
+                raise UpdateFailed(f"Error fetching statistics: {repr(err)}") from err
+
+        stats_coordinator = DataUpdateCoordinator(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_statistics",
+            update_interval=timedelta(hours=1),
+            update_method=update_statistics,
+        )
+        await stats_coordinator.async_config_entry_first_refresh()
+        hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_STATS_COORDINATOR] = stats_coordinator
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 

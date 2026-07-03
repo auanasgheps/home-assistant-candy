@@ -227,5 +227,19 @@ class OvenStatus:
         )
 
 
+@dataclass
+class WashingMachineStatistics:
+    total_cycles: int
+
+    @classmethod
+    def from_json(cls, json):
+        total = sum(
+            int(v)
+            for k, v in json.items()
+            if k.startswith("Program") and v.isdigit()
+        )
+        return cls(total_cycles=total)
+
+
 def fahrenheit_to_celsius(fahrenheit: float) -> float:
     return (fahrenheit - 32) * 5.0 / 9.0

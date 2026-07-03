@@ -10,7 +10,7 @@ from aiolimiter import AsyncLimiter
 import backoff
 
 from .decryption import Encryption, decrypt, find_key
-from .model import DishwasherStatus, OvenStatus, TumbleDryerStatus, WashingMachineStatus
+from .model import DishwasherStatus, OvenStatus, TumbleDryerStatus, WashingMachineStatistics, WashingMachineStatus
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -81,6 +81,38 @@ class CandyClient:
 
             return status
 
+    @backoff.on_exception(
+        backoff.expo, aiohttp.ClientError, max_tries=3, logger=__name__
+    )
+    @backoff.on_exception(backoff.expo, TimeoutError, max_tries=3, logger=__name__)
+    async def statistics_with_retry(self) -> WashingMachineStatistics:
+        return await self.fetch_statistics()
+
+    async def fetch_statistics(self) -> WashingMachineStatistics:
+        url = _statistics_url(self.device_ip, self.use_encryption)
+        async with _LIMITER, self.session.get(url) as resp:
+            if self.use_encryption:
+                resp_hex = await resp.text()
+                if self.encryption_key != "":
+                    decrypted_text = decrypt(
+                        self.encryption_key.encode(), bytes.fromhex(resp_hex)
+                    )
+                else:
+                    decrypted_text = bytes.fromhex(resp_hex)
+                resp_json = json.loads(decrypted_text)
+            else:
+                resp_json = await resp.json(content_type="text/html")
+
+            _LOGGER.debug(resp_json)
+
+            if "statusCounters" not in resp_json:
+                raise Exception(
+                    "Unable to parse statistics response: missing statusCounters key",
+                    resp_json,
+                )
+
+            return WashingMachineStatistics.from_json(resp_json["statusCounters"])
+
 
 async def detect_encryption(
     session: aiohttp.ClientSession, device_ip: str
@@ -127,6 +159,10 @@ async def detect_encryption(
 
 def _status_url(device_ip: str, use_encryption: bool) -> str:
     return f"http://{device_ip}/http-read.json?encrypted={1 if use_encryption else 0}"
+
+
+def _statistics_url(device_ip: str, use_encryption: bool) -> str:
+    return f"http://{device_ip}/http-getStatistics.json?encrypted={1 if use_encryption else 0}"
 
 
 # Maps JSON root keys to human-readable device type labels

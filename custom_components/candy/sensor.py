@@ -21,9 +21,11 @@ from .client.model import (
     MachineState,
     OvenStatus,
     TumbleDryerStatus,
+    WashingMachineStatistics,
 )
 from .const import (
     DATA_KEY_COORDINATOR,
+    DATA_KEY_STATS_COORDINATOR,
     DEVICE_NAME_DISHWASHER,
     DEVICE_NAME_OVEN,
     DEVICE_NAME_TUMBLE_DRYER,
@@ -52,6 +54,7 @@ from .const import (
     UNIQUE_ID_WASH_REMAINING_TIME,
     UNIQUE_ID_WASH_SPIN_SPEED,
     UNIQUE_ID_WASH_TEMPERATURE,
+    UNIQUE_ID_WASH_TOTAL_CYCLES,
     UNIQUE_ID_WASHING_MACHINE,
 )
 
@@ -85,6 +88,9 @@ async def async_setup_entry(
             entities.append(CandyWashNtcDrumSensor(coordinator, config_id))
         if status.motor_speed_freq is not None:
             entities.append(CandyWashMotorFreqSensor(coordinator, config_id))
+        stats_coordinator = hass.data[DOMAIN][config_id].get(DATA_KEY_STATS_COORDINATOR)
+        if stats_coordinator is not None:
+            entities.append(CandyWashTotalCyclesSensor(stats_coordinator, config_id))
         async_add_entities(entities)
     elif isinstance(coordinator.data, TumbleDryerStatus):
         async_add_entities(
@@ -503,6 +509,32 @@ class CandyWashMotorFreqSensor(CandyBaseSensor):
     @property
     def icon(self) -> str:
         return "mdi:sine-wave"
+
+
+class CandyWashTotalCyclesSensor(CandyBaseSensor):
+    """Total number of wash cycles completed by the washing machine."""
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_WASHING_MACHINE
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def name(self) -> str:
+        return "Wash total cycles"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_TOTAL_CYCLES.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        return cast(WashingMachineStatistics, self.coordinator.data).total_cycles
+
+    @property
+    def icon(self) -> str:
+        return "mdi:counter"
 
 
 class CandyTumbleDryerSensor(CandyBaseSensor):

@@ -4,6 +4,7 @@ DOMAIN = "candy"
 PLATFORMS = ["sensor"]
 
 DATA_KEY_COORDINATOR = "coordinator"
+DATA_KEY_STATS_COORDINATOR = "stats_coordinator"
 
 CONF_INTEGRATION_TITLE = "Candy"
 CONF_KEY_USE_ENCRYPTION = "use_encryption"
@@ -20,6 +21,7 @@ UNIQUE_ID_WASH_DELAY = "{0}-wash_delay"
 UNIQUE_ID_WASH_NTC_WATER = "{0}-wash_ntc_water"
 UNIQUE_ID_WASH_NTC_DRUM = "{0}-wash_ntc_drum"
 UNIQUE_ID_WASH_MOTOR_FREQ = "{0}-wash_motor_freq"
+UNIQUE_ID_WASH_TOTAL_CYCLES = "{0}-wash_total_cycles"
 
 UNIQUE_ID_TUMBLE_DRYER = "{0}-tumble_dryer"
 UNIQUE_ID_TUMBLE_PROGRAM = "{0}-tumble_program"
