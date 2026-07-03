@@ -279,7 +279,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     }
 
     if isinstance(coordinator.data, WashingMachineStatus):
-
         last_known_statistics = _restore_last_known_statistics(
             hass, config_entry.entry_id
         )
