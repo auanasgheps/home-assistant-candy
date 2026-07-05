@@ -317,7 +317,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             stats_coordinator.async_set_updated_data(last_known_statistics)
         else:
             await stats_coordinator.async_refresh()
-        if stats_coordinator.last_update_success:
+        stats_entity_id = er.async_get(hass).async_get_entity_id(
+            "sensor", DOMAIN, UNIQUE_ID_WASH_TOTAL_CYCLES.format(config_entry.entry_id)
+        )
+        if stats_coordinator.last_update_success or stats_entity_id is not None:
             hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_STATS_COORDINATOR] = (
                 stats_coordinator
             )

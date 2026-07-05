@@ -2,10 +2,11 @@ from abc import abstractmethod
 from collections.abc import Mapping
 from typing import Any, cast
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import RestoreSensor, SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import (
@@ -79,17 +80,27 @@ async def async_setup_entry(
             CandyWashSpinSpeedSensor(coordinator, config_id),
             CandyWashErrorSensor(coordinator, config_id),
         ]
-        if status.fill_percent is not None:
+        registry = er.async_get(hass)
+
+        def _was_registered(unique_id_template: str) -> bool:
+            return (
+                registry.async_get_entity_id(
+                    "sensor", DOMAIN, unique_id_template.format(config_id)
+                )
+                is not None
+            )
+
+        if status.fill_percent is not None or _was_registered(UNIQUE_ID_WASH_FILL_PERCENT):
             entities.append(CandyWashFillPercentSensor(coordinator, config_id))
-        if status.delay_value is not None:
+        if status.delay_value is not None or _was_registered(UNIQUE_ID_WASH_DELAY):
             entities.append(CandyWashDelaySensor(coordinator, config_id))
-        if status.ntc_water is not None:
+        if status.ntc_water is not None or _was_registered(UNIQUE_ID_WASH_NTC_WATER):
             entities.append(CandyWashNtcWaterSensor(coordinator, config_id))
-        if status.ntc_drum is not None:
+        if status.ntc_drum is not None or _was_registered(UNIQUE_ID_WASH_NTC_DRUM):
             entities.append(CandyWashNtcDrumSensor(coordinator, config_id))
-        if status.motor_speed_freq is not None:
+        if status.motor_speed_freq is not None or _was_registered(UNIQUE_ID_WASH_MOTOR_FREQ):
             entities.append(CandyWashMotorFreqSensor(coordinator, config_id))
-        if status.check_up_state is not None:
+        if status.check_up_state is not None or _was_registered(UNIQUE_ID_WASH_CHECK_UP):
             entities.append(CandyWashCheckUpSensor(coordinator, config_id))
         stats_coordinator = hass.data[DOMAIN][config_id].get(DATA_KEY_STATS_COORDINATOR)
         if stats_coordinator is not None:
@@ -530,8 +541,16 @@ class CandyWashMotorFreqSensor(CandyBaseSensor):
         return "mdi:sine-wave"
 
 
-class CandyWashCheckUpSensor(CandyBaseSensor):
+class CandyWashCheckUpSensor(CandyBaseSensor, RestoreSensor):
     """Check-up state reported by the washing machine (0 = ok, non-zero = service due)."""
+
+    _restored_state: str | None = None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_sensor_data()) is not None:
+            if last.native_value in ("Ok", "Service due"):
+                self._restored_state = str(last.native_value)
 
     def device_name(self) -> str:
         return DEVICE_NAME_WASHING_MACHINE
@@ -554,17 +573,31 @@ class CandyWashCheckUpSensor(CandyBaseSensor):
     @property
     def native_value(self) -> StateType:
         state = cast(WashingMachineStatus, self.coordinator.data).check_up_state
-        if state is None:
-            return None
-        return "Ok" if state == 0 else "Service due"
+        if state is not None:
+            return "Ok" if state == 0 else "Service due"
+        return self._restored_state
 
     @property
     def icon(self) -> str:
         return "mdi:wrench-check"
 
 
-class CandyWashTotalCyclesSensor(CandyBaseSensor):
+class CandyWashTotalCyclesSensor(CandyBaseSensor, RestoreSensor):
     """Total number of wash cycles completed by the washing machine."""
+
+    _restored_cycles: int | None = None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_sensor_data()) is not None:
+            try:
+                self._restored_cycles = int(last.native_value)
+            except (TypeError, ValueError):
+                pass
+
+    @property
+    def available(self) -> bool:
+        return super().available or self._restored_cycles is not None
 
     def device_name(self) -> str:
         return DEVICE_NAME_WASHING_MACHINE
@@ -586,7 +619,9 @@ class CandyWashTotalCyclesSensor(CandyBaseSensor):
 
     @property
     def native_value(self) -> StateType:
-        return cast(WashingMachineStatistics, self.coordinator.data).total_cycles
+        if self.coordinator.data is not None:
+            return cast(WashingMachineStatistics, self.coordinator.data).total_cycles
+        return self._restored_cycles
 
     @property
     def icon(self) -> str:

@@ -2,14 +2,19 @@
 
 from unittest.mock import patch
 
-from homeassistant.core import HomeAssistant
+from homeassistant.components.sensor import SensorExtraStoredData
+from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import device_registry, entity_registry
-from pytest_homeassistant_custom_component.common import load_fixture
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    load_fixture,
+    mock_restore_cache_with_extra_data,
+)
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.candy.const import DATA_KEY_COORDINATOR, DOMAIN
 
-from .common import init_integration
+from .common import TEST_IP, init_integration
 
 
 async def test_main_sensor_idle(
@@ -291,3 +296,118 @@ async def test_main_sensor_off_after_finished(
     state = hass.states.get("sensor.washing_machine")
     assert state
     assert state.state == "Off"
+
+
+async def test_total_cycles_shows_cached_value_after_offline_startup(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Total cycles sensor should show last known value when stats fetch fails at startup."""
+    from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
+
+    from custom_components.candy import CONF_KEY_USE_ENCRYPTION
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="123-456",
+        data={
+            CONF_IP_ADDRESS: TEST_IP,
+            CONF_KEY_USE_ENCRYPTION: False,
+            CONF_PASSWORD: "",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    # Pre-register the total cycles entity so the integration knows it existed before.
+    # Capture the returned entry to get the actual entity_id assigned by HA.
+    registry = entity_registry.async_get(hass)
+    cycles_entry = registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        f"{entry.entry_id}-wash_total_cycles",
+        config_entry=entry,
+    )
+
+    # Seed the RestoreSensor cache using the actual entity_id HA assigned
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State(cycles_entry.entity_id, "40"),
+                SensorExtraStoredData(
+                    native_value=40, native_unit_of_measurement=None
+                ).as_dict(),
+            )
+        ],
+    )
+
+    # Device status is reachable, but statistics endpoint is not registered (offline)
+    aioclient_mock.get(
+        f"http://{TEST_IP}/http-read.json?encrypted=0",
+        text=load_fixture("washing_machine/idle.json"),
+    )
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(cycles_entry.entity_id)
+    assert state is not None
+    assert state.state == "40"
+
+
+async def test_check_up_sensor_shows_cached_value_after_offline_startup(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Wash maintenance sensor should show last known value when startup uses synthetic offline status."""
+    from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
+
+    from custom_components.candy import CONF_KEY_USE_ENCRYPTION
+
+    # Build a fixture with no CheckUpState field so check_up_state parses as None
+    fixture_no_checkup = load_fixture("washing_machine/idle.json").replace(
+        '"CheckUpState": "0",', ""
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="123-456",
+        data={
+            CONF_IP_ADDRESS: TEST_IP,
+            CONF_KEY_USE_ENCRYPTION: False,
+            CONF_PASSWORD: "",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    # Pre-register the maintenance entity and capture the actual entity_id
+    registry = entity_registry.async_get(hass)
+    checkup_entry = registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        f"{entry.entry_id}-wash_check_up",
+        config_entry=entry,
+    )
+
+    # Seed the RestoreSensor cache using the actual entity_id HA assigned
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State(checkup_entry.entity_id, "Ok"),
+                SensorExtraStoredData(
+                    native_value="Ok", native_unit_of_measurement=None
+                ).as_dict(),
+            )
+        ],
+    )
+
+    aioclient_mock.get(
+        f"http://{TEST_IP}/http-read.json?encrypted=0",
+        text=fixture_no_checkup,
+    )
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(checkup_entry.entity_id)
+    assert state is not None
+    assert state.state == "Ok"
