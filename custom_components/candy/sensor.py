@@ -602,7 +602,7 @@ class CandyWashTotalCyclesSensor(CandyBaseSensor, RestoreSensor):
         await super().async_added_to_hass()
         if (last := await self.async_get_last_sensor_data()) is not None:
             with contextlib.suppress(TypeError, ValueError):
-                self._restored_cycles = int(last.native_value)
+                self._restored_cycles = int(str(last.native_value))
 
     @property
     def available(self) -> bool:
