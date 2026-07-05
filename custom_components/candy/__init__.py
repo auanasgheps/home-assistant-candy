@@ -258,7 +258,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                 return status
         except (TimeoutError, aiohttp.ClientError) as err:
             if can_infer_off:
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "Device at %s is unreachable (last state: %s). "
                     "Assuming it was powered off.",
                     ip_address,
