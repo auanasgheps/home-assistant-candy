@@ -317,10 +317,18 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             update_interval=timedelta(hours=1),
             update_method=update_statistics,
         )
+        machine_is_off = getattr(coordinator.data, "machine_state", None) in (
+            MachineState.OFF,
+            *_OFF_INFERRED_STATES,
+        )
         if last_known_statistics is not None:
             # Seed the coordinator with the restored value so we skip the initial
             # network fetch (which would retry 3× against an offline machine).
             stats_coordinator.async_set_updated_data(last_known_statistics)
+        elif machine_is_off:
+            # Device is off — total_cycles cannot have changed, skip the fetch.
+            # The hourly poll will retrieve it once the device is reachable.
+            pass
         else:
             await stats_coordinator.async_refresh()
         stats_entity_id = er.async_get(hass).async_get_entity_id(
