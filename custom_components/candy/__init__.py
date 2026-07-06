@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import copy
 from datetime import timedelta
+import json
 import logging
 from typing import Union
 
@@ -292,10 +293,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             nonlocal last_known_statistics
             try:
                 async with async_timeout.timeout(40):
-                    stats = await client.fetch_statistics()
+                    stats = await client.statistics_with_retry()
                     last_known_statistics = stats
                     return stats
-            except Exception as err:
+            except (aiohttp.ClientError, TimeoutError, json.JSONDecodeError) as err:
                 if last_known_statistics is not None:
                     _LOGGER.warning(
                         "Failed to fetch statistics (%s); returning last known value.",

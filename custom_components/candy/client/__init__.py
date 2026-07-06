@@ -91,6 +91,7 @@ class CandyClient:
         backoff.expo, aiohttp.ClientError, max_tries=3, logger=__name__
     )
     @backoff.on_exception(backoff.expo, TimeoutError, max_tries=3, logger=__name__)
+    @backoff.on_exception(backoff.expo, JSONDecodeError, max_tries=3, logger=__name__)
     async def statistics_with_retry(self) -> WashingMachineStatistics:
         return await self.fetch_statistics()
 
