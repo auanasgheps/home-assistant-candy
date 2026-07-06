@@ -251,8 +251,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         # Use a single attempt (no backoff) when we can fall back to a cached Off status —
         # retrying a connection error against an offline device just wastes time at startup.
         fetch = client.status() if can_infer_off else client.status_with_retry()
+        # When we can fall back to Off, use a short timeout — this cuts the stall caused by
+        # the OS TCP retransmit cycle (~13s) for offline devices. 7s is chosen to guarantee
+        # the rate limiter (max_rate=1, time_period=3s) clears before the HTTP request starts,
+        # plus margin for WiFi jitter and slow firmware. Live devices respond in <100ms.
+        poll_timeout = 7 if can_infer_off else 40
         try:
-            async with async_timeout.timeout(40):
+            async with async_timeout.timeout(poll_timeout):
                 status = await fetch
                 _LOGGER.debug("Fetched status: %s", status)
                 last_known_status = status
