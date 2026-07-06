@@ -60,7 +60,7 @@ class WashingMachineStatus:
     fill_percent: int | None  # 0...100
     # Extended fields
     error: int | None  # Err — 0 means no error
-    delay_value: int | None  # DelVal — delay start value in hours
+    delay_value: int | None  # DelVal — delay start value in minutes
     ntc_water: int | None  # NtcW — water NTC sensor (raw ADC)
     ntc_drum: int | None  # NtcD — drum NTC sensor (raw ADC)
     motor_speed_freq: int | None  # APSfreq — motor frequency

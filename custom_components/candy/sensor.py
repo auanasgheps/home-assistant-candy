@@ -451,7 +451,11 @@ class CandyWashDelaySensor(CandyBaseSensor):
 
     @property
     def native_unit_of_measurement(self) -> str:
-        return UnitOfTime.HOURS
+        return UnitOfTime.MINUTES
+
+    @property
+    def device_class(self) -> str:
+        return SensorDeviceClass.DURATION
 
     @property
     def icon(self) -> str:
