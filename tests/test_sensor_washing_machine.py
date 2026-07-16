@@ -14,7 +14,11 @@ from pytest_homeassistant_custom_component.common import (
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.candy import CONF_KEY_USE_ENCRYPTION
-from custom_components.candy.const import DATA_KEY_COORDINATOR, DOMAIN
+from custom_components.candy.const import (
+    DATA_KEY_COORDINATOR,
+    DATA_KEY_STATS_COORDINATOR,
+    DOMAIN,
+)
 
 from .common import TEST_IP, init_integration
 
@@ -405,3 +409,42 @@ async def test_check_up_sensor_shows_cached_value_after_offline_startup(
     state = hass.states.get(checkup_entry.entity_id)
     assert state is not None
     assert state.state == "Ok"
+
+
+async def test_statistics_not_fetched_when_machine_is_off(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Stats coordinator must not call the device when machine_state is OFF."""
+    await init_integration(
+        hass,
+        aioclient_mock,
+        load_fixture("washing_machine/idle.json"),
+        statistics_response=load_fixture("washing_machine/statistics.json"),
+    )
+
+    config_entries = hass.config_entries.async_entries(DOMAIN)
+    entry_id = config_entries[0].entry_id
+    coordinator = hass.data[DOMAIN][entry_id][DATA_KEY_COORDINATOR]
+    stats_coordinator = hass.data[DOMAIN][entry_id][DATA_KEY_STATS_COORDINATOR]
+
+    # Simulate device going offline — coordinator now holds MachineState.OFF
+    with patch(
+        "custom_components.candy.client.CandyClient.status",
+        side_effect=TimeoutError,
+    ):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    # Now trigger a stats poll; network must NOT be called
+    with patch(
+        "custom_components.candy.client.CandyClient.fetch_statistics",
+        side_effect=AssertionError(
+            "fetch_statistics must not be called when machine is off"
+        ),
+    ):
+        await stats_coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.wash_total_cycles")
+    assert state is not None
+    assert state.state.isdigit()

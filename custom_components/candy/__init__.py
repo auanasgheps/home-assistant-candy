@@ -296,6 +296,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
         async def update_statistics() -> WashingMachineStatistics:
             nonlocal last_known_statistics
+            if (
+                getattr(coordinator.data, "machine_state", None) == MachineState.OFF
+                and last_known_statistics is not None
+            ):
+                return last_known_statistics
             try:
                 async with async_timeout.timeout(40):
                     stats = await client.statistics_with_retry()
