@@ -27,27 +27,27 @@ def test_from_code_raises_for_unrecognized_code():
 
 def test_display_name_returns_english_localized_name():
     program = WashingMachineWashProgram(
-        position=1,
-        selector_position=1,
+        position=16,
+        selector_position=14,
         name="RESISTANT_COTTONS",
-        pr_code=136,
+        pr_code=65,
         max_temperature=90,
-        default_temperature=40,
-        max_spin_speed=1400,
-        default_spin_speed=800,
-        min_soil_level=0,
+        default_temperature=60,
+        max_spin_speed=1200,
+        default_spin_speed=1200,
+        min_soil_level=1,
         max_soil_level=3,
-        default_soil_level=1,
-        steam=False,
-        steam_type="",
-        default_duration=120,
-        duration_soil_max=150,
-        duration_soil_medium=120,
-        duration_soil_min=90,
-        liquid_detergent_dose=None,
-        powder_detergent_dose=None,
+        default_soil_level=3,
+        steam=True,
+        steam_type="C",
+        default_duration=169,
+        duration_soil_max=169,
+        duration_soil_medium=131,
+        duration_soil_min=96,
+        liquid_detergent_dose=4,
+        powder_detergent_dose=4,
         max_cycle_capacity=None,
-        available_options=0,
+        available_options=251,
     )
     assert program.display_name == program.localized_name("en")
 
@@ -87,12 +87,12 @@ def test_display_name_falls_back_to_title_case_for_unknown_program():
 def test_load_downloadable_programs_parses_known_entry():
     raw = [
         {
-            "position": "56",
+            "position": "42",
             "name": "DUAL_WM_WD_PROGRAM_DOWNLOAD_NAME_CASHMERE",
-            "parent": "1",
-            "temperature": "30",
+            "parent": "3",
+            "temperature": "20",
             "spin_speed": "600",
-            "soil_level": "1",
+            "soil_level": "0",
             "options": "0",
             "steam": "0",
         }
@@ -101,12 +101,12 @@ def test_load_downloadable_programs_parses_known_entry():
 
     assert len(result) == 1
     program = result[0]
-    assert program.position == 56
-    assert program.parent == 1
-    assert program.temperature == 30
+    assert program.position == 42
+    assert program.parent == 3
+    assert program.temperature == 20
     assert program.spin_speed == 600
-    assert program.soil_level == 1
-    assert program.recipe_id == "D_56"
+    assert program.soil_level == 0
+    assert program.recipe_id == "D_42"
     assert program.display_name("en") == "Cashmere"
 
 
@@ -133,7 +133,7 @@ def test_load_downloadable_programs_skips_invalid_position():
         {
             "position": "not-a-number",
             "name": "DUAL_WM_WD_PROGRAM_DOWNLOAD_NAME_CASHMERE",
-            "parent": "1",
+            "parent": "3",
         }
     ]
     result = load_downloadable_programs(raw)
@@ -143,12 +143,12 @@ def test_load_downloadable_programs_skips_invalid_position():
 def test_load_downloadable_programs_max_spin_speed_becomes_none():
     raw = [
         {
-            "position": "56",
+            "position": "42",
             "name": "DUAL_WM_WD_PROGRAM_DOWNLOAD_NAME_CASHMERE",
-            "parent": "1",
-            "temperature": "30",
+            "parent": "3",
+            "temperature": "20",
             "spin_speed": "MAX",
-            "soil_level": "1",
+            "soil_level": "0",
             "options": "0",
             "steam": "0",
         }
@@ -160,12 +160,12 @@ def test_load_downloadable_programs_max_spin_speed_becomes_none():
 def test_load_downloadable_programs_invalid_spin_speed_becomes_none():
     raw = [
         {
-            "position": "56",
+            "position": "42",
             "name": "DUAL_WM_WD_PROGRAM_DOWNLOAD_NAME_CASHMERE",
-            "parent": "1",
-            "temperature": "30",
+            "parent": "3",
+            "temperature": "20",
             "spin_speed": "garbage",
-            "soil_level": "1",
+            "soil_level": "0",
             "options": "0",
             "steam": "0",
         }
@@ -177,7 +177,7 @@ def test_load_downloadable_programs_invalid_spin_speed_becomes_none():
 def test_load_downloadable_programs_handles_empty_string_fields():
     raw = [
         {
-            "position": "56",
+            "position": "42",
             "name": "DUAL_WM_WD_PROGRAM_DOWNLOAD_NAME_CASHMERE",
             "parent": "",
             "temperature": "",
@@ -190,6 +190,8 @@ def test_load_downloadable_programs_handles_empty_string_fields():
     result = load_downloadable_programs(raw)
     assert len(result) == 1
     prog = result[0]
+    assert prog.position == 42
+    assert prog.recipe_id == "D_42"
     assert prog.parent == 0
     assert prog.temperature == 0
     assert prog.spin_speed is None

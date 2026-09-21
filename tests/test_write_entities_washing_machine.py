@@ -242,7 +242,9 @@ _OFF_JSON = """{
   }
 }"""
 
-_STATS_OK = '{"statusCounters": {"Temp0to30": "40"}}'
+_STATS_OK = (
+    '{"statusCounters": {"Temp0to30": "318", "Temp40": "70", "Temp60to90": "0"}}'
+)
 
 
 def _add_stats_mocks(aioclient_mock: AiohttpClientMocker) -> None:

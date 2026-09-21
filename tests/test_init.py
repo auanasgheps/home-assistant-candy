@@ -61,7 +61,9 @@ _STATUS_RUNNING = """{
   }
 }"""
 
-_STATS_OK = '{"statusCounters": {"Temp0to30": "40"}}'
+_STATS_OK = (
+    '{"statusCounters": {"Temp0to30": "318", "Temp40": "70", "Temp60to90": "0"}}'
+)
 
 # ---------------------------------------------------------------------------
 # _make_off_status — dishwasher and oven branches
@@ -71,7 +73,7 @@ _STATS_OK = '{"statusCounters": {"Temp0to30": "40"}}'
 def test_make_off_status_dishwasher():
     status = DishwasherStatus(
         machine_state=DishwasherState.WASH,
-        program="Cotton",
+        program="P1+",
         remaining_minutes=30,
         delayed_start_hours=None,
         door_open=False,
@@ -84,7 +86,7 @@ def test_make_off_status_dishwasher():
     result = _make_off_status(status)
     assert result.machine_state == DishwasherState.IDLE
     assert result.remaining_minutes == 0
-    assert result.program == "Cotton"
+    assert result.program == "P1+"
 
 
 def test_make_off_status_oven():
@@ -327,7 +329,7 @@ async def test_maintenance_notification_fires_when_due(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
     """Persistent notification is created when a maintenance counter reaches zero."""
-    # total_cycles=40 (from _STATS_OK), last=-60 → elapsed=100 == threshold → due
+    # total_cycles=388 (from _STATS_OK), last=288 → elapsed=100 == threshold → due
     entry = await init_integration(
         hass,
         aioclient_mock,
@@ -336,7 +338,7 @@ async def test_maintenance_notification_fires_when_due(
         extra_config_data={
             CONF_KEY_MAINTENANCE_ENABLED: True,
             CONF_KEY_WATER_HARDNESS: 2,
-            CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP: -60,
+            CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP: 288,
         },
     )
     stats_coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_STATS_COORDINATOR]

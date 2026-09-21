@@ -36,44 +36,26 @@ from custom_components.candy.const import (
 from .common import TEST_IP
 
 # ---------------------------------------------------------------------------
-# Minimal program entry (no steam)
+# Minimal program entry (SPECIAL_39 matching Pr=1 PrCode=136)
 # ---------------------------------------------------------------------------
 
-_COTTON = {
+_SPECIAL_39 = {
     "program": {
         "position": 1,
-        "name": "DUAL_WM_WD_PROGRAM_NAME_COTTON",
+        "name": "DUAL_WM_WD_PROGRAM_NAME_SPECIAL_39",
         "command_parameters": [
             {"command_parameter": {"name": "selector_position", "validation": "1"}},
             {"command_parameter": {"name": "pr_code", "validation": "136"}},
-            {"command_parameter": {"name": "maximum_temperature", "validation": "90"}},
+            {"command_parameter": {"name": "maximum_temperature", "validation": "40"}},
             {"command_parameter": {"name": "default_temperature", "validation": "40"}},
-            {"command_parameter": {"name": "maximum_spin_speed", "validation": "1400"}},
+            {"command_parameter": {"name": "maximum_spin_speed", "validation": "1200"}},
             {"command_parameter": {"name": "default_spin_speed", "validation": "800"}},
-            {"command_parameter": {"name": "minimum_soil_level", "validation": "1"}},
-            {"command_parameter": {"name": "maximum_soil_level", "validation": "3"}},
-            {"command_parameter": {"name": "default_soil_level", "validation": "2"}},
+            {"command_parameter": {"name": "minimum_soil_level", "validation": "0"}},
+            {"command_parameter": {"name": "maximum_soil_level", "validation": "0"}},
+            {"command_parameter": {"name": "default_soil_level", "validation": "0"}},
             {"command_parameter": {"name": "steam", "validation": "0"}},
-            {"command_parameter": {"name": "default_duration", "validation": "90"}},
-            {
-                "command_parameter": {
-                    "name": "remaining_time_soil_max",
-                    "validation": "120",
-                }
-            },
-            {
-                "command_parameter": {
-                    "name": "remaining_time_soil_medium",
-                    "validation": "90",
-                }
-            },
-            {
-                "command_parameter": {
-                    "name": "remaining_time_soil_min",
-                    "validation": "60",
-                }
-            },
-            {"command_parameter": {"name": "available_options", "validation": "0"}},
+            {"command_parameter": {"name": "default_duration", "validation": "39"}},
+            {"command_parameter": {"name": "available_options", "validation": "240"}},
         ],
     }
 }
@@ -110,7 +92,9 @@ _IDLE_WITH_DIS_TEST_RES_2 = """{
   }
 }"""
 
-_STATS_OK = '{"statusCounters": {"Temp0to30": "40"}}'
+_STATS_OK = (
+    '{"statusCounters": {"Temp0to30": "318", "Temp40": "70", "Temp60to90": "0"}}'
+)
 
 _NOW = datetime(2024, 6, 1, 12, 0, 0, tzinfo=UTC)
 
@@ -126,7 +110,7 @@ def _make_entry(**extra) -> MockConfigEntry:
         CONF_KEY_USE_ENCRYPTION: False,
         CONF_PASSWORD: "",
         CONF_KEY_MODE: MODE_FULL_CONTROL,
-        CONF_KEY_PROGRAMS: [_COTTON],
+        CONF_KEY_PROGRAMS: [_SPECIAL_39],
     }
     data.update(extra)
     return MockConfigEntry(domain=DOMAIN, unique_id="test-checkup", data=data)
