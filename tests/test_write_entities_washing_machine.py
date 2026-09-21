@@ -96,23 +96,23 @@ _COTTON = {
     }
 }
 
-# RAPID_30_MIN: pos=2, sel=2, temp and spin fixed (255 = not selectable), soil fixed, no steam
+# RAPID_30_MIN: pos=8, sel=7, temp and spin fixed (255 = not selectable), soil fixed, no steam
 _RAPID = {
     "program": {
-        "position": 2,
+        "position": 8,
         "name": "DUAL_WM_WD_PROGRAM_NAME_RAPID_30_MIN",
         "command_parameters": [
-            {"command_parameter": {"name": "selector_position", "validation": "2"}},
-            {"command_parameter": {"name": "pr_code", "validation": "5"}},
+            {"command_parameter": {"name": "selector_position", "validation": "7"}},
+            {"command_parameter": {"name": "pr_code", "validation": "71"}},
             {"command_parameter": {"name": "maximum_temperature", "validation": "255"}},
             {"command_parameter": {"name": "default_temperature", "validation": "30"}},
             {"command_parameter": {"name": "maximum_spin_speed", "validation": "255"}},
             {"command_parameter": {"name": "default_spin_speed", "validation": "800"}},
-            {"command_parameter": {"name": "minimum_soil_level", "validation": "0"}},
-            {"command_parameter": {"name": "maximum_soil_level", "validation": "0"}},
-            {"command_parameter": {"name": "default_soil_level", "validation": "0"}},
+            {"command_parameter": {"name": "minimum_soil_level", "validation": "2"}},
+            {"command_parameter": {"name": "maximum_soil_level", "validation": "2"}},
+            {"command_parameter": {"name": "default_soil_level", "validation": "9"}},
             {"command_parameter": {"name": "steam", "validation": "0"}},
-            {"command_parameter": {"name": "default_duration", "validation": "14"}},
+            {"command_parameter": {"name": "default_duration", "validation": "30"}},
             {
                 "command_parameter": {
                     "name": "remaining_time_soil_max",
@@ -135,7 +135,46 @@ _RAPID = {
     }
 }
 
-_PROGRAMS = [_COTTON, _RAPID]
+# RAPID_44_MIN: pos=9, sel=7, temp and spin fixed (255 = not selectable), soil fixed, no steam
+_RAPID_44 = {
+    "program": {
+        "position": 9,
+        "name": "DUAL_WM_WD_PROGRAM_NAME_RAPID_44_MIN",
+        "command_parameters": [
+            {"command_parameter": {"name": "selector_position", "validation": "7"}},
+            {"command_parameter": {"name": "pr_code", "validation": "103"}},
+            {"command_parameter": {"name": "maximum_temperature", "validation": "255"}},
+            {"command_parameter": {"name": "default_temperature", "validation": "40"}},
+            {"command_parameter": {"name": "maximum_spin_speed", "validation": "255"}},
+            {"command_parameter": {"name": "default_spin_speed", "validation": "800"}},
+            {"command_parameter": {"name": "minimum_soil_level", "validation": "3"}},
+            {"command_parameter": {"name": "maximum_soil_level", "validation": "3"}},
+            {"command_parameter": {"name": "default_soil_level", "validation": "9"}},
+            {"command_parameter": {"name": "steam", "validation": "0"}},
+            {"command_parameter": {"name": "default_duration", "validation": "44"}},
+            {
+                "command_parameter": {
+                    "name": "remaining_time_soil_max",
+                    "validation": "0",
+                }
+            },
+            {
+                "command_parameter": {
+                    "name": "remaining_time_soil_medium",
+                    "validation": "0",
+                }
+            },
+            {
+                "command_parameter": {
+                    "name": "remaining_time_soil_min",
+                    "validation": "0",
+                }
+            },
+        ],
+    }
+}
+
+_PROGRAMS = [_COTTON, _RAPID, _RAPID_44]
 
 # AUTOCLEAN: selector_position=23, pr_code=104, fixed temp/spin (255)
 _AUTOCLEAN = {
@@ -315,8 +354,8 @@ async def test_temp_select_available_for_cotton_idle(
 async def test_temp_select_unavailable_for_rapid_idle(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
-    rapid_idle = _IDLE_JSON.replace('"Pr": "1"', '"Pr": "2"').replace(
-        '"PrCode": "136"', '"PrCode": "5"'
+    rapid_idle = _IDLE_JSON.replace('"Pr": "1"', '"Pr": "7"').replace(
+        '"PrCode": "136"', '"PrCode": "71"'
     )
     entry = await _init_full_control(hass, aioclient_mock, rapid_idle)
     state = _state(hass, entry, "select", UNIQUE_ID_WASH_TEMP_SELECT)
@@ -388,8 +427,8 @@ async def test_soil_select_reflects_device_slevel(
 async def test_soil_select_unavailable_for_rapid_idle(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
-    rapid_idle = _IDLE_JSON.replace('"Pr": "1"', '"Pr": "2"').replace(
-        '"PrCode": "136"', '"PrCode": "5"'
+    rapid_idle = _IDLE_JSON.replace('"Pr": "1"', '"Pr": "7"').replace(
+        '"PrCode": "136"', '"PrCode": "71"'
     )
     entry = await _init_full_control(hass, aioclient_mock, rapid_idle)
     state = _state(hass, entry, "select", UNIQUE_ID_WASH_SOIL_SELECT)
@@ -628,8 +667,8 @@ async def test_steam_switch_available_for_cotton_idle(
 async def test_steam_switch_unavailable_for_rapid_idle(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
-    rapid_idle = _IDLE_JSON.replace('"Pr": "1"', '"Pr": "2"').replace(
-        '"PrCode": "136"', '"PrCode": "5"'
+    rapid_idle = _IDLE_JSON.replace('"Pr": "1"', '"Pr": "7"').replace(
+        '"PrCode": "136"', '"PrCode": "71"'
     )
     entry = await _init_full_control(hass, aioclient_mock, rapid_idle)
     state = _state(hass, entry, "switch", UNIQUE_ID_WASH_STEAM_SWITCH)
@@ -754,14 +793,14 @@ async def test_estimated_duration_cotton_light_soil(
 async def test_estimated_duration_rapid_uses_default_duration(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
-    # Rapid has fixed soil (min=max=0) → uses default_duration = 14
-    rapid_idle = _IDLE_JSON.replace('"Pr": "1"', '"Pr": "2"').replace(
-        '"PrCode": "136"', '"PrCode": "5"'
+    # Rapid has fixed soil (min=max=2) → uses default_duration = 30
+    rapid_idle = _IDLE_JSON.replace('"Pr": "1"', '"Pr": "7"').replace(
+        '"PrCode": "136"', '"PrCode": "71"'
     )
     entry = await _init_full_control(hass, aioclient_mock, rapid_idle)
     state = _state(hass, entry, "sensor", UNIQUE_ID_WASH_ESTIMATED_DURATION)
     assert state is not None
-    assert state.state == "14"
+    assert state.state == "30"
 
 
 async def test_estimated_duration_steam_off_no_change(
@@ -1026,15 +1065,15 @@ _NFC_BATHROBE = DownloadableProgram(
     description_translations={"en": "Wash your bathrobe."},
 )
 
-# New Clothes: parent=6 → Output 6 → RAPID_30_MIN (pos=2, selector_position=2, pr_code=5, max_spin_speed=255)
-# position=33, spin_speed=1000, soil_level=0 → sent as SLevTgt=0 (no fallback)
+# New Clothes: parent=6 → Output 6 → RAPID_30_MIN (pos=8, selector_position=7, pr_code=71, max_spin_speed=255)
+# position=33, spin_speed=1000, soil_level=2
 _NFC_NEW_CLOTHES = DownloadableProgram(
     position=33,
     name="DUAL_WM_WD_PROGRAM_DOWNLOAD_NAME_NEW_CLOTHES",
     parent=6,
     temperature=20,
     spin_speed=1000,
-    soil_level=0,
+    soil_level=2,
     options=0,
     steam=0,
     translations={"en": "New Clothes"},
@@ -1042,13 +1081,29 @@ _NFC_NEW_CLOTHES = DownloadableProgram(
     description_translations={"en": "Wash new clothes."},
 )
 
-_NFC_PROGRAMS = [_NFC_BATHROBE, _NFC_NEW_CLOTHES]
+# Gym Fit: parent=7 → Output 7 → RAPID_44_MIN (pos=9, selector_position=7, pr_code=103, max_spin_speed=255)
+# position=37, spin_speed=1000, soil_level=0 → falls back to base.min_soil_level=3 (Rapid 44')
+_NFC_GYM_FIT = DownloadableProgram(
+    position=37,
+    name="DUAL_WM_WD_PROGRAM_DOWNLOAD_NAME_GYM_FIT",
+    parent=7,
+    temperature=30,
+    spin_speed=1000,
+    soil_level=0,
+    options=0,
+    steam=0,
+    translations={"en": "Gym Fit - Fitness"},
+    category_translations={"en": "Special"},
+    description_translations={"en": "Wash gym and fitness clothes."},
+)
+
+_NFC_PROGRAMS = [_NFC_BATHROBE, _NFC_NEW_CLOTHES, _NFC_GYM_FIT]
 
 
 async def _init_full_control_nfc(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, status_json: str
 ) -> MockConfigEntry:
-    """Init Full Control with NFC switch turned on and two NFC test programs."""
+    """Init Full Control with NFC switch turned on and NFC test programs."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         unique_id="test-full-control-nfc",
@@ -1112,6 +1167,15 @@ def test_resolve_downloadable_programs_matches_rapid():
     assert base.name == "RAPID_30_MIN"
 
 
+def test_resolve_downloadable_programs_matches_gym_fit():
+    programs = parse_wash_programs(_PROGRAMS)
+    resolved = resolve_downloadable_programs([_NFC_GYM_FIT], programs)
+    assert len(resolved) == 1
+    nfc, base = resolved[0]
+    assert nfc.name == "DUAL_WM_WD_PROGRAM_DOWNLOAD_NAME_GYM_FIT"
+    assert base.name == "RAPID_44_MIN"
+
+
 def test_resolve_downloadable_programs_skips_unresolvable():
     unknown = DownloadableProgram(
         position=99,
@@ -1144,9 +1208,11 @@ async def test_nfc_program_options_appear_in_select(
     # Standard programs still present
     assert "Whites" in options
     assert "Rapid 30 Min." in options
+    assert "Rapid 44 Min." in options
     # NFC programs appended with category prefix
     assert "Home Care - Bathrobe" in options
     assert "Special - New Clothes" in options
+    assert "Special - Gym Fit - Fitness" in options
 
 
 async def test_nfc_description_sensor_seeded_from_running_special_program(
@@ -1250,6 +1316,17 @@ async def test_nfc_program_duration_attribute(
     state = _state(hass, entry, "select", UNIQUE_ID_WASH_PROGRAM_SELECT)
     assert state is not None
     assert state.attributes.get("duration_minutes") == 90
+
+    # Select Gym Fit — duration attribute should be 44
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": program_eid, "option": "Special - Gym Fit - Fitness"},
+        blocking=True,
+    )
+    state = _state(hass, entry, "select", UNIQUE_ID_WASH_PROGRAM_SELECT)
+    assert state is not None
+    assert state.attributes.get("duration_minutes") == 44
 
     # Switch to standard program — duration attribute should be absent
     await hass.services.async_call(
@@ -1372,11 +1449,52 @@ async def test_start_button_sends_nfc_command(
     assert "Stm=0" in qs
 
 
-async def test_start_button_nfc_zero_soil_level_sent_directly(
+async def test_start_button_nfc_zero_soil_level_falls_back_to_base_soil_level(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
-    # New Clothes: position=33, parent=6 → base=RAPID_30_MIN (PrCode=5)
-    # PrNm=2 (base.selector_position), soil_level=0 → sent as SLevTgt=0 (no fallback)
+    # Gym Fit: position=37, parent=7 → base=RAPID_44_MIN (PrCode=103, selector_position=7)
+    # nfc.soil_level=0 is outside RAPID_44_MIN's soil range [3, 3] → falls back to base.min_soil_level=3
+    # This ensures the machine runs the 44-minute cycle instead of defaulting to Rapid 14' (SLevTgt=0/1)
+    entry = await _init_full_control_nfc(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+
+    program_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": program_eid, "option": "Special - Gym Fit - Fitness"},
+        blocking=True,
+    )
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    qs: str = mock_send.call_args[0][0]
+    assert "PrNm=7" in qs
+    assert f"PrNm={_NFC_GYM_FIT.position}" not in qs
+    assert "PrCode=103" in qs
+    assert "PrStr=Gym%20Fit%20-%20Fitness" in qs
+    assert "TmpTgt=30" in qs
+    assert "SpdTgt=10" in qs  # 1000 // 100
+    assert "SLevTgt=3" in qs  # falls back to RAPID_44_MIN min_soil_level (3)
+    assert "RecipeId=D_37" in qs
+
+
+async def test_start_button_nfc_new_clothes(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    # New Clothes: position=33, parent=6 → base=RAPID_30_MIN (PrCode=71, selector_position=7)
+    # nfc.soil_level=2 matches RAPID_30_MIN's soil range [2, 2] → SLevTgt=2
     entry = await _init_full_control_nfc(hass, aioclient_mock, _IDLE_JSON)
     registry = er.async_get(hass)
 
@@ -1402,13 +1520,13 @@ async def test_start_button_nfc_zero_soil_level_sent_directly(
         )
 
     qs: str = mock_send.call_args[0][0]
-    assert "PrNm=2" in qs
+    assert "PrNm=7" in qs
     assert f"PrNm={_NFC_NEW_CLOTHES.position}" not in qs
-    assert "PrCode=5" in qs
+    assert "PrCode=71" in qs
     assert "PrStr=New%20Clothes" in qs
     assert "TmpTgt=20" in qs
     assert "SpdTgt=10" in qs  # 1000 // 100
-    assert "SLevTgt=0" in qs  # nfc.soil_level=0, sent directly
+    assert "SLevTgt=2" in qs  # matches base soil level
     assert "RecipeId=D_33" in qs
 
 
@@ -1544,8 +1662,8 @@ async def test_wash_option_unavailable_when_program_unsupported(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
     # Start with Rapid active: it has available_options=0, so prewash must be unavailable.
-    rapid_idle = _IDLE_JSON.replace('"Pr": "1"', '"Pr": "2"').replace(
-        '"PrCode": "136"', '"PrCode": "5"'
+    rapid_idle = _IDLE_JSON.replace('"Pr": "1"', '"Pr": "7"').replace(
+        '"PrCode": "136"', '"PrCode": "71"'
     )
     entry = await _init_full_control_with_options(hass, aioclient_mock, rapid_idle)
     state = _state(hass, entry, "switch", UNIQUE_ID_WASH_OPTION_PREWASH)

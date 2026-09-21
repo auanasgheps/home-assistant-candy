@@ -172,3 +172,27 @@ def test_load_downloadable_programs_invalid_spin_speed_becomes_none():
     ]
     result = load_downloadable_programs(raw)
     assert result[0].spin_speed is None
+
+
+def test_load_downloadable_programs_handles_empty_string_fields():
+    raw = [
+        {
+            "position": "56",
+            "name": "DUAL_WM_WD_PROGRAM_DOWNLOAD_NAME_CASHMERE",
+            "parent": "",
+            "temperature": "",
+            "spin_speed": "",
+            "soil_level": "",
+            "options": "",
+            "steam": "",
+        }
+    ]
+    result = load_downloadable_programs(raw)
+    assert len(result) == 1
+    prog = result[0]
+    assert prog.parent == 0
+    assert prog.temperature == 0
+    assert prog.spin_speed is None
+    assert prog.soil_level == 0
+    assert prog.options == 0
+    assert prog.steam == 0

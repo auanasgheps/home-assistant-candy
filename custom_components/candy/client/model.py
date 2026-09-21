@@ -407,6 +407,15 @@ class DownloadableProgram:
         ) or self.description_translations.get("en", "")
 
 
+def _safe_int(val: object, fallback: int) -> int:
+    if isinstance(val, (int, str, float, bytes)):
+        try:
+            return int(val)
+        except ValueError:
+            return fallback
+    return fallback
+
+
 def load_downloadable_programs(cloud_raw: list[dict]) -> list["DownloadableProgram"]:
     """Build DownloadableProgram list from cloud wm_wd_programs response.
 
@@ -438,12 +447,12 @@ def load_downloadable_programs(cloud_raw: list[dict]) -> list["DownloadableProgr
             DownloadableProgram(
                 position=position,
                 name=name,
-                parent=int(entry.get("parent", 0)),
-                temperature=int(entry.get("temperature", 0)),
+                parent=_safe_int(entry.get("parent"), 0),
+                temperature=_safe_int(entry.get("temperature"), 0),
                 spin_speed=spin,
-                soil_level=int(entry.get("soil_level", 0)),
-                options=int(entry.get("options", 0)),
-                steam=int(entry.get("steam", 0)),
+                soil_level=_safe_int(entry.get("soil_level"), 0),
+                options=_safe_int(entry.get("options"), 0),
+                steam=_safe_int(entry.get("steam"), 0),
                 translations=trans["translations"],
                 category_translations=trans["category_translations"],
                 description_translations=trans["description_translations"],

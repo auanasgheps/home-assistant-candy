@@ -331,6 +331,14 @@ class WashStartButton(CandyWashButtonBase):
             )
             steam = steam_state.state == "on" if steam_state else False
             checkup = _should_send_checkup(self.config_entry, dt_util.utcnow())
+            if base.min_soil_level <= nfc.soil_level <= base.max_soil_level and (
+                nfc.soil_level > 0 or base.min_soil_level == 0
+            ):
+                soil_target = nfc.soil_level
+            elif base.min_soil_level <= base.default_soil_level <= base.max_soil_level:
+                soil_target = base.default_soil_level
+            else:
+                soil_target = base.min_soil_level
             params = {
                 "Write": 1,
                 "StSt": 1,
@@ -339,7 +347,7 @@ class WashStartButton(CandyWashButtonBase):
                 "PrCode": base.pr_code,
                 "PrStr": nfc.display_name(lang),
                 "TmpTgt": nfc.temperature,
-                "SLevTgt": nfc.soil_level,
+                "SLevTgt": soil_target,
                 "SpdTgt": nfc.spin_speed // 100
                 if nfc.spin_speed is not None
                 else base.max_spin_speed // 100,
