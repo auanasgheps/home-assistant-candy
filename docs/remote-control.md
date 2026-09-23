@@ -44,19 +44,16 @@ device's statistics endpoint — not by elapsed time.
 
 | Counter | Threshold | Cycle to run | Auto-reset? |
 |---|---|---|---|
-| Check-up | 100 cycles (fixed) | Full Check-up button | No — manual |
+| Check-up | 100 cycles (fixed) | Full Check-up button | Yes — automatic on completion (manual button fallback) |
 | Limescale | 85–110 cycles, depends on configured water hardness | Limescale Cleaning button | No — manual |
 | Filter | 100 cycles (fixed) | none — physical cleaning | No — manual |
 
-### Manual reset is required after every maintenance operation
+### Maintenance resets and lifecycle
 
-None of the three counters resets itself. Pressing **Full Check-up** or
-**Limescale Cleaning** only sends the corresponding cycle to the machine —
-it does not touch the counter's stored baseline. After the cycle completes
-(or after physically cleaning the filter), you must press the matching
-**reset button**:
+- **Full Check-up**: Resets its counter automatically when the cycle completes successfully (`CheckUpState == 2`). Home Assistant posts a completion notification matching the Simply-Fi app, clears any active check-up reminder, commits the updated `total_cycles` baseline, and resets the appliance diagnostic register. A manual reset button is also available as a fallback.
+- **Limescale and Filter**: Require manual reset. Pressing **Limescale Cleaning** only sends the cycle to the machine — it does not touch the stored baseline. After descaling completes (or after physically cleaning the pump filter), press the matching **reset button**:
 
-- Check-up maintenance reset
+- Check-up maintenance reset (manual fallback)
 - Limescale maintenance reset
 - Filter maintenance reset
 
