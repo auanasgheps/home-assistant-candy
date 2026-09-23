@@ -35,6 +35,7 @@ from .const import (
     CHECKUP_SCHEDULE_WEEKLY,
     CONF_KEY_CHECKUP_ENABLED,
     CONF_KEY_CHECKUP_LAST_DATE,
+    CONF_KEY_CHECKUP_PENDING,
     CONF_KEY_CHECKUP_SCHEDULE,
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
     CONF_KEY_INTERFACE_TYPE,
@@ -217,9 +218,9 @@ class CandyWashButtonBase(CoordinatorEntity, ButtonEntity):
             if data[DATA_KEY_WRITE_PENDING] == 0:
                 await self.coordinator.async_request_refresh()
 
-    def _record_checkup_requested(self) -> None:
+    def _record_checkup_pending(self) -> None:
         new_data = dict(self.config_entry.data)
-        new_data[CONF_KEY_CHECKUP_LAST_DATE] = dt_util.utcnow().timestamp()
+        new_data[CONF_KEY_CHECKUP_PENDING] = True
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
 
     @property
@@ -363,7 +364,7 @@ class WashStartButton(CandyWashButtonBase):
             }
             await self._send_command_and_refresh(urlencode(params, quote_via=quote))
             if checkup == 1:
-                self._record_checkup_requested()
+                self._record_checkup_pending()
             return
 
         temp_str = _get_state(UNIQUE_ID_WASH_TEMP_SELECT)
@@ -441,7 +442,7 @@ class WashStartButton(CandyWashButtonBase):
         }
         await self._send_command_and_refresh(urlencode(params, quote_via=quote))
         if checkup == 1:
-            self._record_checkup_requested()
+            self._record_checkup_pending()
 
 
 class WashMaintResetButton(CoordinatorEntity, ButtonEntity):

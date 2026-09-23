@@ -20,6 +20,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .client import CandyClient
 from .client.model import (
@@ -39,8 +40,12 @@ from .client.model import (
     WineCoolerStatus,
 )
 from .const import (
+    CHECKUP_SCHEDULE_EVERY_CYCLE,
     CONF_KEY_CHECKUP_ENABLED,
+    CONF_KEY_CHECKUP_LAST_DATE,
     CONF_KEY_CHECKUP_LAST_RESULT,
+    CONF_KEY_CHECKUP_PENDING,
+    CONF_KEY_CHECKUP_SCHEDULE,
     CONF_KEY_MAINTENANCE_ENABLED,
     CONF_KEY_MAINTENANCE_FILTER_ENABLED,
     CONF_KEY_MAINTENANCE_LAST_FILTER,
@@ -509,38 +514,84 @@ def _register_maintenance_notifications(
     return stats_coordinator.async_add_listener(_on_stats_update)
 
 
+_FINISHED_STATES = {MachineState.FINISHED1, MachineState.FINISHED2}
+
+
 def _register_checkup_listener(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     coordinator: DataUpdateCoordinator[Any],
 ) -> Callable[[], None]:
-    """Register a coordinator listener that persists the timestamp when DisTestRes transitions 0→non-zero."""
+    """Register a coordinator listener that records the check-up timestamp when the cycle finishes."""
     initial = cast(WashingMachineStatus | None, coordinator.data)
     initial_code = (
         initial.dis_test_res.code
         if initial is not None and initial.dis_test_res is not None
         else None
     )
+    initial_state = initial.machine_state if initial is not None else None
+    initial_pending = config_entry.data.get(CONF_KEY_CHECKUP_PENDING, False)
+
     prev_result: list[int | None] = [initial_code]
+    prev_state: list[MachineState | None] = [initial_state]
+    finished_cycle_recorded: list[bool] = [
+        initial_state in _FINISHED_STATES and not initial_pending
+    ]
 
     def _on_status_update() -> None:
         status = cast(WashingMachineStatus | None, coordinator.data)
-        if status is None or status.dis_test_res is None:
+        if status is None:
             return
-        curr_code = status.dis_test_res.code
-        prev_code = prev_result[0]
+        curr_state = status.machine_state
+        prior_state = prev_state[0]
+        prev_state[0] = curr_state
+
+        curr_code = (
+            status.dis_test_res.code if status.dis_test_res is not None else None
+        )
+        prior_code = prev_result[0]
         prev_result[0] = curr_code
-        if prev_code is None:
+
+        if curr_state not in _FINISHED_STATES:
+            finished_cycle_recorded[0] = False
+
+        is_pending = config_entry.data.get(CONF_KEY_CHECKUP_PENDING, False)
+        schedule = config_entry.data.get(
+            CONF_KEY_CHECKUP_SCHEDULE, CHECKUP_SCHEDULE_EVERY_CYCLE
+        )
+
+        if curr_state in _FINISHED_STATES:
+            if not finished_cycle_recorded[0]:
+                should_record = is_pending or schedule == CHECKUP_SCHEDULE_EVERY_CYCLE
+                if should_record and curr_code is not None and curr_code != 0:
+                    finished_cycle_recorded[0] = True
+                    new_data = dict(config_entry.data)
+                    new_data[CONF_KEY_CHECKUP_LAST_DATE] = dt_util.utcnow().timestamp()
+                    new_data[CONF_KEY_CHECKUP_LAST_RESULT] = curr_code
+                    new_data[CONF_KEY_CHECKUP_PENDING] = False
+                    hass.config_entries.async_update_entry(config_entry, data=new_data)
+                    return
+        elif (
+            is_pending
+            and curr_state in (MachineState.IDLE, MachineState.OFF)
+            and prior_state not in (MachineState.IDLE, MachineState.OFF, None)
+        ):
+            new_data = dict(config_entry.data)
+            new_data[CONF_KEY_CHECKUP_PENDING] = False
+            hass.config_entries.async_update_entry(config_entry, data=new_data)
             return
-        if curr_code != 0 and prev_code == 0:
+
+        if (
+            curr_code is not None
+            and curr_code != 0
+            and (prior_code == 0 or prior_code is None)
+            and config_entry.data.get(CONF_KEY_CHECKUP_LAST_RESULT) != curr_code
+        ):
             new_data = dict(config_entry.data)
             new_data[CONF_KEY_CHECKUP_LAST_RESULT] = curr_code
             hass.config_entries.async_update_entry(config_entry, data=new_data)
 
     return coordinator.async_add_listener(_on_status_update)
-
-
-_FINISHED_STATES = {MachineState.FINISHED1, MachineState.FINISHED2}
 
 
 def _register_stats_refresh_listener(
