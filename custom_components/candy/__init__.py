@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 import copy
 from datetime import timedelta
 import json
 import logging
 from typing import Any, cast
+from urllib.parse import quote, urlencode
 
 import aiohttp
 import async_timeout
 from homeassistant.components.persistent_notification import (
     async_create as pn_async_create,
+    async_dismiss as pn_async_dismiss,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
@@ -24,6 +27,7 @@ from homeassistant.util import dt as dt_util
 
 from .client import CandyClient
 from .client.model import (
+    CheckUpState,
     DishwasherState,
     DishwasherStatus,
     DryerCycleState,
@@ -52,12 +56,14 @@ from .const import (
     CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP,
     CONF_KEY_MAINTENANCE_LAST_LIMESCALE,
     CONF_KEY_MAINTENANCE_LIMESCALE_ENABLED,
+    CONF_KEY_MODE,
     CONF_KEY_PROGRAM_LANGUAGE,
     CONF_KEY_USE_ENCRYPTION,
     CONF_KEY_WATER_HARDNESS,
     DATA_KEY_CHECKUP_UNSUB,
     DATA_KEY_CLIENT,
     DATA_KEY_COORDINATOR,
+    DATA_KEY_FULL_CHECKUP_UNSUB,
     DATA_KEY_MAINT_UNSUB,
     DATA_KEY_STATS_COORDINATOR,
     DATA_KEY_STATS_REFRESH_UNSUB,
@@ -65,6 +71,8 @@ from .const import (
     MAINTENANCE_FILTER_THRESHOLD,
     MAINTENANCE_FULL_CHECKUP_THRESHOLD,
     MAINTENANCE_HARDNESS_THRESHOLDS,
+    MODE_FULL_CONTROL,
+    NOTIF_ID_FULL_CHECKUP,
     NOTIF_ID_MAINT_FILTER,
     NOTIF_ID_MAINT_FULL_CHECKUP,
     NOTIF_ID_MAINT_LIMESCALE,
@@ -237,6 +245,7 @@ def _offline_washing_machine() -> WashingMachineStatus:
         unbalance_count=None,
         fault_count=None,
         dis_test_res=None,
+        checkup_state=None,
         soil_level=None,
         recipe_id=None,
     )
@@ -455,6 +464,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             unsub_stats_refresh
         )
 
+        unsub_full_checkup = _register_full_checkup_listener(
+            hass, config_entry, coordinator, stats_coordinator, client
+        )
+        hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_FULL_CHECKUP_UNSUB] = (
+            unsub_full_checkup
+        )
+
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
     return True
@@ -594,6 +610,92 @@ def _register_checkup_listener(
     return coordinator.async_add_listener(_on_status_update)
 
 
+def _register_full_checkup_listener(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    coordinator: DataUpdateCoordinator[Any],
+    stats_coordinator: DataUpdateCoordinator[WashingMachineStatistics],
+    client: CandyClient,
+) -> Callable[[], None]:
+    """Register a coordinator listener that handles Full Check-up completion."""
+    initial = cast(WashingMachineStatus | None, coordinator.data)
+    prev_state: list[CheckUpState | None] = [
+        initial.checkup_state if initial is not None else None
+    ]
+
+    def _on_status_update() -> None:
+        status = cast(WashingMachineStatus | None, coordinator.data)
+        if status is None:
+            return
+        curr_state = status.checkup_state
+        prior_state = prev_state[0]
+        prev_state[0] = curr_state
+
+        has_no_error = (status.error in (None, 0)) and (
+            status.machine_state != MachineState.ERROR
+        )
+
+        if (
+            curr_state == CheckUpState.COMPLETED
+            and prior_state == CheckUpState.RUNNING
+            and has_no_error
+        ):
+            entry_id = config_entry.entry_id
+            lang = config_entry.data.get(
+                CONF_KEY_PROGRAM_LANGUAGE, hass.config.language
+            )
+            title = localized_notification_text("full_checkup_result_title", lang)
+            message = localized_notification_text("full_checkup_result_message", lang)
+            pn_async_create(
+                hass,
+                message,
+                title=title,
+                notification_id=NOTIF_ID_FULL_CHECKUP.format(entry_id),
+            )
+            pn_async_dismiss(hass, NOTIF_ID_MAINT_FULL_CHECKUP.format(entry_id))
+
+            async def _update_baseline() -> None:
+                await stats_coordinator.async_request_refresh()
+                total: int | None = None
+                if stats_coordinator.data is not None:
+                    total = stats_coordinator.data.total_cycles
+                else:
+                    restored = _restore_last_known_statistics(hass, entry_id)
+                    if restored is not None:
+                        total = restored.total_cycles
+
+                if total is not None:
+                    new_data = dict(config_entry.data)
+                    new_data[CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP] = total
+                    hass.config_entries.async_update_entry(config_entry, data=new_data)
+                    stats_coordinator.async_update_listeners()
+
+            hass.async_create_task(_update_baseline())
+
+            if (
+                config_entry.data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL
+                and status.remote_control
+            ):
+
+                async def _send_reset() -> None:
+                    try:
+                        await client.send_command(
+                            urlencode(
+                                {"Write": 1, "StSt": 0, "PrNm": 11}, quote_via=quote
+                            )
+                        )
+                        await asyncio.sleep(5)
+                        await coordinator.async_request_refresh()
+                    except Exception as err:
+                        _LOGGER.warning(
+                            "Failed to reset appliance check-up state: %s", err
+                        )
+
+                hass.async_create_task(_send_reset())
+
+    return coordinator.async_add_listener(_on_status_update)
+
+
 def _register_stats_refresh_listener(
     hass: HomeAssistant,
     coordinator: DataUpdateCoordinator[Any],
@@ -626,6 +728,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         for key in (
             DATA_KEY_MAINT_UNSUB,
             DATA_KEY_CHECKUP_UNSUB,
+            DATA_KEY_FULL_CHECKUP_UNSUB,
             DATA_KEY_STATS_REFRESH_UNSUB,
         ):
             unsub = entry_data.get(key)

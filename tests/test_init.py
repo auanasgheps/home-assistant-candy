@@ -122,6 +122,7 @@ async def test_restore_last_known_status_washing_machine(hass: HomeAssistant):
     result = _restore_last_known_status(hass, entry.entry_id)
     assert isinstance(result, WashingMachineStatus)
     assert result.machine_state == MachineState.OFF
+    assert result.checkup_state is None
 
 
 async def test_restore_last_known_status_tumble_dryer(hass: HomeAssistant):

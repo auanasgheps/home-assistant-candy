@@ -60,6 +60,12 @@ class CheckUpResult(StatusCode):
     PROBLEM = (2, "Problem detected")
 
 
+class CheckUpState(StatusCode):
+    IDLE = (0, "Idle")
+    RUNNING = (1, "Running")
+    COMPLETED = (2, "Completed")
+
+
 class WashProgramState(StatusCode):
     STOPPED = (0, "Stopped")
     PRE_WASH = (1, "Pre-wash")
@@ -96,6 +102,7 @@ class WashingMachineStatus:
     unbalance_count: int | None  # unbC — unbalance count
     fault_count: int | None  # numF — total fault count
     dis_test_res: CheckUpResult | None  # DisTestRes — result of last diagnostic
+    checkup_state: CheckUpState | None  # CheckUpState — diagnostic lifecycle
     soil_level: int | None  # SLevel — 0–4 soil level setting
     recipe_id: str | None  # RecipeId — downloadable program (e.g. "D_33")
 
@@ -122,6 +129,9 @@ class WashingMachineStatus:
             fault_count=int(json["numF"]) if "numF" in json else None,
             dis_test_res=CheckUpResult.from_code(int(json["DisTestRes"]))
             if "DisTestRes" in json
+            else None,
+            checkup_state=CheckUpState.from_code(int(json["CheckUpState"]))
+            if "CheckUpState" in json
             else None,
             soil_level=int(json["SLevel"]) if "SLevel" in json else None,
             recipe_id=str(json["RecipeId"]).strip()

@@ -64,6 +64,7 @@ _IDLE_WASHING_MACHINE = WashingMachineStatus(
     unbalance_count=None,
     fault_count=None,
     dis_test_res=None,
+    checkup_state=None,
     soil_level=None,
     recipe_id=None,
 )

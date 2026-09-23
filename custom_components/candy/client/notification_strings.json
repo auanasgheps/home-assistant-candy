@@ -31,6 +31,22 @@
     "pt": "Para garantir sempre o melhor desempenho, sugerimos que inicie oCiclo de verificação complet\n\nCiclo curto de diagnóstico (3-5 min), para comprovar a operação correta dos principais componentes da máquina.\nInicie-o com o tambor vazio.",
     "ru": "Для обеспечения лучших результатов рекомендуем вам запустить цикл Full - Check - up (Полная проверка)\n\nКороткий цикл диагностики (около 3-5 минут) для контроля работы основных компонентов машины.\nЗапустить с пустым барабаном."
   },
+  "full_checkup_result_message": {
+    "en": "Healthy level: 100%\n\nChecks carried out:\n\n· Door lock\n· Load water prewash \n· Load water wash \n· Load water fabric softener \n· Slow drum rotation\n· Drain water \n· Spin",
+    "es": "Nivel de salud: 100%\n\nVerificaciones efectuadas:\n\n· Puerta bloqueada\n· Carga de agua prelavado \n· Carga de agua lavado \n· Carga de agua suavizante \n· Rotación lenta del cesto\n· Drenaje de agua \n· Centrifugado",
+    "fr": "Niveau de santé: 100%\n\nVérifications à effectuer:\n\n· Verrou de porte\n· Charge d'eau pré-lavage \n· Charge d'eau lavage \n· Charge d'eau adoucissant \n· Rotation douce du tambour· Eau vidange \n· Essorage",
+    "it": "Livello di salute: 100%\n\nVerifiche effettuate:\n\n· Blocco Porta \n· Carico acqua prelavaggio \n· Carico acqua lavaggio \n· Carico acqua ammorbidente \n· Movimentazione lenta cesto \n· Scarico acqua \n· Centrifuga",
+    "pt": "Nível saudável 100%\n\nVerificações feitas:\n\n· Bloqueio porta \n· Água pré-lavagem \n· Água lavagem \n· Amaciador \n· Rotação lenta cuba \n· Despejo água \n· Centrifugação",
+    "ru": "Уровень загрязнения: 100%\n\nДиагностика осуществляется:\n\nБлокировка двери\n·Набор воды для предварительной стирки \n·Набор воды для стирки \n· Добавление кондиционера для белья \n·Медленное вращение барабана \n· Слив воды \n· Отжим"
+  },
+  "full_checkup_result_title": {
+    "en": "Full Check-up Results",
+    "es": "Resultados Check-up",
+    "fr": "Résultats de la vérification",
+    "it": "Risultati Check-up Completo",
+    "pt": "Diagnóstico",
+    "ru": "Результаты диагностики"
+  },
   "full_checkup_title": {
     "en": "Check-up",
     "es": "Check-up",
