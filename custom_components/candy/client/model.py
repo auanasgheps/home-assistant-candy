@@ -375,6 +375,16 @@ class WashingMachineWashProgram:
         translations = _PROGRAM_NAMES.get(self.name + "_DESCRIPTION", {})
         return translations.get(language) or translations.get("en") or None
 
+    def duration_for_soil(self, soil: int) -> int:
+        """Return duration in minutes for the given soil level."""
+        if self.min_soil_level < self.max_soil_level:
+            if soil <= 1:
+                return self.duration_soil_min or self.default_duration
+            if soil == 2:
+                return self.duration_soil_medium or self.default_duration
+            return self.duration_soil_max or self.default_duration
+        return self.default_duration
+
 
 @dataclass
 class DownloadableProgram:
@@ -415,6 +425,16 @@ class DownloadableProgram:
         return self.description_translations.get(
             lang
         ) or self.description_translations.get("en", "")
+
+    def resolve_soil_target(self, base: WashingMachineWashProgram) -> int:
+        """Resolve effective soil level against a base program's constraints."""
+        if base.min_soil_level <= self.soil_level <= base.max_soil_level and (
+            self.soil_level > 0 or base.min_soil_level == 0
+        ):
+            return self.soil_level
+        if base.min_soil_level <= base.default_soil_level <= base.max_soil_level:
+            return base.default_soil_level
+        return base.min_soil_level
 
 
 def _safe_int(val: object, fallback: int) -> int:

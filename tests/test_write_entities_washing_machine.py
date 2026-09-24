@@ -1099,7 +1099,23 @@ _NFC_GYM_FIT = DownloadableProgram(
     description_translations={"en": "Wash gym and fitness clothes."},
 )
 
-_NFC_PROGRAMS = [_NFC_BATHROBE, _NFC_NEW_CLOTHES, _NFC_GYM_FIT]
+# Tablecloths: parent=1 → Output 1 → RESISTANT_COTTONS
+# soil_level=3 → duration_soil_max=120 (distinct from default_duration=90 and medium=90)
+_NFC_TABLECLOTHS = DownloadableProgram(
+    position=58,
+    name="DUAL_WM_WD_PROGRAM_DOWNLOAD_NAME_TABLECLOTHS",
+    parent=1,
+    temperature=60,
+    spin_speed=1000,
+    soil_level=3,
+    options=0,
+    steam=0,
+    translations={"en": "Tablecloths"},
+    category_translations={"en": "Home Care"},
+    description_translations={"en": "Wash tablecloths."},
+)
+
+_NFC_PROGRAMS = [_NFC_BATHROBE, _NFC_NEW_CLOTHES, _NFC_GYM_FIT, _NFC_TABLECLOTHS]
 
 
 async def _init_full_control_nfc(
@@ -1213,6 +1229,7 @@ async def test_nfc_program_options_appear_in_select(
     assert "Rapid 44 Min." in options
     # NFC programs appended with category prefix
     assert "Home Care - Bathrobe" in options
+    assert "Home Care - Tablecloths" in options
     assert "Special - New Clothes" in options
     assert "Special - Gym Fit - Fitness" in options
 
@@ -1308,27 +1325,50 @@ async def test_nfc_program_duration_attribute(
         "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_SELECT.format(entry.entry_id)
     )
 
-    # Select NFC program — duration attribute should be present
+    # Select Tablecloths (soil_level=3) — duration should be 120 (duration_soil_max), not default 90
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": program_eid, "option": "Home Care - Tablecloths"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    state = _state(hass, entry, "select", UNIQUE_ID_WASH_PROGRAM_SELECT)
+    assert state is not None
+    assert state.attributes.get("duration_minutes") == 120
+    sensor_state = _state(hass, entry, "sensor", UNIQUE_ID_WASH_ESTIMATED_DURATION)
+    assert sensor_state is not None
+    assert sensor_state.state == "120"
+
+    # Select Bathrobe (soil_level=2) — duration should be 90 (duration_soil_medium)
     await hass.services.async_call(
         "select",
         "select_option",
         {"entity_id": program_eid, "option": "Home Care - Bathrobe"},
         blocking=True,
     )
+    await hass.async_block_till_done()
     state = _state(hass, entry, "select", UNIQUE_ID_WASH_PROGRAM_SELECT)
     assert state is not None
     assert state.attributes.get("duration_minutes") == 90
+    sensor_state = _state(hass, entry, "sensor", UNIQUE_ID_WASH_ESTIMATED_DURATION)
+    assert sensor_state is not None
+    assert sensor_state.state == "90"
 
-    # Select Gym Fit — duration attribute should be 44
+    # Select Gym Fit (soil_level=0) — falls back to base soil 3 duration 44
     await hass.services.async_call(
         "select",
         "select_option",
         {"entity_id": program_eid, "option": "Special - Gym Fit - Fitness"},
         blocking=True,
     )
+    await hass.async_block_till_done()
     state = _state(hass, entry, "select", UNIQUE_ID_WASH_PROGRAM_SELECT)
     assert state is not None
     assert state.attributes.get("duration_minutes") == 44
+    sensor_state = _state(hass, entry, "sensor", UNIQUE_ID_WASH_ESTIMATED_DURATION)
+    assert sensor_state is not None
+    assert sensor_state.state == "44"
 
     # Switch to standard program — duration attribute should be absent
     await hass.services.async_call(
@@ -1337,6 +1377,7 @@ async def test_nfc_program_duration_attribute(
         {"entity_id": program_eid, "option": "Whites"},
         blocking=True,
     )
+    await hass.async_block_till_done()
     state = _state(hass, entry, "select", UNIQUE_ID_WASH_PROGRAM_SELECT)
     assert state is not None
     assert state.attributes.get("duration_minutes") is None
