@@ -22,6 +22,7 @@ from custom_components.candy import (
     MODE_FULL_CONTROL,
     NOTIF_ID_FULL_CHECKUP,
     NOTIF_ID_MAINT_FULL_CHECKUP,
+    NOTIF_ID_WASH_ERROR,
     _register_full_checkup_listener,
 )
 from custom_components.candy.client.model import CheckUpState, WashingMachineStatus
@@ -368,7 +369,14 @@ async def test_full_checkup_error_suppresses_completion(
         await coordinator.async_request_refresh()
         await hass.async_block_till_done()
 
-    mock_notify.assert_not_called()
+    # Full check-up completion notification is suppressed, but wash error notification is posted
+    mock_notify.assert_called_once()
+    assert mock_notify.call_args.kwargs.get(
+        "notification_id"
+    ) != NOTIF_ID_FULL_CHECKUP.format(entry.entry_id)
+    assert mock_notify.call_args.kwargs.get(
+        "notification_id"
+    ) == NOTIF_ID_WASH_ERROR.format(entry.entry_id)
     mock_dismiss.assert_not_called()
     mock_send.assert_not_called()
     assert entry.data[CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP] == 0

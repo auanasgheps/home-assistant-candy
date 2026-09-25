@@ -67,6 +67,7 @@ from .const import (
     DATA_KEY_MAINT_UNSUB,
     DATA_KEY_STATS_COORDINATOR,
     DATA_KEY_STATS_REFRESH_UNSUB,
+    DATA_KEY_WASH_ERROR_UNSUB,
     DOMAIN,
     MAINTENANCE_FILTER_THRESHOLD,
     MAINTENANCE_FULL_CHECKUP_THRESHOLD,
@@ -76,6 +77,7 @@ from .const import (
     NOTIF_ID_MAINT_FILTER,
     NOTIF_ID_MAINT_FULL_CHECKUP,
     NOTIF_ID_MAINT_LIMESCALE,
+    NOTIF_ID_WASH_ERROR,
     PLATFORMS,
     UNIQUE_ID_DISHWASHER,
     UNIQUE_ID_OVEN,
@@ -84,7 +86,11 @@ from .const import (
     UNIQUE_ID_WASHING_MACHINE,
     UNIQUE_ID_WINE_COOLER,
 )
-from .helpers import cycles_remaining, localized_notification_text
+from .helpers import (
+    cycles_remaining,
+    get_wash_error_notification_strings,
+    localized_notification_text,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -471,6 +477,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             unsub_full_checkup
         )
 
+        unsub_wash_error = _register_wash_error_listener(
+            hass, config_entry, coordinator
+        )
+        hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_WASH_ERROR_UNSUB] = (
+            unsub_wash_error
+        )
+
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
     return True
@@ -720,6 +733,52 @@ def _register_stats_refresh_listener(
     return coordinator.async_add_listener(_on_status_update)
 
 
+def _register_wash_error_listener(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    coordinator: DataUpdateCoordinator[Any],
+) -> Callable[[], None]:
+    """Register a coordinator listener that posts error notifications and dismisses them when cleared."""
+    entry_id = config_entry.entry_id
+    notif_id = NOTIF_ID_WASH_ERROR.format(entry_id)
+    lang = config_entry.data.get(CONF_KEY_PROGRAM_LANGUAGE, hass.config.language)
+
+    initial = cast(WashingMachineStatus | None, coordinator.data)
+    initial_error = initial.error if initial is not None else None
+    prev_error: list[int | None] = [initial_error]
+
+    if initial_error is not None and initial_error > 0:
+        notif_strings = get_wash_error_notification_strings(initial_error, lang)
+        if notif_strings is not None:
+            title, message = notif_strings
+            pn_async_create(hass, message, title=title, notification_id=notif_id)
+        else:
+            _LOGGER.warning("Unknown washing machine error code: %s", initial_error)
+
+    def _on_status_update() -> None:
+        status = cast(WashingMachineStatus | None, coordinator.data)
+        if status is None:
+            return
+        curr_error = status.error
+        prior_error = prev_error[0]
+        prev_error[0] = curr_error
+
+        if curr_error == prior_error:
+            return
+
+        if curr_error is not None and curr_error > 0:
+            notif_strings = get_wash_error_notification_strings(curr_error, lang)
+            if notif_strings is not None:
+                title, message = notif_strings
+                pn_async_create(hass, message, title=title, notification_id=notif_id)
+            else:
+                _LOGGER.warning("Unknown washing machine error code: %s", curr_error)
+        elif prior_error is not None and prior_error > 0:
+            pn_async_dismiss(hass, notif_id)
+
+    return coordinator.async_add_listener(_on_status_update)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -730,6 +789,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             DATA_KEY_CHECKUP_UNSUB,
             DATA_KEY_FULL_CHECKUP_UNSUB,
             DATA_KEY_STATS_REFRESH_UNSUB,
+            DATA_KEY_WASH_ERROR_UNSUB,
         ):
             unsub = entry_data.get(key)
             if unsub is not None:

@@ -29,9 +29,11 @@ from custom_components.candy.client.model import (
 from custom_components.candy.const import (
     CONF_KEY_MAINTENANCE_ENABLED,
     CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP,
+    CONF_KEY_PROGRAM_LANGUAGE,
     CONF_KEY_WATER_HARDNESS,
     DATA_KEY_COORDINATOR,
     DATA_KEY_STATS_COORDINATOR,
+    DATA_KEY_WASH_ERROR_UNSUB,
     UNIQUE_ID_DISHWASHER,
     UNIQUE_ID_OVEN,
     UNIQUE_ID_TUMBLE_DRYER,
@@ -58,6 +60,22 @@ _STATUS_RUNNING = """{
     "WiFiStatus": "1", "Err": "0", "MachMd": "2", "Pr": "1", "PrPh": "1",
     "PrCode": "136", "SLevel": "2", "Temp": "40", "SpinSp": "8",
     "DelVal": "0", "RemTime": "45", "FillR": "30"
+  }
+}"""
+
+_STATUS_ERROR_2 = """{
+  "statusLavatrice": {
+    "WiFiStatus": "1", "Err": "2", "MachMd": "1", "Pr": "1", "PrPh": "0",
+    "PrCode": "136", "SLevel": "0", "Temp": "40", "SpinSp": "8",
+    "DelVal": "0", "RemTime": "0", "FillR": "0"
+  }
+}"""
+
+_STATUS_ERROR_3 = """{
+  "statusLavatrice": {
+    "WiFiStatus": "1", "Err": "3", "MachMd": "1", "Pr": "1", "PrPh": "0",
+    "PrCode": "136", "SLevel": "0", "Temp": "40", "SpinSp": "8",
+    "DelVal": "0", "RemTime": "0", "FillR": "0"
   }
 }"""
 
@@ -349,3 +367,163 @@ async def test_maintenance_notification_fires_when_due(
         await hass.async_block_till_done()
 
     mock_notify.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# Washing Machine Error Notifications
+# ---------------------------------------------------------------------------
+
+
+async def test_wash_error_notification_posted_on_startup(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """When washing machine starts up with an active error, notification is immediately posted."""
+    with patch("custom_components.candy.pn_async_create") as mock_notify:
+        entry = await init_integration(
+            hass,
+            aioclient_mock,
+            _STATUS_ERROR_2,
+            statistics_response=_STATS_OK,
+        )
+    mock_notify.assert_called_once()
+    assert (
+        mock_notify.call_args.kwargs["notification_id"]
+        == f"candy_{entry.entry_id}_wash_error"
+    )
+    assert "E02" in mock_notify.call_args.kwargs["title"]
+    assert "E02-Troubles with loading water" in mock_notify.call_args.args[1]
+
+
+async def test_wash_error_notification_lifecycle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Notification created on error, updated on error change, dismissed when cleared."""
+    entry = await init_integration(
+        hass,
+        aioclient_mock,
+        _STATUS_IDLE,
+        statistics_response=_STATS_OK,
+    )
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+
+    with (
+        patch("custom_components.candy.pn_async_create") as mock_notify,
+        patch("custom_components.candy.pn_async_dismiss") as mock_dismiss,
+    ):
+        # 1. Error occurs (Err: 2)
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-read.json?encrypted=0", text=_STATUS_ERROR_2
+        )
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+        mock_notify.assert_called_once()
+        assert (
+            mock_notify.call_args.kwargs["notification_id"]
+            == f"candy_{entry.entry_id}_wash_error"
+        )
+        assert "E02" in mock_notify.call_args.kwargs["title"]
+        mock_dismiss.assert_not_called()
+
+        # 2. Same error stays (Err: 2) -> no duplicate call
+        mock_notify.reset_mock()
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        mock_notify.assert_not_called()
+        mock_dismiss.assert_not_called()
+
+        # 3. New error occurs (Err: 3) -> updated notification
+        mock_notify.reset_mock()
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-read.json?encrypted=0", text=_STATUS_ERROR_3
+        )
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+        mock_notify.assert_called_once()
+        assert (
+            mock_notify.call_args.kwargs["notification_id"]
+            == f"candy_{entry.entry_id}_wash_error"
+        )
+        assert "E03" in mock_notify.call_args.kwargs["title"]
+        mock_dismiss.assert_not_called()
+
+        # 4. Error cleared (Err: 0) -> notification dismissed
+        mock_notify.reset_mock()
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-read.json?encrypted=0", text=_STATUS_IDLE
+        )
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+        mock_notify.assert_not_called()
+        mock_dismiss.assert_called_once_with(hass, f"candy_{entry.entry_id}_wash_error")
+
+        # 5. Stays cleared (Err: 0) -> dismiss not called again
+        mock_dismiss.reset_mock()
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        mock_dismiss.assert_not_called()
+
+
+async def test_wash_error_notification_respects_language(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Notification text matches configured wizard language."""
+    with patch("custom_components.candy.pn_async_create") as mock_notify:
+        await init_integration(
+            hass,
+            aioclient_mock,
+            _STATUS_ERROR_2,
+            statistics_response=_STATS_OK,
+            extra_config_data={CONF_KEY_PROGRAM_LANGUAGE: "it"},
+        )
+    mock_notify.assert_called_once()
+    assert mock_notify.call_args.kwargs["title"] == "Errore lavatrice: E02"
+    assert "E02-Problema di carico acqua" in mock_notify.call_args.args[1]
+
+
+async def test_wash_error_notification_unknown_code(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Unknown error code does not create notification and logs warning."""
+    status_err_99 = """{
+      "statusLavatrice": {
+        "WiFiStatus": "1", "Err": "99", "MachMd": "1", "Pr": "1", "PrPh": "0",
+        "PrCode": "136", "SLevel": "0", "Temp": "40", "SpinSp": "8",
+        "DelVal": "0", "RemTime": "0", "FillR": "0"
+      }
+    }"""
+    with (
+        patch("custom_components.candy.pn_async_create") as mock_notify,
+        patch("custom_components.candy._LOGGER.warning") as mock_warn,
+    ):
+        await init_integration(
+            hass,
+            aioclient_mock,
+            status_err_99,
+            statistics_response=_STATS_OK,
+        )
+    mock_notify.assert_not_called()
+    mock_warn.assert_called_with("Unknown washing machine error code: %s", 99)
+
+
+async def test_wash_error_listener_unloaded(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Wash error listener is cleaned up when entry is unloaded."""
+    entry = await init_integration(
+        hass,
+        aioclient_mock,
+        _STATUS_IDLE,
+        statistics_response=_STATS_OK,
+    )
+    assert DATA_KEY_WASH_ERROR_UNSUB in hass.data[DOMAIN][entry.entry_id]
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.entry_id not in hass.data.get(DOMAIN, {})
