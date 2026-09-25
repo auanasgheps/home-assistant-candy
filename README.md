@@ -52,7 +52,7 @@ At setup, you choose between **Read-Only** (sensors only) and **Full Control**. 
 
 **Control entities:** program selector (all localized program names), temperature, spin speed, soil level, delay start, option switches (Prewash, Hygiene, Steam, Anti-crease, Good Night, Extra Rinse, AquaPlus), and Start / Pause / Stop buttons.
 
-**Maintenance & diagnostics:** mirrors the Candy app's built-in reminders — check-up, limescale, and filter counters with configurable water hardness thresholds; self-diagnostic result sensor and last check-up timestamp. Running the check-up or limescale cycle does **not** reset its counter automatically — press the matching reset button once the cycle finishes. The filter counter has no start button at all: clean the filter by hand, then reset it manually.
+**Maintenance & diagnostics:** mirrors the Candy app's built-in reminders — check-up, limescale, and filter counters with configurable water hardness thresholds; self-diagnostic result sensor and last check-up timestamp. Running the check-up or limescale cycle resets its counter automatically upon successful completion and sends a notification (manual reset buttons are also available as a fallback). The filter counter has no start button at all: clean the filter by hand, then reset it manually.
 
 **Remote Control status:** a dedicated sensor tracks whether the machine currently accepts remote commands, and disables every control entity while it doesn't. See [`docs/remote-control.md`](docs/remote-control.md) for details.
 

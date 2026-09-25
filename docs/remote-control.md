@@ -45,16 +45,17 @@ device's statistics endpoint — not by elapsed time.
 | Counter | Threshold | Cycle to run | Auto-reset? |
 |---|---|---|---|
 | Check-up | 100 cycles (fixed) | Full Check-up button | Yes — automatic on completion (manual button fallback) |
-| Limescale | 85–110 cycles, depends on configured water hardness | Limescale Cleaning button | No — manual |
+| Limescale | 85–110 cycles, depends on configured water hardness | Limescale Cleaning button | Yes — automatic on completion (manual button fallback) |
 | Filter | 100 cycles (fixed) | none — physical cleaning | No — manual |
 
 ### Maintenance resets and lifecycle
 
 - **Full Check-up**: Resets its counter automatically when the cycle completes successfully (`CheckUpState == 2`). Home Assistant posts a completion notification matching the Simply-Fi app, clears any active check-up reminder, commits the updated `total_cycles` baseline, and resets the appliance diagnostic register. A manual reset button is also available as a fallback.
-- **Limescale and Filter**: Require manual reset. Pressing **Limescale Cleaning** only sends the cycle to the machine — it does not touch the stored baseline. After descaling completes (or after physically cleaning the pump filter), press the matching **reset button**:
+- **Limescale Cleaning**: Resets its counter automatically when the `AUTOCLEAN` cycle completes successfully (`MachMd` reaches `FINISHED1` or `FINISHED2` without errors). Home Assistant dismisses any active limescale reminder, posts a cycle completion notification (matching the Simply-Fi app), commits the updated `total_cycles` baseline, and refreshes statistics. A manual reset button is also available as a fallback.
+- **Filter**: Requires manual reset. Cleaning the pump filter is a physical task without machine feedback; after cleaning, press the matching **Filter maintenance reset** button:
 
 - Check-up maintenance reset (manual fallback)
-- Limescale maintenance reset
+- Limescale maintenance reset (manual fallback)
 - Filter maintenance reset
 
 Each reset button writes the current `total_cycles` value (from the stats

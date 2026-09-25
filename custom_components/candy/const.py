@@ -11,6 +11,7 @@ DATA_KEY_MAINT_UNSUB = "maint_unsub"
 DATA_KEY_CHECKUP_UNSUB = "checkup_unsub"
 DATA_KEY_FULL_CHECKUP_UNSUB = "full_checkup_unsub"
 DATA_KEY_STATS_REFRESH_UNSUB = "stats_refresh_unsub"
+DATA_KEY_LIMESCALE_UNSUB = "limescale_unsub"
 DATA_KEY_WASH_ERROR_UNSUB = "wash_error_unsub"
 
 CONF_INTEGRATION_TITLE = "Candy"

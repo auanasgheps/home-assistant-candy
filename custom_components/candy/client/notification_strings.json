@@ -95,6 +95,30 @@
     "ru": "Чтобы ваша стиральная машина всегда была чистой, а также для удаления отложений рекомендуем запустить цикл Удаление накипи (Limescale Removal).\n\nПредназначено для чистки и дезинфекции барабана при использовании только стирального порошка или средства для снятия известкового налета для стиральной машины. Эту программу не следует запускать при наличии белья в машине.",
     "tr": "Çamaşır makinenizi her zaman temiz tutmak ve birikintileri temizlemek için, Kireç Çözücü çevrimini başlatmanızı öneririz.\n\nDesigned to clean and sanitaze the drum, using only powder detergent or a washing machine limescale remover. Do not start the programme with laundry in the drum."
   },
+  "limescale_result_message": {
+    "de": "Das Entkalkungsprogramm wurde erfolgreich abgeschlossen. Der Wartungszähler wurde zurückgesetzt.",
+    "en": "The limescale cleaning cycle has completed successfully. The maintenance counter has been reset.",
+    "es": "El ciclo de limpieza de cal se ha completado con éxito. El contador de mantenimiento se ha reiniciado.",
+    "fr": "Le cycle de nettoyage anticalcaire s'est terminé avec succès. Le compteur d'entretien a été réinitialisé.",
+    "it": "Il ciclo di pulizia del calcare è terminato con successo. Il contatore di manutenzione è stato reimpostato.",
+    "nl": "De kalkaanslagreinigingscyclus is succesvol afgerond. De onderhoudsteller is gereset.",
+    "pl": "Cykl czyszczenia z kamienia zakończył się pomyślnie. Licznik konserwacji został zresetowany.",
+    "pt": "O ciclo de limpeza de calcário foi concluído com sucesso. O contador de manutenção foi reposto.",
+    "ru": "Цикл очистки от накипи успешно завершен. Счетчик технического обслуживания был сброшен.",
+    "tr": "Kireç temizleme programı başarıyla tamamlandı. Bakım sayacı sıfırlandı."
+  },
+  "limescale_result_title": {
+    "de": "Entkalkung abgeschlossen",
+    "en": "Limescale cleaning completed",
+    "es": "Limpieza de cal completada",
+    "fr": "Nettoyage anticalcaire terminé",
+    "it": "Pulizia calcare completata",
+    "nl": "Kalkaanslag reiniging voltooid",
+    "pl": "Czyszczenie kamienia zakończone",
+    "pt": "Limpeza de calcário concluída",
+    "ru": "Очистка известкового налета завершена",
+    "tr": "Kireç temizliği tamamlandı"
+  },
   "limescale_title": {
     "de": "Nächstes Entkalken",
     "en": "Limescale cleaning",
