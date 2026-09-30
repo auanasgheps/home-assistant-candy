@@ -30,6 +30,8 @@ CONF_KEY_DEVICE_MODEL = "device_model"
 CONF_KEY_SERIAL_NUMBER = "serial_number"
 CONF_KEY_PURCHASE_DATE = "purchase_date"
 CONF_KEY_PROGRAM_LANGUAGE = "program_language"
+CONF_KEY_BRAND = "brand"
+CONF_KEY_APPLIANCE_TYPE = "appliance_type"
 
 PROGRAM_LANGUAGES: dict[str, str] = {
     "bg": "Български",
@@ -53,6 +55,7 @@ PROGRAM_LANGUAGES: dict[str, str] = {
 }
 
 UNIQUE_ID_WASHING_MACHINE = "{0}-washing_machine"
+UNIQUE_ID_WASHER_DRYER = "{0}-washer_dryer"
 UNIQUE_ID_WASH_PROGRAM = "{0}-wash_program"
 UNIQUE_ID_WASH_CYCLE_STATUS = "{0}-wash_cycle_status"
 UNIQUE_ID_WASH_REMAINING_TIME = "{0}-wash_remaining_time"
@@ -83,8 +86,19 @@ UNIQUE_ID_WASH_LIQUID_DETERGENT = "{0}-wash_liquid_detergent"
 UNIQUE_ID_WASH_POWDER_DETERGENT = "{0}-wash_powder_detergent"
 UNIQUE_ID_WASH_CYCLE_CAPACITY = "{0}-wash_cycle_capacity"
 UNIQUE_ID_WASH_PURCHASE_DATE = "{0}-wash_purchase_date"
+UNIQUE_ID_WASH_DRY_TARGET = "{0}-wash_dry_target"
+
+PROGRAM_TYPE_WASHING = "washing"
+PROGRAM_TYPE_DRYING = "drying"
+PROGRAM_TYPE_WASH_AND_DRY = "wash_and_dry"
+PROGRAM_TYPES: list[str] = [
+    PROGRAM_TYPE_WASHING,
+    PROGRAM_TYPE_DRYING,
+    PROGRAM_TYPE_WASH_AND_DRY,
+]
 
 CONF_KEY_IS_WASHING_MACHINE = "is_washing_machine"
+CONF_KEY_IS_WASHER_DRYER = "is_washer_dryer"
 CONF_KEY_INTERFACE_TYPE = "interface_type"
 
 CONF_KEY_MAINTENANCE_ENABLED = "maintenance_enabled"
@@ -135,6 +149,7 @@ UNIQUE_ID_WASH_LIMESCALE_BUTTON = "{0}-wash_limescale_button"
 NOTIF_ID_LIMESCALE = "candy_{0}_limescale"
 NOTIF_ID_WASH_ERROR = "candy_{0}_wash_error"
 
+UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT = "{0}-wash_program_type_select"
 UNIQUE_ID_WASH_PROGRAM_SELECT = "{0}-wash_program_select"
 UNIQUE_ID_WASH_PROGRAM_DESCRIPTION = "{0}-wash_program_description"
 UNIQUE_ID_WASH_TEMP_SELECT = "{0}-wash_temp_select"
@@ -143,6 +158,7 @@ UNIQUE_ID_WASH_SOIL_SELECT = "{0}-wash_soil_select"
 UNIQUE_ID_WASH_DELAY_NUMBER = "{0}-wash_delay_number"
 UNIQUE_ID_WASH_START_BUTTON = "{0}-wash_start_button"
 UNIQUE_ID_WASH_PAUSE_BUTTON = "{0}-wash_pause_button"
+UNIQUE_ID_WASH_RESUME_BUTTON = "{0}-wash_resume_button"
 UNIQUE_ID_WASH_STOP_BUTTON = "{0}-wash_stop_button"
 UNIQUE_ID_WASH_STEAM_SWITCH = "{0}-wash_steam_switch"
 UNIQUE_ID_WASH_NFC_SWITCH = "{0}-wash_nfc_switch"
@@ -189,6 +205,7 @@ UNIQUE_ID_WINE_COOLER_TEMP_DOWN = "{0}-wine_cooler_temp_down"
 UNIQUE_ID_WINE_COOLER_PROGRAM_DOWN = "{0}-wine_cooler_program_down"
 
 DEVICE_NAME_WASHING_MACHINE = "Washing machine"
+DEVICE_NAME_WASHER_DRYER = "Washer dryer"
 DEVICE_NAME_TUMBLE_DRYER = "Tumble dryer"
 DEVICE_NAME_OVEN = "Oven"
 DEVICE_NAME_DISHWASHER = "Dishwasher"

@@ -30,11 +30,14 @@ from .const import (
     CHECKUP_SCHEDULE_MONTHLY,
     CHECKUP_SCHEDULE_WEEKLY,
     CONF_INTEGRATION_TITLE,
+    CONF_KEY_APPLIANCE_TYPE,
+    CONF_KEY_BRAND,
     CONF_KEY_CHECKUP_ENABLED,
     CONF_KEY_CHECKUP_SCHEDULE,
     CONF_KEY_DEVICE_MODEL,
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
     CONF_KEY_INTERFACE_TYPE,
+    CONF_KEY_IS_WASHER_DRYER,
     CONF_KEY_IS_WASHING_MACHINE,
     CONF_KEY_MAC_ADDRESS,
     CONF_KEY_MAINTENANCE_ENABLED,
@@ -605,6 +608,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         new_data[CONF_KEY_DOWNLOADABLE_PROGRAMS] = appliance.downloadable_programs
         if appliance.interface_type:
             new_data[CONF_KEY_INTERFACE_TYPE] = appliance.interface_type
+        if appliance.brand:
+            new_data[CONF_KEY_BRAND] = appliance.brand
+        if appliance.appliance_type:
+            new_data[CONF_KEY_APPLIANCE_TYPE] = appliance.appliance_type
+            if appliance.appliance_type == "washer_dryer":
+                new_data[CONF_KEY_IS_WASHER_DRYER] = True
 
         self._pending_data = new_data
         return await self.async_step_language()
@@ -791,6 +800,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
 
         if self._is_washing_machine:
             self._config_data[CONF_KEY_IS_WASHING_MACHINE] = True
+            if (
+                isinstance(status, WashingMachineStatus)
+                and status.dry_target is not None
+                and status.dry_target.code > 0
+            ):
+                self._config_data[CONF_KEY_IS_WASHER_DRYER] = True
 
         return await self.async_step_mode()
 
@@ -863,6 +878,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
         )
         if appliance.interface_type:
             self._config_data[CONF_KEY_INTERFACE_TYPE] = appliance.interface_type
+        if appliance.brand:
+            self._config_data[CONF_KEY_BRAND] = appliance.brand
+        if appliance.appliance_type:
+            self._config_data[CONF_KEY_APPLIANCE_TYPE] = appliance.appliance_type
+            if appliance.appliance_type == "washer_dryer":
+                self._config_data[CONF_KEY_IS_WASHER_DRYER] = True
 
         return await self.async_step_language()
 

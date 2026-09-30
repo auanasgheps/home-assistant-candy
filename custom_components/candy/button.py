@@ -66,6 +66,7 @@ from .const import (
     UNIQUE_ID_WASH_NFC_SWITCH,
     UNIQUE_ID_WASH_PAUSE_BUTTON,
     UNIQUE_ID_WASH_PROGRAM_SELECT,
+    UNIQUE_ID_WASH_RESUME_BUTTON,
     UNIQUE_ID_WASH_SOIL_SELECT,
     UNIQUE_ID_WASH_SPIN_SELECT,
     UNIQUE_ID_WASH_START_BUTTON,
@@ -128,6 +129,7 @@ async def async_setup_entry(
     ]
     if supports_pause:
         buttons.append(WashPauseButton(coordinator, config_entry, client))
+        buttons.append(WashResumeButton(coordinator, config_entry, client))
     async_add_entities(buttons)
 
     if config_entry.data.get(CONF_KEY_MAINTENANCE_ENABLED):
@@ -488,14 +490,11 @@ class WashMaintResetButton(CoordinatorEntity, ButtonEntity):
 class WashPauseButton(CandyWashButtonBase):
     _attr_name = "Pause wash"
     _attr_translation_key = "wash_pause_button"
+    _attr_icon = "mdi:pause-circle-outline"
 
     @property
     def unique_id(self) -> str:
         return UNIQUE_ID_WASH_PAUSE_BUTTON.format(self.config_id)
-
-    @property
-    def icon(self) -> str:
-        return "mdi:pause-circle-outline"
 
     @property
     def available(self) -> bool:
@@ -506,6 +505,26 @@ class WashPauseButton(CandyWashButtonBase):
 
     async def async_press(self) -> None:
         await self._send_command_and_refresh("Pa=1")
+
+
+class WashResumeButton(CandyWashButtonBase):
+    _attr_name = "Resume wash"
+    _attr_translation_key = "wash_resume_button"
+    _attr_icon = "mdi:play-circle-outline"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_RESUME_BUTTON.format(self.config_id)
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        status = cast(WashingMachineStatus, self.coordinator.data)
+        return status.machine_state == MachineState.PAUSED
+
+    async def async_press(self) -> None:
+        await self._send_command_and_refresh("Pa=0")
 
 
 class WashStopButton(CandyWashButtonBase):

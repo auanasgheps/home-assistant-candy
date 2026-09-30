@@ -67,6 +67,7 @@ _IDLE_WASHING_MACHINE = WashingMachineStatus(
     checkup_state=None,
     soil_level=None,
     recipe_id=None,
+    dry_target=None,
 )
 
 # ---------------------------------------------------------------------------
@@ -468,6 +469,8 @@ _MOCK_APPLIANCE = CloudApplianceData(
         }
     ],
     downloadable_programs=[],
+    brand="candy",
+    appliance_type="washer",
 )
 
 
