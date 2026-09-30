@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, patch
 
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
@@ -18,11 +19,17 @@ from custom_components.candy import (
     CONF_KEY_USE_ENCRYPTION,
     DATA_KEY_COORDINATOR,
     DATA_KEY_LIMESCALE_UNSUB,
+    DATA_KEY_STATS_COORDINATOR,
     DOMAIN,
     MODE_FULL_CONTROL,
     NOTIF_ID_LIMESCALE,
     NOTIF_ID_MAINT_LIMESCALE,
     _register_limescale_listener,
+)
+from custom_components.candy.client.model import (
+    MachineState,
+    WashingMachineStatistics,
+    WashingMachineStatus,
 )
 
 from .common import TEST_IP
@@ -398,3 +405,72 @@ async def test_limescale_disabled_skips_registration(
     mock_notify.assert_not_called()
     mock_dismiss.assert_not_called()
     assert entry.data[CONF_KEY_MAINTENANCE_LAST_LIMESCALE] == 0
+
+
+async def test_limescale_idle_to_running_to_finished_transition(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+):
+    """Transitioning from IDLE to RUNNING autoclean to FINISHED notifies and resets counter."""
+    entry = await _setup(hass, aioclient_mock, _IDLE_JSON)
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+
+    # Transition from IDLE to RUNNING AUTOCLEAN
+    running_status = WashingMachineStatus.from_json(
+        json.loads(_RUNNING_AUTOCLEAN_JSON)["statusLavatrice"]
+    )
+    coordinator.async_set_updated_data(running_status)
+    await hass.async_block_till_done()
+    assert coordinator.data.machine_state == MachineState.RUNNING
+
+    # Transition from RUNNING AUTOCLEAN to FINISHED
+    _mock_status(aioclient_mock, _COMPLETED_AUTOCLEAN_JSON, _STATS_51_CYCLES)
+    completed_status = WashingMachineStatus.from_json(
+        json.loads(_COMPLETED_AUTOCLEAN_JSON)["statusLavatrice"]
+    )
+    with (
+        patch("custom_components.candy.pn_async_create") as mock_notify,
+        patch("custom_components.candy.pn_async_dismiss") as mock_dismiss,
+    ):
+        coordinator.async_set_updated_data(completed_status)
+        await hass.async_block_till_done()
+        assert coordinator.data.machine_state == MachineState.FINISHED1
+
+    mock_notify.assert_called_once()
+    mock_dismiss.assert_called_once_with(
+        hass, NOTIF_ID_MAINT_LIMESCALE.format(entry.entry_id)
+    )
+    assert entry.data[CONF_KEY_MAINTENANCE_LAST_LIMESCALE] == 51
+
+
+async def test_limescale_completion_restores_from_storage_when_stats_none(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+):
+    """When stats coordinator data is None, baseline restores from last known statistics."""
+    entry = await _setup(
+        hass,
+        aioclient_mock,
+        _RUNNING_AUTOCLEAN_JSON,
+        **{CONF_KEY_MAINTENANCE_LAST_LIMESCALE: 10},
+    )
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+    stats_coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_STATS_COORDINATOR]
+    stats_coordinator.async_set_updated_data(None)
+
+    restored_stats = WashingMachineStatistics(total_cycles=50)
+
+    with (
+        patch("custom_components.candy.pn_async_create"),
+        patch("custom_components.candy.pn_async_dismiss"),
+        patch.object(stats_coordinator, "async_request_refresh"),
+        patch(
+            "custom_components.candy._restore_last_known_statistics",
+            return_value=restored_stats,
+        ),
+    ):
+        _mock_status(aioclient_mock, _COMPLETED_AUTOCLEAN_JSON, _STATS_50_CYCLES)
+        await coordinator.async_request_refresh()
+        await hass.async_block_till_done()
+
+    assert entry.data[CONF_KEY_MAINTENANCE_LAST_LIMESCALE] == 50

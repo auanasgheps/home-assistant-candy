@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
@@ -19,6 +19,10 @@ from custom_components.candy.client import (
 )
 from custom_components.candy.client.model import DownloadableProgram, MachineState
 from custom_components.candy.const import (
+    CHECKUP_SCHEDULE_EVERY_CYCLE,
+    CONF_KEY_CHECKUP_ENABLED,
+    CONF_KEY_CHECKUP_PENDING,
+    CONF_KEY_CHECKUP_SCHEDULE,
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
     CONF_KEY_INTERFACE_TYPE,
     CONF_KEY_MAINTENANCE_ENABLED,
@@ -49,6 +53,7 @@ from custom_components.candy.const import (
     UNIQUE_ID_WASH_STOP_BUTTON,
     UNIQUE_ID_WASH_TEMP_SELECT,
 )
+from custom_components.candy.select import CandyWashProgramDescriptionSensor
 
 from .common import TEST_IP
 
@@ -1305,6 +1310,18 @@ async def test_nfc_description_sensor_updated_on_select(
     assert state.state.startswith("This programme is developed")
 
 
+def test_nfc_description_sensor_seed_from_coordinator_none():
+    """Description sensor handles coordinator update with None status without error."""
+    mock_coord = MagicMock()
+    mock_coord.data = None
+    mock_entry = MagicMock()
+    mock_entry.data = {}
+
+    sensor = CandyWashProgramDescriptionSensor(mock_coord, mock_entry)
+    sensor._seed_from_coordinator()
+    assert sensor.native_value is None
+
+
 async def test_nfc_program_options_absent_when_toggle_off(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
@@ -1573,6 +1590,75 @@ async def test_start_button_nfc_new_clothes(
     assert "RecipeId=D_33" in qs
 
 
+async def test_start_button_nfc_with_checkup_scheduled(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """NFC start button records checkup pending when checkup is scheduled."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="test-full-control-nfc-checkup",
+        data={
+            CONF_IP_ADDRESS: TEST_IP,
+            CONF_KEY_USE_ENCRYPTION: False,
+            CONF_PASSWORD: "",
+            CONF_KEY_MODE: MODE_FULL_CONTROL,
+            CONF_KEY_PROGRAMS: _PROGRAMS,
+            CONF_KEY_DOWNLOADABLE_PROGRAMS: [],
+            CONF_KEY_CHECKUP_ENABLED: True,
+            CONF_KEY_CHECKUP_SCHEDULE: CHECKUP_SCHEDULE_EVERY_CYCLE,
+        },
+    )
+    aioclient_mock.get(f"http://{TEST_IP}/http-read.json?encrypted=0", text=_IDLE_JSON)
+    _add_stats_mocks(aioclient_mock)
+    entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.candy.select.load_downloadable_programs",
+            return_value=_NFC_PROGRAMS,
+        ),
+        patch(
+            "custom_components.candy.button.load_downloadable_programs",
+            return_value=_NFC_PROGRAMS,
+        ),
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    nfc_switch_eid = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_NFC_SWITCH.format(entry.entry_id)
+    )
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": nfc_switch_eid}, blocking=True
+    )
+
+    program_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": program_eid, "option": "Special - New Clothes"},
+        blocking=True,
+    )
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    qs: str = mock_send.call_args[0][0]
+    assert "StartCheckUp=1" in qs
+    assert "RecipeId=D_33" in qs
+    assert entry.data.get(CONF_KEY_CHECKUP_PENDING) is True
+
+
 # ---------------------------------------------------------------------------
 # Wash option switches (Prewash, Extra Rinse +1, …)
 # ---------------------------------------------------------------------------
@@ -1733,6 +1819,66 @@ async def test_wash_option_turn_on_off(
         "switch", "turn_off", {"entity_id": prewash_eid}, blocking=True
     )
     assert hass.states.get(prewash_eid).state == "off"
+
+
+async def test_steam_switch_turn_off(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Steam switch can be turned on and turned off."""
+    entry = await _init_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+    steam_eid = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_STEAM_SWITCH.format(entry.entry_id)
+    )
+    assert steam_eid is not None
+
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": steam_eid}, blocking=True
+    )
+    assert hass.states.get(steam_eid).state == "on"
+
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": steam_eid}, blocking=True
+    )
+    assert hass.states.get(steam_eid).state == "off"
+
+
+async def test_nfc_switch_turn_off(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """NFC special programs switch can be turned off."""
+    entry = await _init_full_control_nfc(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+    nfc_eid = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_NFC_SWITCH.format(entry.entry_id)
+    )
+    assert nfc_eid is not None
+    assert hass.states.get(nfc_eid).state == "on"
+
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": nfc_eid}, blocking=True
+    )
+    assert hass.states.get(nfc_eid).state == "off"
+
+
+async def test_wash_option_switch_unavailable_when_coordinator_fails(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Wash option switch reports unavailable when coordinator update fails."""
+    entry = await _init_full_control_with_options(hass, aioclient_mock, _IDLE_JSON)
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+    registry = er.async_get(hass)
+    prewash_eid = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_OPTION_PREWASH.format(entry.entry_id)
+    )
+    assert prewash_eid is not None
+    assert hass.states.get(prewash_eid).state == "off"
+
+    coordinator.last_update_success = False
+    coordinator.async_update_listeners()
+    await hass.async_block_till_done()
+
+    assert hass.states.get(prewash_eid).state == "unavailable"
 
 
 async def test_start_button_includes_option_mask(

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import aiohttp
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -14,6 +15,9 @@ from custom_components.candy import (
     CONF_KEY_USE_ENCRYPTION,
     DOMAIN,
     _make_off_status,
+    _register_checkup_listener,
+    _register_stats_refresh_listener,
+    _register_wash_error_listener,
     _restore_last_known_statistics,
     _restore_last_known_status,
 )
@@ -527,3 +531,143 @@ async def test_wash_error_listener_unloaded(
     await hass.async_block_till_done()
 
     assert entry.entry_id not in hass.data.get(DOMAIN, {})
+
+
+async def test_wash_error_notification_unknown_code_on_update(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Unknown error code appearing on status update logs warning and skips notification."""
+    entry = await init_integration(
+        hass,
+        aioclient_mock,
+        _STATUS_IDLE,
+        statistics_response=_STATS_OK,
+    )
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+
+    status_err_99 = """{
+      "statusLavatrice": {
+        "WiFiStatus": "1", "Err": "99", "MachMd": "6", "Pr": "1", "PrPh": "0",
+        "PrCode": "136", "SLevel": "0", "Temp": "40", "SpinSp": "8",
+        "DelVal": "0", "RemTime": "0", "FillR": "0"
+      }
+    }"""
+
+    with (
+        patch("custom_components.candy.pn_async_create") as mock_notify,
+        patch("custom_components.candy._LOGGER.warning") as mock_warn,
+    ):
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-read.json?encrypted=0", text=status_err_99
+        )
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-prepareStatistics.json?encrypted=0",
+            text='{"response":"SUCCESS"}',
+        )
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-getStatistics.json?encrypted=0",
+            text=_STATS_OK,
+        )
+        await coordinator.async_request_refresh()
+        await hass.async_block_till_done()
+
+    mock_notify.assert_not_called()
+    mock_warn.assert_called_with("Unknown washing machine error code: %s", 99)
+
+
+def test_wash_error_listener_handles_none_status(hass: HomeAssistant):
+    """Wash error listener safely ignores None coordinator data on update."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = None
+    listener_cb = None
+
+    def _capture_listener(cb):
+        nonlocal listener_cb
+        listener_cb = cb
+        return MagicMock()
+
+    mock_coordinator.async_add_listener = _capture_listener
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test-entry"
+    mock_entry.data = {}
+
+    unsub = _register_wash_error_listener(hass, mock_entry, mock_coordinator)
+    assert callable(unsub)
+    assert listener_cb is not None
+
+    with patch("custom_components.candy.pn_async_create") as mock_notify:
+        listener_cb()
+
+    mock_notify.assert_not_called()
+
+
+def test_checkup_listener_handles_none_status(hass: HomeAssistant):
+    """Checkup listener safely ignores None coordinator data on update."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = None
+    listener_cb = None
+
+    def _capture_listener(cb):
+        nonlocal listener_cb
+        listener_cb = cb
+        return MagicMock()
+
+    mock_coordinator.async_add_listener = _capture_listener
+    mock_entry = MagicMock()
+    mock_entry.data = {}
+
+    unsub = _register_checkup_listener(hass, mock_entry, mock_coordinator)
+    assert callable(unsub)
+    assert listener_cb is not None
+    listener_cb()
+
+
+def test_stats_refresh_listener_handles_none_status(hass: HomeAssistant):
+    """Stats refresh listener safely ignores None coordinator data on update."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = None
+    mock_stats_coordinator = MagicMock()
+    listener_cb = None
+
+    def _capture_listener(cb):
+        nonlocal listener_cb
+        listener_cb = cb
+        return MagicMock()
+
+    mock_coordinator.async_add_listener = _capture_listener
+
+    unsub = _register_stats_refresh_listener(
+        hass, mock_coordinator, mock_stats_coordinator
+    )
+    assert callable(unsub)
+    assert listener_cb is not None
+    listener_cb()
+    mock_stats_coordinator.async_request_refresh.assert_not_called()
+
+
+async def test_update_statistics_raises_when_no_restored_stats_and_fetch_fails(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """When machine is not off, no restored stats exist, and statistics fetch fails, UpdateFailed is raised."""
+    aioclient_mock.get(
+        f"http://{TEST_IP}/http-read.json?encrypted=0", text=_STATUS_IDLE
+    )
+    aioclient_mock.get(
+        f"http://{TEST_IP}/http-prepareStatistics.json?encrypted=0",
+        exc=aiohttp.ClientError("Failed to fetch statistics"),
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="stats_fail_test",
+        data={
+            CONF_IP_ADDRESS: TEST_IP,
+            CONF_PASSWORD: "",
+            CONF_KEY_USE_ENCRYPTION: False,
+        },
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert DATA_KEY_STATS_COORDINATOR not in hass.data[DOMAIN][entry.entry_id]

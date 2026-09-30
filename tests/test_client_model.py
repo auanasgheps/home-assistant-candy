@@ -201,6 +201,29 @@ def test_load_downloadable_programs_handles_empty_string_fields():
     assert prog.steam == 0
 
 
+def test_load_downloadable_programs_handles_none_and_invalid_fields():
+    raw = [
+        {
+            "position": "42",
+            "name": "DUAL_WM_WD_PROGRAM_DOWNLOAD_NAME_CASHMERE",
+            "parent": None,
+            "temperature": "invalid",
+            "spin_speed": None,
+            "soil_level": {},
+            "options": None,
+            "steam": [],
+        }
+    ]
+    result = load_downloadable_programs(raw)
+    assert len(result) == 1
+    prog = result[0]
+    assert prog.parent == 0
+    assert prog.temperature == 0
+    assert prog.soil_level == 0
+    assert prog.options == 0
+    assert prog.steam == 0
+
+
 def test_duration_for_soil_variable_soil():
     program = WashingMachineWashProgram(
         position=16,

@@ -25,7 +25,11 @@ from custom_components.candy import (
     NOTIF_ID_WASH_ERROR,
     _register_full_checkup_listener,
 )
-from custom_components.candy.client.model import CheckUpState, WashingMachineStatus
+from custom_components.candy.client.model import (
+    CheckUpState,
+    WashingMachineStatistics,
+    WashingMachineStatus,
+)
 from custom_components.candy.const import MODE_READ_ONLY
 
 from .common import TEST_IP
@@ -519,3 +523,41 @@ async def test_full_checkup_reset_failure_logs_warning(
 
     mock_warn.assert_called_once()
     assert "Failed to reset appliance check-up state" in mock_warn.call_args[0][0]
+
+
+async def test_full_checkup_completion_restores_from_storage_when_stats_none(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+):
+    """When stats coordinator data is None, Full Check-up baseline restores from last known statistics."""
+    entry = await _setup(
+        hass,
+        aioclient_mock,
+        _RUNNING_CHECKUP_JSON,
+        **{CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP: 10},
+    )
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+    stats_coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_STATS_COORDINATOR]
+    stats_coordinator.async_set_updated_data(None)
+
+    restored_stats = WashingMachineStatistics(total_cycles=388)
+
+    with (
+        patch("custom_components.candy.pn_async_create"),
+        patch("custom_components.candy.pn_async_dismiss"),
+        patch(
+            "custom_components.candy.client.CandyClient.send_command",
+            new_callable=AsyncMock,
+        ),
+        patch("custom_components.candy.asyncio.sleep"),
+        patch.object(stats_coordinator, "async_request_refresh"),
+        patch(
+            "custom_components.candy._restore_last_known_statistics",
+            return_value=restored_stats,
+        ),
+    ):
+        _mock_status(aioclient_mock, _COMPLETED_CHECKUP_JSON, _STATS_50_CYCLES)
+        await coordinator.async_request_refresh()
+        await hass.async_block_till_done()
+
+    assert entry.data[CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP] == 388

@@ -242,6 +242,35 @@ async def test_program_sensor_special_program_unknown_recipe_id_fallback(
     assert state.attributes["recipe_id"] == "D_999"
 
 
+async def test_program_sensor_legacy_downloadable_position_match(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Test displaying downloadable program name when matched by dial position with RecipeId 0."""
+    status_payload = (
+        load_fixture("washing_machine/idle.json")
+        .replace('"Pr": "1"', '"Pr": "33"')
+        .replace('"RecipeId": "0"', '"RecipeId": "0"')
+    )
+    with patch(
+        "custom_components.candy.sensor.load_downloadable_programs",
+        return_value=[_TEST_NFC_NEW_CLOTHES],
+    ):
+        await init_integration(
+            hass,
+            aioclient_mock,
+            status_payload,
+            statistics_response='{"statusCounters": {"Temp0to30": "318", "Temp40": "70", "Temp60to90": "0"}}',
+            extra_config_data={
+                CONF_KEY_PROGRAMS: _TEST_PROGRAMS,
+                CONF_KEY_DOWNLOADABLE_PROGRAMS: [],
+            },
+        )
+
+    state = hass.states.get("sensor.wash_program")
+    assert state
+    assert state.state == "New Clothes"
+
+
 async def test_cycle_sensor_idle(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
