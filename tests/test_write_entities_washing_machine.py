@@ -25,6 +25,7 @@ from custom_components.candy.const import (
     CONF_KEY_CHECKUP_SCHEDULE,
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
     CONF_KEY_INTERFACE_TYPE,
+    CONF_KEY_IS_WASHER_DRYER,
     CONF_KEY_MAINTENANCE_ENABLED,
     CONF_KEY_MODE,
     CONF_KEY_PROGRAM_LANGUAGE,
@@ -32,6 +33,9 @@ from custom_components.candy.const import (
     DATA_KEY_COORDINATOR,
     MODE_FULL_CONTROL,
     MODE_READ_ONLY,
+    PROGRAM_TYPE_DRYING,
+    PROGRAM_TYPE_WASH_AND_DRY,
+    PROGRAM_TYPE_WASHING,
     UNIQUE_ID_WASH_DELAY_NUMBER,
     UNIQUE_ID_WASH_ESTIMATED_DURATION,
     UNIQUE_ID_WASH_FULL_CHECKUP_BUTTON,
@@ -44,6 +48,8 @@ from custom_components.candy.const import (
     UNIQUE_ID_WASH_PAUSE_BUTTON,
     UNIQUE_ID_WASH_PROGRAM_DESCRIPTION,
     UNIQUE_ID_WASH_PROGRAM_SELECT,
+    UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT,
+    UNIQUE_ID_WASH_RESUME_BUTTON,
     UNIQUE_ID_WASH_SCHEDULED_FINISH,
     UNIQUE_ID_WASH_SCHEDULED_START,
     UNIQUE_ID_WASH_SOIL_SELECT,
@@ -234,6 +240,14 @@ _RUNNING_JSON = """{
     "WiFiStatus": "1", "Err": "0", "MachMd": "2", "Pr": "1", "PrPh": "2",
     "PrCode": "136", "SLevel": "0", "Temp": "40", "SpinSp": "8",
     "DelVal": "0", "RemTime": "1800", "FillR": "50", "CheckUpState": "0"
+  }
+}"""
+
+_PAUSED_JSON = """{
+  "statusLavatrice": {
+    "WiFiStatus": "1", "Err": "0", "MachMd": "3", "Pr": "1", "PrPh": "2",
+    "PrCode": "136", "SLevel": "0", "Temp": "40", "SpinSp": "8",
+    "DelVal": "0", "RemTime": "1200", "FillR": "50", "CheckUpState": "0"
   }
 }"""
 
@@ -2015,6 +2029,102 @@ async def test_pause_button_sends_command(
 
 
 # ---------------------------------------------------------------------------
+# Resume button
+# ---------------------------------------------------------------------------
+
+
+async def test_resume_button_available_when_paused(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control(hass, aioclient_mock, _PAUSED_JSON)
+    resume_state = _state(hass, entry, "button", UNIQUE_ID_WASH_RESUME_BUTTON)
+    assert resume_state is not None
+    assert resume_state.state != "unavailable"
+
+    # Start and Pause buttons must be unavailable when paused
+    start_state = _state(hass, entry, "button", UNIQUE_ID_WASH_START_BUTTON)
+    assert start_state is not None
+    assert start_state.state == "unavailable"
+
+    pause_state = _state(hass, entry, "button", UNIQUE_ID_WASH_PAUSE_BUTTON)
+    assert pause_state is not None
+    assert pause_state.state == "unavailable"
+
+    # Stop button must remain available when paused
+    stop_state = _state(hass, entry, "button", UNIQUE_ID_WASH_STOP_BUTTON)
+    assert stop_state is not None
+    assert stop_state.state != "unavailable"
+
+
+async def test_resume_button_unavailable_when_running(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control(hass, aioclient_mock, _RUNNING_JSON)
+    state = _state(hass, entry, "button", UNIQUE_ID_WASH_RESUME_BUTTON)
+    assert state is not None
+    assert state.state == "unavailable"
+
+
+async def test_resume_button_unavailable_when_idle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control(hass, aioclient_mock, _IDLE_JSON)
+    state = _state(hass, entry, "button", UNIQUE_ID_WASH_RESUME_BUTTON)
+    assert state is not None
+    assert state.state == "unavailable"
+
+
+async def test_resume_button_sends_command(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control(hass, aioclient_mock, _PAUSED_JSON)
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_RESUME_BUTTON.format(entry.entry_id)
+    )
+    assert entity_id is not None
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": entity_id}, blocking=True
+        )
+
+    mock_send.assert_called_once_with("Pa=0")
+
+
+async def test_resume_button_present_for_rapido(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control_with_interface_type(
+        hass, aioclient_mock, "RAPIDO_4DIG_STM_NEL"
+    )
+    state = _state(hass, entry, "button", UNIQUE_ID_WASH_RESUME_BUTTON)
+    assert state is not None
+
+
+async def test_resume_button_absent_for_bianca(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control_with_interface_type(
+        hass, aioclient_mock, "BIANCA_SOME_MODEL"
+    )
+    state = _state(hass, entry, "button", UNIQUE_ID_WASH_RESUME_BUTTON)
+    assert state is None
+
+
+async def test_resume_button_present_when_no_interface_type(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Existing entries without interface_type in config keep the resume button."""
+    entry = await _init_full_control(hass, aioclient_mock, _IDLE_JSON)
+    state = _state(hass, entry, "button", UNIQUE_ID_WASH_RESUME_BUTTON)
+    assert state is not None
+
+
+# ---------------------------------------------------------------------------
 # Feature gating: pause button excluded for BIANCA devices
 # ---------------------------------------------------------------------------
 
@@ -2091,6 +2201,8 @@ async def test_controls_unavailable_when_remote_control_off(
         ("select", UNIQUE_ID_WASH_SOIL_SELECT),
         ("number", UNIQUE_ID_WASH_DELAY_NUMBER),
         ("button", UNIQUE_ID_WASH_START_BUTTON),
+        ("button", UNIQUE_ID_WASH_PAUSE_BUTTON),
+        ("button", UNIQUE_ID_WASH_RESUME_BUTTON),
         ("button", UNIQUE_ID_WASH_STOP_BUTTON),
         ("switch", UNIQUE_ID_WASH_STEAM_SWITCH),
     ]
@@ -2356,3 +2468,231 @@ async def test_full_checkup_button_sends_command(
     mock_send.assert_called_once()
     qs: str = mock_send.call_args[0][0]
     assert "CheckUpState=1" in qs
+
+
+# ---------------------------------------------------------------------------
+# Washer-Dryer Program Type and Program Filtering Tests
+# ---------------------------------------------------------------------------
+
+_COTTON_WD = {
+    "program": {
+        "position": 1,
+        "name": "DUAL_WM_WD_PROGRAM_NAME_RESISTANT_COTTONS",
+        "command_parameters": [
+            {"command_parameter": {"name": "selector_position", "validation": "1"}},
+            {"command_parameter": {"name": "pr_code", "validation": "65"}},
+            {"command_parameter": {"name": "program_type", "validation": "W"}},
+            {"command_parameter": {"name": "selector_position_dry", "validation": "1"}},
+            {"command_parameter": {"name": "maximum_temperature", "validation": "90"}},
+            {"command_parameter": {"name": "default_temperature", "validation": "60"}},
+            {"command_parameter": {"name": "maximum_spin_speed", "validation": "1400"}},
+            {"command_parameter": {"name": "default_spin_speed", "validation": "1000"}},
+            {"command_parameter": {"name": "minimum_soil_level", "validation": "1"}},
+            {"command_parameter": {"name": "maximum_soil_level", "validation": "3"}},
+            {"command_parameter": {"name": "default_soil_level", "validation": "2"}},
+            {"command_parameter": {"name": "steam", "validation": "0"}},
+            {"command_parameter": {"name": "default_duration", "validation": "120"}},
+            {"command_parameter": {"name": "dry", "validation": "255"}},
+        ],
+    }
+}
+
+_DELICATES_WD = {
+    "program": {
+        "position": 5,
+        "name": "DUAL_WM_WD_PROGRAM_NAME_DELICATES",
+        "command_parameters": [
+            {"command_parameter": {"name": "selector_position", "validation": "5"}},
+            {"command_parameter": {"name": "pr_code", "validation": "4"}},
+            {"command_parameter": {"name": "program_type", "validation": "W"}},
+            {"command_parameter": {"name": "maximum_temperature", "validation": "40"}},
+            {"command_parameter": {"name": "default_temperature", "validation": "30"}},
+            {"command_parameter": {"name": "maximum_spin_speed", "validation": "800"}},
+            {"command_parameter": {"name": "default_spin_speed", "validation": "400"}},
+            {"command_parameter": {"name": "minimum_soil_level", "validation": "1"}},
+            {"command_parameter": {"name": "maximum_soil_level", "validation": "1"}},
+            {"command_parameter": {"name": "default_soil_level", "validation": "1"}},
+            {"command_parameter": {"name": "steam", "validation": "0"}},
+            {"command_parameter": {"name": "default_duration", "validation": "59"}},
+            {"command_parameter": {"name": "dry", "validation": "0"}},
+        ],
+    }
+}
+
+_HIGH_DRY_WD = {
+    "program": {
+        "position": 16,
+        "name": "DUAL_WM_WD_PROGRAM_NAME_HIGH_DRY",
+        "command_parameters": [
+            {"command_parameter": {"name": "selector_position", "validation": "16"}},
+            {"command_parameter": {"name": "pr_code", "validation": "45"}},
+            {"command_parameter": {"name": "program_type", "validation": "D"}},
+            {"command_parameter": {"name": "maximum_temperature", "validation": "0"}},
+            {"command_parameter": {"name": "default_temperature", "validation": "0"}},
+            {"command_parameter": {"name": "maximum_spin_speed", "validation": "0"}},
+            {"command_parameter": {"name": "default_spin_speed", "validation": "0"}},
+            {"command_parameter": {"name": "minimum_soil_level", "validation": "0"}},
+            {"command_parameter": {"name": "maximum_soil_level", "validation": "0"}},
+            {"command_parameter": {"name": "default_soil_level", "validation": "0"}},
+            {"command_parameter": {"name": "steam", "validation": "0"}},
+            {"command_parameter": {"name": "default_duration", "validation": "120"}},
+            {"command_parameter": {"name": "dry", "validation": "255"}},
+        ],
+    }
+}
+
+_WD_PROGRAMS = [_COTTON_WD, _DELICATES_WD, _HIGH_DRY_WD]
+
+
+async def _init_full_control_wd(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    status_json: str,
+    programs: list[dict],
+) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="test-full-control-wd",
+        data={
+            CONF_IP_ADDRESS: TEST_IP,
+            CONF_KEY_USE_ENCRYPTION: False,
+            CONF_PASSWORD: "",
+            CONF_KEY_MODE: MODE_FULL_CONTROL,
+            CONF_KEY_IS_WASHER_DRYER: True,
+            CONF_KEY_PROGRAMS: programs,
+        },
+    )
+    aioclient_mock.get(f"http://{TEST_IP}/http-read.json?encrypted=0", text=status_json)
+    _add_stats_mocks(aioclient_mock)
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_program_type_select_omitted_for_wash_only_machine(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Standard washing machines do not expose the Program Type selector."""
+    entry = await _init_full_control(hass, aioclient_mock, _IDLE_JSON)
+    state = _state(hass, entry, "select", UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT)
+    assert state is None
+
+
+async def test_program_type_select_created_for_washer_dryer(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Washer-dryers expose the Program Type selector with correct initial options."""
+    entry = await _init_full_control_wd(hass, aioclient_mock, _IDLE_JSON, _WD_PROGRAMS)
+    state = _state(hass, entry, "select", UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT)
+    assert state is not None
+    assert state.state == PROGRAM_TYPE_WASHING
+    assert state.attributes["options"] == [
+        PROGRAM_TYPE_WASHING,
+        PROGRAM_TYPE_DRYING,
+        PROGRAM_TYPE_WASH_AND_DRY,
+    ]
+
+
+async def test_program_select_filtering_across_program_types(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Program list dynamically filters based on the selected Program Type."""
+    entry = await _init_full_control_wd(hass, aioclient_mock, _IDLE_JSON, _WD_PROGRAMS)
+    registry = er.async_get(hass)
+    type_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT.format(entry.entry_id)
+    )
+    prog_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    assert type_id is not None
+    assert prog_id is not None
+
+    # 1. In 'washing' mode: only wash programs appear
+    prog_state = hass.states.get(prog_id)
+    assert prog_state is not None
+    assert "Whites" in prog_state.attributes["options"]
+    assert "Delicates" in prog_state.attributes["options"]
+    assert "High Heat Dry" not in prog_state.attributes["options"]
+
+    # 2. Switch to 'drying' mode: only standalone dry programs appear
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": type_id, "option": PROGRAM_TYPE_DRYING},
+        blocking=True,
+    )
+    prog_state = hass.states.get(prog_id)
+    assert prog_state is not None
+    assert prog_state.attributes["options"] == ["High Heat Dry"]
+    assert prog_state.state == "High Heat Dry"
+
+    # 3. Switch to 'wash_and_dry' mode: only combo-compatible wash programs appear
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": type_id, "option": PROGRAM_TYPE_WASH_AND_DRY},
+        blocking=True,
+    )
+    prog_state = hass.states.get(prog_id)
+    assert prog_state is not None
+    assert prog_state.attributes["options"] == ["Whites"]
+    assert prog_state.state == "Whites"
+
+
+async def test_program_type_select_reflects_idle_dry_cycle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Program type selector reflects drying when a dry cycle is selected on dial."""
+    dry_idle_json = """{
+      "statusLavatrice": {
+        "WiFiStatus": "1", "Err": "0", "MachMd": "1", "Pr": "16", "PrPh": "0",
+        "PrCode": "45", "SLevel": "0", "Temp": "0", "SpinSp": "0",
+        "DelVal": "0", "RemTime": "0", "FillR": "0", "CheckUpState": "0"
+      }
+    }"""
+    entry = await _init_full_control_wd(
+        hass, aioclient_mock, dry_idle_json, _WD_PROGRAMS
+    )
+    state = _state(hass, entry, "select", UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT)
+    assert state is not None
+    assert state.state == PROGRAM_TYPE_DRYING
+
+
+async def test_program_type_select_reflects_idle_wash_and_dry_cycle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Program type selector reflects wash_and_dry when DryT is active on wash program."""
+    combo_idle_json = """{
+      "statusLavatrice": {
+        "WiFiStatus": "1", "Err": "0", "MachMd": "1", "Pr": "1", "PrPh": "0",
+        "PrCode": "65", "SLevel": "0", "Temp": "60", "SpinSp": "10",
+        "DryT": "1", "DelVal": "0", "RemTime": "0", "FillR": "0", "CheckUpState": "0"
+      }
+    }"""
+    entry = await _init_full_control_wd(
+        hass, aioclient_mock, combo_idle_json, _WD_PROGRAMS
+    )
+    state = _state(hass, entry, "select", UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT)
+    assert state is not None
+    assert state.state == PROGRAM_TYPE_WASH_AND_DRY
+
+
+async def test_program_type_select_unavailable_when_running(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Program type selector is unavailable when the machine is running."""
+    dry_running_json = """{
+      "statusLavatrice": {
+        "WiFiStatus": "1", "Err": "0", "MachMd": "2", "Pr": "16", "PrPh": "2",
+        "PrCode": "45", "SLevel": "0", "Temp": "0", "SpinSp": "0",
+        "DelVal": "0", "RemTime": "3600", "FillR": "0", "CheckUpState": "0"
+      }
+    }"""
+    entry = await _init_full_control_wd(
+        hass, aioclient_mock, dry_running_json, _WD_PROGRAMS
+    )
+    state = _state(hass, entry, "select", UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT)
+    assert state is not None
+    assert state.state == "unavailable"

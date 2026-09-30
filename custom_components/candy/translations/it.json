@@ -138,6 +138,14 @@
       }
     },
     "select": {
+      "wash_program_type": {
+        "name": "Tipologia programma",
+        "state": {
+          "washing": "Lavaggio",
+          "drying": "Asciugatura",
+          "wash_and_dry": "Lavaggio - asciugatura"
+        }
+      },
       "wash_program_select": {
         "name": "Programma di lavaggio"
       },
@@ -159,6 +167,12 @@
     "button": {
       "wash_start_button": {
         "name": "Avvia lavaggio"
+      },
+      "wash_pause_button": {
+        "name": "Pausa lavaggio"
+      },
+      "wash_resume_button": {
+        "name": "Riprendi lavaggio"
       },
       "wash_stop_button": {
         "name": "Ferma lavaggio"

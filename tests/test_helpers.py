@@ -5,7 +5,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.candy import CONF_KEY_USE_ENCRYPTION
 from custom_components.candy.const import (
+    CONF_KEY_BRAND,
     CONF_KEY_DEVICE_MODEL,
+    CONF_KEY_IS_WASHER_DRYER,
     CONF_KEY_MAC_ADDRESS,
     CONF_KEY_MODE,
     CONF_KEY_PURCHASE_DATE,
@@ -17,6 +19,7 @@ from custom_components.candy.helpers import (
     cycles_remaining,
     get_wash_error_notification_strings,
     wash_device_info,
+    wash_device_name,
 )
 
 
@@ -83,6 +86,23 @@ def test_wash_device_info_full_control():
     assert info["model"] == "RO41274DWMSE"
     assert info["serial_number"] == "SN123456"
     assert "hw_version" not in info
+
+
+def test_wash_device_info_washer_dryer_hoover():
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_IP_ADDRESS: "192.168.0.1",
+            CONF_KEY_USE_ENCRYPTION: False,
+            CONF_PASSWORD: "",
+            CONF_KEY_BRAND: "hoover",
+            CONF_KEY_IS_WASHER_DRYER: True,
+        },
+    )
+    assert wash_device_name(entry) == "Washer dryer"
+    info = wash_device_info(entry)
+    assert info["name"] == "Washer dryer"
+    assert info["manufacturer"] == "Hoover"
 
 
 def test_get_wash_error_notification_strings():

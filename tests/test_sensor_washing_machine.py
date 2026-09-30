@@ -20,7 +20,9 @@ from custom_components.candy import (
 )
 from custom_components.candy.client.model import DownloadableProgram
 from custom_components.candy.const import (
+    CONF_KEY_BRAND,
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
+    CONF_KEY_IS_WASHER_DRYER,
     CONF_KEY_IS_WASHING_MACHINE,
     CONF_KEY_MAINTENANCE_ENABLED,
     CONF_KEY_MAINTENANCE_LAST_FILTER,
@@ -1051,3 +1053,64 @@ async def test_poll_interval_restores_active_on_recovery(
     await hass.async_block_till_done()
 
     assert coordinator.update_interval == SCAN_INTERVAL_ACTIVE
+
+
+async def test_washer_dryer_sensor_setup(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Test washer dryer entities, naming, manufacturer, and dry target sensor."""
+    fixture = load_fixture("washing_machine/idle.json").replace(
+        '"DryT": "0"', '"DryT": "1"'
+    )
+    entry = await init_integration(
+        hass,
+        aioclient_mock,
+        fixture,
+        statistics_response='{"statusCounters": {"Program1": "10"}}',
+        extra_config_data={
+            CONF_KEY_IS_WASHER_DRYER: True,
+            CONF_KEY_BRAND: "hoover",
+        },
+    )
+
+    dev_reg = device_registry.async_get(hass)
+    device = dev_reg.async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    assert device is not None
+    assert device.name == "Washer dryer"
+    assert device.manufacturer == "Hoover"
+
+    main_state = hass.states.get("sensor.washer_dryer")
+    assert main_state is not None
+    assert main_state.state == "Idle"
+    assert main_state.attributes["friendly_name"] == "Washer dryer"
+
+    dry_target_state = hass.states.get("sensor.wash_dry_target")
+    assert dry_target_state is not None
+    assert dry_target_state.state == "extra_dry"
+    assert dry_target_state.attributes["friendly_name"] == "Wash dry target"
+
+
+async def test_washer_dryer_sensor_not_created_for_washing_machine(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Standard washing machines do not create dry target sensor and keep standard name."""
+    entry = await init_integration(
+        hass,
+        aioclient_mock,
+        load_fixture("washing_machine/idle.json"),
+        statistics_response='{"statusCounters": {"Program1": "10"}}',
+    )
+
+    dev_reg = device_registry.async_get(hass)
+    device = dev_reg.async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    assert device is not None
+    assert device.name == "Washing machine"
+    assert device.manufacturer == "Candy"
+
+    main_state = hass.states.get("sensor.washing_machine")
+    assert main_state is not None
+    assert main_state.state == "Idle"
+    assert main_state.attributes["friendly_name"] == "Washing machine"
+
+    dry_target_state = hass.states.get("sensor.wash_dry_target")
+    assert dry_target_state is None

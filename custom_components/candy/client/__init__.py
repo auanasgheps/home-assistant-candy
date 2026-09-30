@@ -17,6 +17,7 @@ from .model import (
     DownloadableProgram as DownloadableProgram,
     OvenStatus,
     TumbleDryerStatus,
+    WasherDryerDryTarget as WasherDryerDryTarget,
     WashingMachineStatistics,
     WashingMachineStatus,
     WashingMachineWashProgram as WashingMachineWashProgram,

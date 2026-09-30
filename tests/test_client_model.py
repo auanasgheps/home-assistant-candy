@@ -7,6 +7,8 @@ import pytest
 from custom_components.candy.client.model import (
     DownloadableProgram,
     MachineState,
+    WasherDryerDryTarget,
+    WashingMachineStatus,
     WashingMachineWashProgram,
     load_downloadable_programs,
 )
@@ -49,6 +51,9 @@ def test_display_name_returns_english_localized_name():
         powder_detergent_dose=4,
         max_cycle_capacity=None,
         available_options=251,
+        program_type="W",
+        selector_position_dry=None,
+        dry_supported=False,
     )
     assert program.display_name == program.localized_name("en")
 
@@ -76,6 +81,9 @@ def test_display_name_falls_back_to_title_case_for_unknown_program():
         powder_detergent_dose=None,
         max_cycle_capacity=None,
         available_options=0,
+        program_type="W",
+        selector_position_dry=None,
+        dry_supported=False,
     )
     assert program.display_name == "Totally Unknown Program"
 
@@ -247,6 +255,9 @@ def test_duration_for_soil_variable_soil():
         powder_detergent_dose=4,
         max_cycle_capacity=None,
         available_options=251,
+        program_type="W",
+        selector_position_dry=None,
+        dry_supported=False,
     )
     assert program.duration_for_soil(1) == 96
     assert program.duration_for_soil(2) == 131
@@ -278,6 +289,9 @@ def test_duration_for_soil_fixed_soil():
         powder_detergent_dose=None,
         max_cycle_capacity=None,
         available_options=0,
+        program_type="W",
+        selector_position_dry=None,
+        dry_supported=False,
     )
     assert program.duration_for_soil(1) == 44
     assert program.duration_for_soil(2) == 44
@@ -307,6 +321,9 @@ def test_resolve_soil_target():
         powder_detergent_dose=4,
         max_cycle_capacity=None,
         available_options=251,
+        program_type="W",
+        selector_position_dry=None,
+        dry_supported=False,
     )
     base_fixed = WashingMachineWashProgram(
         position=9,
@@ -330,6 +347,9 @@ def test_resolve_soil_target():
         powder_detergent_dose=None,
         max_cycle_capacity=None,
         available_options=0,
+        program_type="W",
+        selector_position_dry=None,
+        dry_supported=False,
     )
     nfc_valid = DownloadableProgram(
         position=56,
@@ -361,3 +381,209 @@ def test_resolve_soil_target():
     )
     assert nfc_zero.resolve_soil_target(base_variable) == 3
     assert nfc_zero.resolve_soil_target(base_fixed) == 3
+
+
+# ---------------------------------------------------------------------------
+# WasherDryerDryTarget
+# ---------------------------------------------------------------------------
+
+
+def test_washer_dryer_dry_target_codes():
+    expected_codes = {
+        0: (WasherDryerDryTarget.NO_DRY, "no_dry"),
+        1: (WasherDryerDryTarget.EXTRA_DRY, "extra_dry"),
+        2: (WasherDryerDryTarget.IRON_DRY, "iron_dry"),
+        3: (WasherDryerDryTarget.CUPBOARD_DRY, "cupboard_dry"),
+        4: (WasherDryerDryTarget.COOLDOWN, "cooldown"),
+        5: (WasherDryerDryTarget.TIME_120, "120_minutes"),
+        6: (WasherDryerDryTarget.TIME_90, "90_minutes"),
+        7: (WasherDryerDryTarget.TIME_60, "60_minutes"),
+        8: (WasherDryerDryTarget.TIME_30, "30_minutes"),
+    }
+    for code, (target, label) in expected_codes.items():
+        parsed = WasherDryerDryTarget.from_code(code)
+        assert parsed is target
+        assert parsed.label == label
+        assert str(parsed) == label
+
+    with pytest.raises(ValueError, match="Unrecognized code"):
+        WasherDryerDryTarget.from_code(99)
+
+
+def test_washing_machine_status_parses_dry_target():
+    payload = {
+        "MachMd": "1",
+        "PrPh": "6",
+        "Pr": "1",
+        "Temp": "40",
+        "SpinSp": "10",
+        "RemTime": "3600",
+        "WiFiStatus": "1",
+        "DryT": "1",
+    }
+    status = WashingMachineStatus.from_json(payload)
+    assert status.dry_target is WasherDryerDryTarget.EXTRA_DRY
+
+
+def test_washing_machine_status_without_dry_target():
+    payload = {
+        "MachMd": "1",
+        "PrPh": "2",
+        "Pr": "1",
+        "Temp": "40",
+        "SpinSp": "10",
+        "RemTime": "3600",
+        "WiFiStatus": "1",
+    }
+    status = WashingMachineStatus.from_json(payload)
+    assert status.dry_target is None
+
+
+# ---------------------------------------------------------------------------
+# WashingMachineWashProgram: program_type & dry compatibility
+# ---------------------------------------------------------------------------
+
+
+def test_wash_program_from_dict_wash_only():
+    raw = {
+        "program": {
+            "position": "1",
+            "name": "DUAL_WM_WD_PROGRAM_NAME_DELICATES",
+            "command_parameters": [
+                {"command_parameter": {"name": "selector_position", "validation": "1"}},
+                {"command_parameter": {"name": "pr_code", "validation": "4"}},
+                {
+                    "command_parameter": {
+                        "name": "maximum_temperature",
+                        "validation": "40",
+                    }
+                },
+                {
+                    "command_parameter": {
+                        "name": "default_temperature",
+                        "validation": "30",
+                    }
+                },
+                {
+                    "command_parameter": {
+                        "name": "maximum_spin_speed",
+                        "validation": "800",
+                    }
+                },
+                {
+                    "command_parameter": {
+                        "name": "default_spin_speed",
+                        "validation": "400",
+                    }
+                },
+                {
+                    "command_parameter": {
+                        "name": "minimum_soil_level",
+                        "validation": "1",
+                    }
+                },
+                {
+                    "command_parameter": {
+                        "name": "maximum_soil_level",
+                        "validation": "1",
+                    }
+                },
+                {
+                    "command_parameter": {
+                        "name": "default_soil_level",
+                        "validation": "1",
+                    }
+                },
+                {"command_parameter": {"name": "steam", "validation": "0"}},
+                {"command_parameter": {"name": "default_duration", "validation": "59"}},
+                {"command_parameter": {"name": "available_options", "validation": "0"}},
+                {"command_parameter": {"name": "dry", "validation": "0"}},
+            ],
+        }
+    }
+    prog = WashingMachineWashProgram.from_dict(raw)
+    assert prog.program_type == "W"
+    assert prog.is_wash is True
+    assert prog.is_dry is False
+    assert prog.is_wash_and_dry is False
+    assert prog.selector_position_dry is None
+    assert prog.dry_supported is False
+
+
+def test_wash_program_from_dict_standalone_dry():
+    raw = {
+        "program": {
+            "position": "16",
+            "name": "DUAL_WM_WD_PROGRAM_NAME_HIGH_DRY",
+            "command_parameters": [
+                {
+                    "command_parameter": {
+                        "name": "selector_position",
+                        "validation": "16",
+                    }
+                },
+                {"command_parameter": {"name": "pr_code", "validation": "45"}},
+                {"command_parameter": {"name": "program_type", "validation": "D"}},
+                {"command_parameter": {"name": "dry", "validation": "255"}},
+            ],
+        }
+    }
+    prog = WashingMachineWashProgram.from_dict(raw)
+    assert prog.program_type == "D"
+    assert prog.is_wash is False
+    assert prog.is_dry is True
+    assert prog.is_wash_and_dry is False
+    assert prog.dry_supported is True
+
+
+def test_wash_program_from_dict_wash_with_dry_attachment():
+    raw = {
+        "program": {
+            "position": "9",
+            "name": "DUAL_WM_WD_PROGRAM_NAME_RESISTANT_COTTONS",
+            "command_parameters": [
+                {"command_parameter": {"name": "selector_position", "validation": "9"}},
+                {"command_parameter": {"name": "pr_code", "validation": "65"}},
+                {"command_parameter": {"name": "program_type", "validation": "W"}},
+                {
+                    "command_parameter": {
+                        "name": "selector_position_dry",
+                        "validation": "1",
+                    }
+                },
+                {"command_parameter": {"name": "dry", "validation": "255"}},
+            ],
+        }
+    }
+    prog = WashingMachineWashProgram.from_dict(raw)
+    assert prog.program_type == "W"
+    assert prog.is_wash is True
+    assert prog.is_dry is False
+    assert prog.is_wash_and_dry is True
+    assert prog.selector_position_dry == 1
+    assert prog.dry_supported is True
+
+
+def test_wash_program_from_dict_combo_cycle():
+    raw = {
+        "program": {
+            "position": "23",
+            "name": "DUAL_WM_WD_PROGRAM_NAME_RAPID_WASH_AND_DRY_59_MIN",
+            "command_parameters": [
+                {
+                    "command_parameter": {
+                        "name": "selector_position",
+                        "validation": "23",
+                    }
+                },
+                {"command_parameter": {"name": "pr_code", "validation": "16"}},
+                {"command_parameter": {"name": "program_type", "validation": "WD"}},
+                {"command_parameter": {"name": "dry", "validation": "0"}},
+            ],
+        }
+    }
+    prog = WashingMachineWashProgram.from_dict(raw)
+    assert prog.program_type == "WD"
+    assert prog.is_wash is True
+    assert prog.is_dry is False
+    assert prog.is_wash_and_dry is True

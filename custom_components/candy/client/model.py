@@ -80,6 +80,18 @@ class WashProgramState(StatusCode):
     SPIN = (10, "Spin")
 
 
+class WasherDryerDryTarget(StatusCode):
+    NO_DRY = (0, "no_dry")
+    EXTRA_DRY = (1, "extra_dry")
+    IRON_DRY = (2, "iron_dry")
+    CUPBOARD_DRY = (3, "cupboard_dry")
+    COOLDOWN = (4, "cooldown")
+    TIME_120 = (5, "120_minutes")
+    TIME_90 = (6, "90_minutes")
+    TIME_60 = (7, "60_minutes")
+    TIME_30 = (8, "30_minutes")
+
+
 @dataclass
 class WashingMachineStatus:
     machine_state: MachineState
@@ -105,6 +117,7 @@ class WashingMachineStatus:
     checkup_state: CheckUpState | None  # CheckUpState — diagnostic lifecycle
     soil_level: int | None  # SLevel — 0–4 soil level setting
     recipe_id: str | None  # RecipeId — downloadable program (e.g. "D_33")
+    dry_target: WasherDryerDryTarget | None
 
     @classmethod
     def from_json(cls, json):
@@ -136,6 +149,9 @@ class WashingMachineStatus:
             soil_level=int(json["SLevel"]) if "SLevel" in json else None,
             recipe_id=str(json["RecipeId"]).strip()
             if json.get("RecipeId") is not None
+            else None,
+            dry_target=WasherDryerDryTarget.from_code(int(json["DryT"]))
+            if "DryT" in json
             else None,
         )
 
@@ -298,6 +314,9 @@ class WashingMachineWashProgram:
     powder_detergent_dose: int | None  # 1–4 dose level, or None if not applicable
     max_cycle_capacity: int | None  # kg
     available_options: int  # OptMsk1 bitmask of valid options for this program
+    program_type: str
+    selector_position_dry: int | None
+    dry_supported: bool
 
     @classmethod
     def from_dict(cls, program_dict: dict) -> "WashingMachineWashProgram":
@@ -308,7 +327,7 @@ class WashingMachineWashProgram:
             for cp in p["command_parameters"]
         }
 
-        def _int(key: str, fallback: int = 0) -> int:
+        def _int(key: str, fallback: int) -> int:
             val = params.get(key, "")
             try:
                 return int(val)
@@ -330,29 +349,64 @@ class WashingMachineWashProgram:
                 raw_name = raw_name[len(prefix) :]
                 break
 
+        raw_program_type: str = params.get("program_type", "").upper()
+        if not raw_program_type:
+            if "_DRY" in raw_name.upper() or "DRY_" in raw_name.upper():
+                raw_program_type = "D"
+            else:
+                raw_program_type = "W"
+
+        selector_position_dry = _int_or_none("selector_position_dry")
+        dry_val = _int("dry", 0)
+        dry_supported = (selector_position_dry is not None) or (dry_val > 0)
+
         return cls(
             position=int(p["position"]),
-            selector_position=_int("selector_position"),
+            selector_position=_int("selector_position", 0),
             name=raw_name,
-            pr_code=_int("pr_code"),
-            max_temperature=_int("maximum_temperature"),
-            default_temperature=_int("default_temperature"),
-            max_spin_speed=_int("maximum_spin_speed"),
-            default_spin_speed=_int("default_spin_speed"),
-            min_soil_level=_int("minimum_soil_level"),
-            max_soil_level=_int("maximum_soil_level"),
-            default_soil_level=_int("default_soil_level"),
-            steam=_int("steam") != 0,
+            pr_code=_int("pr_code", 0),
+            max_temperature=_int("maximum_temperature", 0),
+            default_temperature=_int("default_temperature", 0),
+            max_spin_speed=_int("maximum_spin_speed", 0),
+            default_spin_speed=_int("default_spin_speed", 0),
+            min_soil_level=_int("minimum_soil_level", 0),
+            max_soil_level=_int("maximum_soil_level", 0),
+            default_soil_level=_int("default_soil_level", 0),
+            steam=_int("steam", 0) != 0,
             steam_type=params.get("steam_type", ""),
-            default_duration=_int("default_duration"),
-            duration_soil_max=_int("remaining_time_soil_max"),
-            duration_soil_medium=_int("remaining_time_soil_medium"),
-            duration_soil_min=_int("remaining_time_soil_min"),
+            default_duration=_int("default_duration", 0),
+            duration_soil_max=_int("remaining_time_soil_max", 0),
+            duration_soil_medium=_int("remaining_time_soil_medium", 0),
+            duration_soil_min=_int("remaining_time_soil_min", 0),
             liquid_detergent_dose=_int_or_none("liquid_detergent_dose"),
             powder_detergent_dose=_int_or_none("powder_detergent_dose"),
             max_cycle_capacity=_int_or_none("max_cycle_capacity"),
-            available_options=_int("available_options"),
+            available_options=_int("available_options", 0),
+            program_type=raw_program_type,
+            selector_position_dry=selector_position_dry,
+            dry_supported=dry_supported,
         )
+
+    @property
+    def is_dry(self) -> bool:
+        if self.program_type:
+            return self.program_type == "D"
+        name_upper = self.name.upper()
+        return (
+            name_upper.endswith("_DRY")
+            or "_DRY_" in name_upper
+            or name_upper.startswith("DRY_")
+        )
+
+    @property
+    def is_wash(self) -> bool:
+        if self.program_type:
+            return self.program_type in ("W", "WD")
+        return not self.is_dry
+
+    @property
+    def is_wash_and_dry(self) -> bool:
+        return (self.program_type == "WD") or (self.is_wash and self.dry_supported)
 
     @property
     def display_name(self) -> str:

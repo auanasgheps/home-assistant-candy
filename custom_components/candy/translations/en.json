@@ -178,6 +178,9 @@
       "washing_machine": {
         "name": "Washing machine"
       },
+      "washer_dryer": {
+        "name": "Washer dryer"
+      },
       "wash_cycle_status": {
         "name": "Cycle status"
       },
@@ -243,6 +246,20 @@
           "low": "Low",
           "normal": "Normal",
           "high": "High"
+        }
+      },
+      "wash_dry_target": {
+        "name": "Dry target",
+        "state": {
+          "no_dry": "No dry",
+          "extra_dry": "Extra dry",
+          "iron_dry": "Iron dry",
+          "cupboard_dry": "Cupboard dry",
+          "cooldown": "Cooldown",
+          "120_minutes": "120 minutes",
+          "90_minutes": "90 minutes",
+          "60_minutes": "60 minutes",
+          "30_minutes": "30 minutes"
         }
       },
       "wash_estimated_duration": {
@@ -321,6 +338,14 @@
       }
     },
     "select": {
+      "wash_program_type": {
+        "name": "Program type",
+        "state": {
+          "washing": "Washing",
+          "drying": "Drying",
+          "wash_and_dry": "Washing & drying"
+        }
+      },
       "wash_program_select": {
         "name": "Wash program"
       },
@@ -382,6 +407,9 @@
       },
       "wash_pause_button": {
         "name": "Pause wash"
+      },
+      "wash_resume_button": {
+        "name": "Resume wash"
       },
       "wash_stop_button": {
         "name": "Stop wash"
