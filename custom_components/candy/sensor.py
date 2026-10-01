@@ -55,7 +55,6 @@ from .const import (
     CONF_KEY_CHECKUP_LAST_RESULT,
     CONF_KEY_DEVICE_MODEL,
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
-    CONF_KEY_IS_WASHER_DRYER,
     CONF_KEY_MAC_ADDRESS,
     CONF_KEY_MAINTENANCE_ENABLED,
     CONF_KEY_MAINTENANCE_FILTER_ENABLED,
@@ -77,6 +76,7 @@ from .const import (
     DEVICE_NAME_TUMBLE_DRYER,
     DEVICE_NAME_WINE_COOLER,
     DOMAIN,
+    DRY_TARGET_DURATIONS,
     MAINTENANCE_FILTER_THRESHOLD,
     MAINTENANCE_FULL_CHECKUP_THRESHOLD,
     MAINTENANCE_HARDNESS_THRESHOLDS,
@@ -101,6 +101,7 @@ from .const import (
     UNIQUE_ID_WASH_CYCLE_STATUS,
     UNIQUE_ID_WASH_DELAY,
     UNIQUE_ID_WASH_DELAY_NUMBER,
+    UNIQUE_ID_WASH_DRY_SELECT,
     UNIQUE_ID_WASH_DRY_TARGET,
     UNIQUE_ID_WASH_ERROR,
     UNIQUE_ID_WASH_ESTIMATED_DURATION,
@@ -116,6 +117,7 @@ from .const import (
     UNIQUE_ID_WASH_POWDER_DETERGENT,
     UNIQUE_ID_WASH_PROGRAM,
     UNIQUE_ID_WASH_PROGRAM_SELECT,
+    UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT,
     UNIQUE_ID_WASH_PURCHASE_DATE,
     UNIQUE_ID_WASH_REMAINING_TIME,
     UNIQUE_ID_WASH_SCHEDULED_FINISH,
@@ -136,7 +138,7 @@ from .const import (
     UNIQUE_ID_WINE_COOLER_TEMP,
     UNIQUE_ID_WINE_COOLER_TEMP_DOWN,
 )
-from .helpers import cycles_remaining, wash_device_name
+from .helpers import cycles_remaining, is_washer_dryer, wash_device_name
 
 
 async def async_setup_entry(
@@ -188,7 +190,7 @@ async def async_setup_entry(
             entities.append(CandyWashMotorFreqSensor(coordinator, config_entry))
         if status.soil_level is not None or _was_registered(UNIQUE_ID_WASH_SOIL_LEVEL):
             entities.append(CandyWashSoilLevelSensor(coordinator, config_entry))
-        if config_entry.data.get(CONF_KEY_IS_WASHER_DRYER) or _was_registered(
+        if is_washer_dryer(config_entry, programs) or _was_registered(
             UNIQUE_ID_WASH_DRY_TARGET
         ):
             entities.append(CandyWashDryTargetSensor(coordinator, config_entry))
@@ -334,7 +336,7 @@ class CandyWashingMachineSensor(CandyBaseSensor):
 
     def __init__(self, coordinator: DataUpdateCoordinator, config_entry: ConfigEntry):
         super().__init__(coordinator, config_entry)
-        if config_entry.data.get(CONF_KEY_IS_WASHER_DRYER):
+        if is_washer_dryer(config_entry, None):
             self._attr_translation_key = "washer_dryer"
             self._attr_name = "Washer dryer"
 
@@ -346,7 +348,7 @@ class CandyWashingMachineSensor(CandyBaseSensor):
 
     @property
     def unique_id(self) -> str:
-        if self.config_entry.data.get(CONF_KEY_IS_WASHER_DRYER):
+        if is_washer_dryer(self.config_entry, None):
             reg = er.async_get(self.hass)
             old_id = UNIQUE_ID_WASHING_MACHINE.format(self.config_id)
             if reg.async_get_entity_id("sensor", DOMAIN, old_id):
@@ -391,8 +393,9 @@ class CandyWashingMachineSensor(CandyBaseSensor):
 class CandyWashDryTargetSensor(CandyBaseSensor):
     """Target drying preset reported by washer-dryer."""
 
+    _attr_has_entity_name = True
     _attr_translation_key = "wash_dry_target"
-    _attr_name = "Wash dry target"
+    _attr_name = "Dry target"
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = [target.label for target in WasherDryerDryTarget]
 
@@ -463,6 +466,18 @@ class CandyWashProgramSensor(CandyBaseSensor):
             )
             if dl_match is not None:
                 return dl_match.display_name(lang)
+        if status.program_code is not None:
+            match = next(
+                (
+                    p
+                    for p in self._programs
+                    if p.selector_position == status.program
+                    and p.pr_code == status.program_code
+                ),
+                None,
+            )
+            if match is not None:
+                return match.localized_name(lang)
         match = next(
             (p for p in self._programs if p.selector_position == status.program),
             None,
@@ -1163,6 +1178,8 @@ class CandyWashEstimatedDurationSensor(CandyBaseSensor):
         registry = er.async_get(self.hass)
         target_unique_ids = {
             UNIQUE_ID_WASH_PROGRAM_SELECT.format(self.config_id),
+            UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT.format(self.config_id),
+            UNIQUE_ID_WASH_DRY_SELECT.format(self.config_id),
             UNIQUE_ID_WASH_SOIL_SELECT.format(self.config_id),
             UNIQUE_ID_WASH_STEAM_SWITCH.format(self.config_id),
         }
@@ -1226,10 +1243,25 @@ class CandyWashEstimatedDurationSensor(CandyBaseSensor):
             )
         else:
             status = cast(WashingMachineStatus, self.coordinator.data)
-            program = next(
-                (p for p in self._programs if p.selector_position == status.program),
-                None,
-            )
+            if status.program_code is not None:
+                program = next(
+                    (
+                        p
+                        for p in self._programs
+                        if p.selector_position == status.program
+                        and p.pr_code == status.program_code
+                    ),
+                    None,
+                )
+            if program is None:
+                program = next(
+                    (
+                        p
+                        for p in self._programs
+                        if p.selector_position == status.program
+                    ),
+                    None,
+                )
 
         if program is None:
             if prog_state is not None and prog_state.state not in (
@@ -1240,6 +1272,26 @@ class CandyWashEstimatedDurationSensor(CandyBaseSensor):
                 if nfc_duration and int(nfc_duration) > 0:
                     return int(nfc_duration)
             return None
+
+        dry_eid = registry.async_get_entity_id(
+            "select", DOMAIN, UNIQUE_ID_WASH_DRY_SELECT.format(self.config_id)
+        )
+        dry_state = self.hass.states.get(dry_eid) if dry_eid else None
+        dry_target = (
+            dry_state.state
+            if dry_state and dry_state.state not in ("unavailable", "unknown")
+            else None
+        )
+
+        if program.is_dry:
+            dry_duration = DRY_TARGET_DURATIONS.get(dry_target, 0) if dry_target else 0
+            return (
+                dry_duration
+                if dry_duration > 0
+                else (
+                    program.default_duration if program.default_duration > 0 else None
+                )
+            )
 
         if program.min_soil_level < program.max_soil_level:
             soil_eid = registry.async_get_entity_id(
@@ -1276,6 +1328,9 @@ class CandyWashEstimatedDurationSensor(CandyBaseSensor):
             and self._steam_selected(registry)
         ):
             minutes += STEAM_DURATION_OFFSETS[program.steam_type]
+
+        if dry_target:
+            minutes += DRY_TARGET_DURATIONS.get(dry_target, 0)
 
         return minutes if minutes > 0 else None
 
@@ -1387,41 +1442,29 @@ class CandyWashScheduledFinishSensor(CandyBaseSensor):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         registry = er.async_get(self.hass)
-        watch_ids = []
-        domain_uid_pairs = [
-            ("number", UNIQUE_ID_WASH_DELAY_NUMBER),
-            ("select", UNIQUE_ID_WASH_PROGRAM_SELECT),
-            ("select", UNIQUE_ID_WASH_SOIL_SELECT),
-        ]
-        for domain, uid in domain_uid_pairs:
-            eid = registry.async_get_entity_id(
-                domain, DOMAIN, uid.format(self.config_id)
-            )
-            if eid:
-                watch_ids.append(eid)
-        if watch_ids:
-            self.async_on_remove(
-                async_track_state_change_event(
-                    self.hass, watch_ids, self._on_dep_changed
-                )
-            )
+        target_unique_ids = {
+            UNIQUE_ID_WASH_DELAY_NUMBER.format(self.config_id),
+            UNIQUE_ID_WASH_PROGRAM_SELECT.format(self.config_id),
+            UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT.format(self.config_id),
+            UNIQUE_ID_WASH_DRY_SELECT.format(self.config_id),
+            UNIQUE_ID_WASH_SOIL_SELECT.format(self.config_id),
+            UNIQUE_ID_WASH_STEAM_SWITCH.format(self.config_id),
+            UNIQUE_ID_WASH_ESTIMATED_DURATION.format(self.config_id),
+        }
 
-        async def _subscribe_steam() -> None:
-            steam_eid = registry.async_get_entity_id(
-                "switch", DOMAIN, UNIQUE_ID_WASH_STEAM_SWITCH.format(self.config_id)
-            )
-            if steam_eid:
-                self.async_on_remove(
-                    async_track_state_change_event(
-                        self.hass, [steam_eid], self._on_dep_changed
-                    )
-                )
+        @callback
+        def _on_state_changed(event: Any) -> None:
+            entity_id: str = event.data.get("entity_id", "")
+            if not entity_id.startswith(("select.", "switch.", "number.", "sensor.")):
+                return
+            entry = registry.async_get(entity_id)
+            if entry is not None and entry.config_entry_id == self.config_id:
+                if entry.unique_id in target_unique_ids:
+                    self.async_write_ha_state()
 
-        self.hass.async_create_task(_subscribe_steam())
-
-    @callback
-    def _on_dep_changed(self, event) -> None:
-        self.async_write_ha_state()
+        self.async_on_remove(
+            self.hass.bus.async_listen(EVENT_STATE_CHANGED, _on_state_changed)
+        )
 
     def _estimated_duration_minutes(self) -> int | None:
         """Return the current value of the estimated duration sensor, or None."""
@@ -1513,6 +1556,18 @@ def _resolve_program_from_select(
     status = cast(
         WashingMachineStatus, hass.data[DOMAIN][config_id][DATA_KEY_COORDINATOR].data
     )
+    if status.program_code is not None:
+        match = next(
+            (
+                p
+                for p in programs
+                if p.selector_position == status.program
+                and p.pr_code == status.program_code
+            ),
+            None,
+        )
+        if match is not None:
+            return match
     return next(
         (p for p in programs if p.selector_position == status.program),
         None,

@@ -413,6 +413,11 @@ class WashStartButton(CandyWashButtonBase):
         else:
             soil = program.default_soil_level
 
+        if program.is_dry:
+            temp = 0
+            spin = 0
+            soil = 0
+
         steam_entity_id = registry.async_get_entity_id(
             "switch", DOMAIN, UNIQUE_ID_WASH_STEAM_SWITCH.format(self.config_id)
         )

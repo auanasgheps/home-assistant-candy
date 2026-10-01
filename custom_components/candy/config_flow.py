@@ -800,12 +800,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
 
         if self._is_washing_machine:
             self._config_data[CONF_KEY_IS_WASHING_MACHINE] = True
-            if (
-                isinstance(status, WashingMachineStatus)
-                and status.dry_target is not None
-                and status.dry_target.code > 0
-            ):
-                self._config_data[CONF_KEY_IS_WASHER_DRYER] = True
 
         return await self.async_step_mode()
 
@@ -828,7 +822,28 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
         if mode == MODE_FULL_CONTROL:
             return await self.async_step_cloud()
 
-        # Read-only washing machine: ask about maintenance counters
+        # Read-only washing machine: ask whether appliance is a washer-dryer
+        return await self.async_step_washer_dryer()
+
+    async def async_step_washer_dryer(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask whether the appliance is a washer-dryer in Read-Only mode."""
+        if user_input is None:
+            return self.async_show_form(
+                step_id="washer_dryer",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required(
+                            CONF_KEY_IS_WASHER_DRYER,
+                            default=False,
+                        ): bool,
+                    }
+                ),
+            )
+        self._config_data[CONF_KEY_IS_WASHER_DRYER] = bool(
+            user_input[CONF_KEY_IS_WASHER_DRYER]
+        )
         return await self.async_step_maintenance()
 
     async def async_step_cloud(

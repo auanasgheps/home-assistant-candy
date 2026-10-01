@@ -28,6 +28,13 @@
           "mode": "Mode"
         }
       },
+      "washer_dryer": {
+        "title": "Washer-Dryer combo",
+        "description": "In Read-Only mode, Candy appliances cannot be automatically distinguished between a standard Washing Machine and a Washer-Dryer combo. Check this box if your appliance has drying capabilities.",
+        "data": {
+          "is_washer_dryer": "Appliance is a Washer-Dryer combo"
+        }
+      },
       "cloud": {
         "title": "Simply-Fi account",
         "description": "Enter your Simply-Fi / hOn credentials.\n\nCredentials are only used to download the machine data, then discarded. Your machine should be already registered with the Candy Simply-Fi service.",
