@@ -3341,6 +3341,12 @@ async def test_start_button_dry_program_ignores_temp_and_spin_select_values(
     if spin_id:
         hass.states.async_set(spin_id, "1000")
 
+    steam_id = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_STEAM_SWITCH.format(entry.entry_id)
+    )
+    if steam_id:
+        hass.states.async_set(steam_id, "on")
+
     await hass.services.async_call(
         "select",
         "select_option",
@@ -3361,3 +3367,5 @@ async def test_start_button_dry_program_ignores_temp_and_spin_select_values(
     assert "TmpTgt=0" in query_string
     assert "SpdTgt=0" in query_string
     assert "SLevTgt=0" in query_string
+    assert "OptMsk1=0" in query_string
+    assert "Stm=0" in query_string
