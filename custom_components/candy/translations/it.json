@@ -85,6 +85,20 @@
       "wash_program_description": {
         "name": "Descrizione programma"
       },
+      "wash_dry_target": {
+        "name": "Target asciugatura",
+        "state": {
+          "no_dry": "Nessuna asciugatura",
+          "extra_dry": "Extra asciutto",
+          "iron_dry": "Pronto stiro",
+          "cupboard_dry": "Pronto armadio",
+          "cooldown": "Raffreddamento",
+          "120_minutes": "120 minuti",
+          "90_minutes": "90 minuti",
+          "60_minutes": "60 minuti",
+          "30_minutes": "30 minuti"
+        }
+      },
       "tumble_dryer": {
         "name": "Asciugatrice"
       },
@@ -157,6 +171,19 @@
       },
       "wash_soil_select": {
         "name": "Livello di sporco"
+      },
+      "wash_dry_select": {
+        "name": "Impostazione asciugatura",
+        "state": {
+          "no_dry": "Nessuna asciugatura",
+          "extra_dry": "Extra asciutto",
+          "iron_dry": "Pronto stiro",
+          "cupboard_dry": "Pronto armadio",
+          "120_minutes": "120 minuti",
+          "90_minutes": "90 minuti",
+          "60_minutes": "60 minuti",
+          "30_minutes": "30 minuti"
+        }
       }
     },
     "number": {

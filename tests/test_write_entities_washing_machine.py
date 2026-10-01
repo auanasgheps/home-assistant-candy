@@ -8,7 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
@@ -31,12 +33,19 @@ from custom_components.candy.const import (
     CONF_KEY_PROGRAM_LANGUAGE,
     CONF_KEY_PROGRAMS,
     DATA_KEY_COORDINATOR,
+    DRY_TARGET_CUPBOARD_DRY,
+    DRY_TARGET_EXTRA_DRY,
+    DRY_TARGET_IRON_DRY,
+    DRY_TARGET_NO_DRY,
+    DRY_TARGET_OPTIONS_FULL,
+    DRY_TARGET_OPTIONS_ONLY_DRY,
     MODE_FULL_CONTROL,
     MODE_READ_ONLY,
     PROGRAM_TYPE_DRYING,
     PROGRAM_TYPE_WASH_AND_DRY,
     PROGRAM_TYPE_WASHING,
     UNIQUE_ID_WASH_DELAY_NUMBER,
+    UNIQUE_ID_WASH_DRY_SELECT,
     UNIQUE_ID_WASH_ESTIMATED_DURATION,
     UNIQUE_ID_WASH_FULL_CHECKUP_BUTTON,
     UNIQUE_ID_WASH_LIMESCALE_BUTTON,
@@ -2696,3 +2705,382 @@ async def test_program_type_select_unavailable_when_running(
     state = _state(hass, entry, "select", UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT)
     assert state is not None
     assert state.state == "unavailable"
+
+
+async def test_dry_select_omitted_for_wash_only_machine(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Standard washing machines do not expose the Dry Select entity."""
+    entry = await _init_full_control(hass, aioclient_mock, _IDLE_JSON)
+    state = _state(hass, entry, "select", UNIQUE_ID_WASH_DRY_SELECT)
+    assert state is None
+
+
+async def test_dry_select_created_for_washer_dryer(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Washer-dryers expose the Dry Select entity defaulting to no_dry in washing mode."""
+    entry = await _init_full_control_wd(hass, aioclient_mock, _IDLE_JSON, _WD_PROGRAMS)
+    state = _state(hass, entry, "select", UNIQUE_ID_WASH_DRY_SELECT)
+    assert state is not None
+    assert state.state == DRY_TARGET_NO_DRY
+    assert state.attributes["options"] == [DRY_TARGET_NO_DRY]
+
+
+async def test_dry_select_options_and_switching_across_program_types(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Dry select options dynamically adapt to Program Type selections."""
+    entry = await _init_full_control_wd(hass, aioclient_mock, _IDLE_JSON, _WD_PROGRAMS)
+    registry = er.async_get(hass)
+    type_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT.format(entry.entry_id)
+    )
+    dry_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_DRY_SELECT.format(entry.entry_id)
+    )
+    assert type_id is not None
+    assert dry_id is not None
+
+    # 1. Initially in 'washing': only 'no_dry' is available
+    dry_state = hass.states.get(dry_id)
+    assert dry_state is not None
+    assert dry_state.state == DRY_TARGET_NO_DRY
+    assert dry_state.attributes["options"] == [DRY_TARGET_NO_DRY]
+
+    # 2. Switch to 'wash_and_dry': exposes all dry targets and defaults to cupboard_dry
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": type_id, "option": PROGRAM_TYPE_WASH_AND_DRY},
+        blocking=True,
+    )
+    dry_state = hass.states.get(dry_id)
+    assert dry_state is not None
+    assert dry_state.state == DRY_TARGET_CUPBOARD_DRY
+    assert dry_state.attributes["options"] == DRY_TARGET_OPTIONS_FULL
+
+    # 3. User selects iron_dry
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": dry_id, "option": DRY_TARGET_IRON_DRY},
+        blocking=True,
+    )
+    dry_state = hass.states.get(dry_id)
+    assert dry_state is not None
+    assert dry_state.state == DRY_TARGET_IRON_DRY
+
+    # 4. Switch to 'drying' (standalone dry): exposes dry targets only
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": type_id, "option": PROGRAM_TYPE_DRYING},
+        blocking=True,
+    )
+    dry_state = hass.states.get(dry_id)
+    assert dry_state is not None
+    assert dry_state.attributes["options"] == DRY_TARGET_OPTIONS_ONLY_DRY
+    assert dry_state.state == DRY_TARGET_IRON_DRY
+
+    # 5. User selects extra_dry
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": dry_id, "option": DRY_TARGET_EXTRA_DRY},
+        blocking=True,
+    )
+    dry_state = hass.states.get(dry_id)
+    assert dry_state is not None
+    assert dry_state.state == DRY_TARGET_EXTRA_DRY
+
+    # 6. Switch back to 'washing': clamped back to 'no_dry'
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": type_id, "option": PROGRAM_TYPE_WASHING},
+        blocking=True,
+    )
+    dry_state = hass.states.get(dry_id)
+    assert dry_state is not None
+    assert dry_state.state == DRY_TARGET_NO_DRY
+    assert dry_state.attributes["options"] == [DRY_TARGET_NO_DRY]
+
+
+async def test_dry_select_incompatible_wash_program_clamped(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Dry select clamps to no_dry when selecting a program incompatible with drying."""
+    entry = await _init_full_control_wd(hass, aioclient_mock, _IDLE_JSON, _WD_PROGRAMS)
+    registry = er.async_get(hass)
+    type_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT.format(entry.entry_id)
+    )
+    prog_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    dry_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_DRY_SELECT.format(entry.entry_id)
+    )
+    assert type_id is not None
+    assert prog_id is not None
+    assert dry_id is not None
+
+    # Switch to wash_and_dry mode
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": type_id, "option": PROGRAM_TYPE_WASH_AND_DRY},
+        blocking=True,
+    )
+    dry_state = hass.states.get(dry_id)
+    assert dry_state is not None
+    assert dry_state.state == DRY_TARGET_CUPBOARD_DRY
+
+    # Switch back to washing mode and select Delicates (incompatible with drying)
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": type_id, "option": PROGRAM_TYPE_WASHING},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": prog_id, "option": "Delicates"},
+        blocking=True,
+    )
+    dry_state = hass.states.get(dry_id)
+    assert dry_state is not None
+    assert dry_state.state == DRY_TARGET_NO_DRY
+    assert dry_state.attributes["options"] == [DRY_TARGET_NO_DRY]
+
+
+async def test_dry_select_reflects_idle_dry_cycle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Dry select reflects dry target when a dry cycle is selected on dial."""
+    dry_idle_json = """{
+      "statusLavatrice": {
+        "WiFiStatus": "1", "Err": "0", "MachMd": "1", "Pr": "16", "PrPh": "0",
+        "PrCode": "45", "SLevel": "0", "Temp": "0", "SpinSp": "0",
+        "DryT": "1", "DelVal": "0", "RemTime": "0", "FillR": "0", "CheckUpState": "0"
+      }
+    }"""
+    entry = await _init_full_control_wd(
+        hass, aioclient_mock, dry_idle_json, _WD_PROGRAMS
+    )
+    state = _state(hass, entry, "select", UNIQUE_ID_WASH_DRY_SELECT)
+    assert state is not None
+    assert state.state == DRY_TARGET_EXTRA_DRY
+    assert state.attributes["options"] == DRY_TARGET_OPTIONS_ONLY_DRY
+
+
+async def test_dry_select_reflects_idle_wash_and_dry_cycle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Dry select reflects active DryT when dial is on a wash program."""
+    combo_idle_json = """{
+      "statusLavatrice": {
+        "WiFiStatus": "1", "Err": "0", "MachMd": "1", "Pr": "1", "PrPh": "0",
+        "PrCode": "65", "SLevel": "0", "Temp": "60", "SpinSp": "10",
+        "DryT": "1", "DelVal": "0", "RemTime": "0", "FillR": "0", "CheckUpState": "0"
+      }
+    }"""
+    entry = await _init_full_control_wd(
+        hass, aioclient_mock, combo_idle_json, _WD_PROGRAMS
+    )
+    state = _state(hass, entry, "select", UNIQUE_ID_WASH_DRY_SELECT)
+    assert state is not None
+    assert state.state == DRY_TARGET_EXTRA_DRY
+    assert state.attributes["options"] == DRY_TARGET_OPTIONS_FULL
+
+
+async def test_dry_select_unavailable_when_running(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Dry select is unavailable when the machine is running."""
+    dry_running_json = """{
+      "statusLavatrice": {
+        "WiFiStatus": "1", "Err": "0", "MachMd": "2", "Pr": "16", "PrPh": "2",
+        "PrCode": "45", "SLevel": "0", "Temp": "0", "SpinSp": "0",
+        "DelVal": "0", "RemTime": "3600", "FillR": "0", "CheckUpState": "0"
+      }
+    }"""
+    entry = await _init_full_control_wd(
+        hass, aioclient_mock, dry_running_json, _WD_PROGRAMS
+    )
+    state = _state(hass, entry, "select", UNIQUE_ID_WASH_DRY_SELECT)
+    assert state is not None
+    assert state.state == "unavailable"
+
+
+async def test_dry_select_invalid_option_raises(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Selecting an invalid dry target raises ServiceValidationError."""
+    entry = await _init_full_control_wd(hass, aioclient_mock, _IDLE_JSON, _WD_PROGRAMS)
+    registry = er.async_get(hass)
+    dry_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_DRY_SELECT.format(entry.entry_id)
+    )
+    assert dry_id is not None
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            "select",
+            "select_option",
+            {"entity_id": dry_id, "option": "invalid_dry_target"},
+            blocking=True,
+        )
+
+
+async def test_start_button_sends_command_wd_wash_only(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Starting a cycle on a washer-dryer in wash-only mode dispatches Dry=0."""
+    entry = await _init_full_control_wd(hass, aioclient_mock, _IDLE_JSON, _WD_PROGRAMS)
+    registry = er.async_get(hass)
+    start_id = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    assert start_id is not None
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_id}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    query_string: str = mock_send.call_args[0][0]
+    assert "Write=1" in query_string
+    assert "StSt=1" in query_string
+    assert "PrNm=1" in query_string
+    assert "PrCode=65" in query_string
+    assert "Dry=0" in query_string
+
+
+async def test_start_button_sends_command_wd_wash_and_dry(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Starting a cycle on a washer-dryer in wash_and_dry mode dispatches selected Dry target."""
+    entry = await _init_full_control_wd(hass, aioclient_mock, _IDLE_JSON, _WD_PROGRAMS)
+    registry = er.async_get(hass)
+    type_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT.format(entry.entry_id)
+    )
+    dry_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_DRY_SELECT.format(entry.entry_id)
+    )
+    start_id = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    assert type_id is not None
+    assert dry_id is not None
+    assert start_id is not None
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": type_id, "option": PROGRAM_TYPE_WASH_AND_DRY},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": dry_id, "option": DRY_TARGET_IRON_DRY},
+        blocking=True,
+    )
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_id}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    query_string: str = mock_send.call_args[0][0]
+    assert "Write=1" in query_string
+    assert "StSt=1" in query_string
+    assert "PrNm=1" in query_string
+    assert "PrCode=65" in query_string
+    assert "Dry=2" in query_string
+
+
+async def test_start_button_sends_command_wd_drying(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Starting a standalone drying cycle on a washer-dryer dispatches selected Dry target."""
+    entry = await _init_full_control_wd(hass, aioclient_mock, _IDLE_JSON, _WD_PROGRAMS)
+    registry = er.async_get(hass)
+    type_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT.format(entry.entry_id)
+    )
+    dry_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_DRY_SELECT.format(entry.entry_id)
+    )
+    start_id = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    assert type_id is not None
+    assert dry_id is not None
+    assert start_id is not None
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": type_id, "option": PROGRAM_TYPE_DRYING},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": dry_id, "option": DRY_TARGET_EXTRA_DRY},
+        blocking=True,
+    )
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_id}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    query_string: str = mock_send.call_args[0][0]
+    assert "Write=1" in query_string
+    assert "StSt=1" in query_string
+    assert "PrNm=16" in query_string
+    assert "PrCode=45" in query_string
+    assert "Dry=1" in query_string
+    assert "TmpTgt=0" in query_string
+    assert "SpdTgt=0" in query_string
+
+
+async def test_start_button_unknown_dry_target_raises(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Unknown dry target state in the entity state machine raises ValueError upon start."""
+    entry = await _init_full_control_wd(hass, aioclient_mock, _IDLE_JSON, _WD_PROGRAMS)
+    registry = er.async_get(hass)
+    dry_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_DRY_SELECT.format(entry.entry_id)
+    )
+    start_id = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    assert dry_id is not None
+    assert start_id is not None
+
+    hass.states.async_set(dry_id, "invalid_target")
+
+    with pytest.raises(ValueError, match="Unknown dry target: invalid_target"):
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_id}, blocking=True
+        )

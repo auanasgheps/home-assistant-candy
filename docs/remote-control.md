@@ -21,8 +21,8 @@ switches control back to the app/network side (or the cycle finishes).
 
 Every entity that writes to the machine becomes `unavailable`:
 
-- Start / Pause / Stop buttons
-- Program, temperature, spin speed, and soil level selects
+- Start / Pause / Resume / Stop buttons
+- Program, Program Type, Dry Setting, temperature, spin speed, and soil level selects
 - Option switches (Prewash, Hygiene, Steam, Anti-crease, Good Night, Extra
   Rinse, AquaPlus, NFC)
 - Delay start number
@@ -82,6 +82,37 @@ When the washing machine reports an operational fault or hardware issue (`Err` c
 - **Dynamic updates**: If the machine's reported error code changes while a fault is active, the persistent notification updates in-place.
 - **Automatic dismissal**: Once the issue is resolved on the appliance and the error code clears (`Err` returns to 0), Home Assistant automatically clears and dismisses the error notification without requiring manual action.
 - **Universal availability**: Error notifications run for all washing machine setups, both in Read-Only and Full Control modes.
+- **Washer-Dryer specific faults**: Faults such as `E12` (drying system fault) provide specific troubleshooting guidance to restart drying or verify airflow.
+
+## Washer-Dryer Combos (Candy & Hoover)
+
+For dual-purpose Washer-Dryer combo appliances (`is_washer_dryer`), the integration provides full control over washing, combo wash & dry, and standalone drying operations, mirroring the Simply-Fi / Hoover Wizard mobile applications.
+
+### Program Type Selection (`select.<device>_program_type`)
+
+Washer-dryers expose a dedicated **Program type** selector with three operating modes:
+
+1. **Washing (`washing`)**: Standard wash cycles. The dry setting is locked to `No dry`.
+2. **Wash & Dry (`wash_and_dry`)**: Combined cycles that wash and automatically transition into drying. The wash program selector automatically filters to only show cycles compatible with automatic drying transition (`selector_position_dry > 0`), and the dry setting defaults to `Cupboard dry`.
+3. **Drying (`drying`)**: Standalone dry cycles (e.g. High Dry, Low Dry, Wool Dry). Spin speed and temperature selectors are automatically zeroed out, and only drying programs appear in the program selector.
+
+### Dry Setting Selection (`select.<device>_dry_setting`)
+
+Controls the target drying dryness level or timed duration dispatched to the machine (`Dry` wire parameter):
+
+- **Dryness Presets**: `Extra dry` (`Dry=1`), `Iron dry` (`Dry=2`), `Cupboard dry` (`Dry=3`), or `No dry` (`Dry=0`).
+- **Timed Drying**: `120 minutes` (`Dry=5`), `90 minutes` (`Dry=6`), `60 minutes` (`Dry=7`), or `30 minutes` (`Dry=8`).
+- **Dynamic Gating & Program Resynchronization**: Selecting an incompatible wash cycle (such as Delicates) automatically clamps the dry setting back to `No dry`. In standalone `drying` mode, `No dry` is hidden.
+- **Running Lockout**: The dry setting selector reports `unavailable` while the appliance is actively running (`MachMd == 2`).
+
+### Live Telemetry Sensors
+
+- **Dry target sensor (`sensor.<device>_dry_target`)**: Categorical enum sensor reflecting the active dry target register (`DryT`), including the machine's intermediate `cooldown` phase.
+
+### Dedicated Resume Button (`button.<device>_resume_wash`)
+
+When a running cycle is paused (either via the Pause button, front door opening, or device pause event), Simply-Fi machines report state `PAUSED` (`MachMd == 3`). A dedicated **Resume wash** button dispatches resume instruction `Pa=0`, seamlessly continuing the paused cycle without resetting cycle parameters or remaining runtime (`RemTime`).
+
 
 ## Polling behaviour
 

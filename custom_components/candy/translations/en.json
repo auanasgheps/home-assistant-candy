@@ -362,6 +362,19 @@
           "normal": "Normal",
           "high": "High"
         }
+      },
+      "wash_dry_select": {
+        "name": "Dry setting",
+        "state": {
+          "no_dry": "No dry",
+          "extra_dry": "Extra dry",
+          "iron_dry": "Iron dry",
+          "cupboard_dry": "Cupboard dry",
+          "120_minutes": "120 minutes",
+          "90_minutes": "90 minutes",
+          "60_minutes": "60 minutes",
+          "30_minutes": "30 minutes"
+        }
       }
     },
     "number": {

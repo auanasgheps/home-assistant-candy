@@ -33,12 +33,17 @@ from .const import (
     DATA_KEY_CLIENT,
     DATA_KEY_COORDINATOR,
     DOMAIN,
+    DRY_TARGET_CUPBOARD_DRY,
+    DRY_TARGET_NO_DRY,
+    DRY_TARGET_OPTIONS_FULL,
+    DRY_TARGET_OPTIONS_ONLY_DRY,
     MODE_FULL_CONTROL,
     PROGRAM_TYPE_DRYING,
     PROGRAM_TYPE_WASH_AND_DRY,
     PROGRAM_TYPE_WASHING,
     PROGRAM_TYPES,
     SOIL_LABELS,
+    UNIQUE_ID_WASH_DRY_SELECT,
     UNIQUE_ID_WASH_NFC_SWITCH,
     UNIQUE_ID_WASH_PROGRAM_DESCRIPTION,
     UNIQUE_ID_WASH_PROGRAM_SELECT,
@@ -80,9 +85,13 @@ async def async_setup_entry(
     ) or any(p.is_dry for p in programs)
 
     type_select: CandyWashProgramTypeSelect | None = None
+    dry_select: CandyWashDrySelect | None = None
     if is_washer_dryer:
         type_select = CandyWashProgramTypeSelect(
             coordinator, config_entry, client, programs
+        )
+        dry_select = CandyWashDrySelect(
+            coordinator, config_entry, client, programs, type_select
         )
 
     temp_select = WashTempSelect(coordinator, config_entry, client, programs)
@@ -100,6 +109,7 @@ async def async_setup_entry(
         description_sensor,
         nfc_entries,
         type_select,
+        dry_select,
     )
 
     entities: list[SelectEntity | SensorEntity] = [
@@ -111,7 +121,11 @@ async def async_setup_entry(
     ]
     if type_select is not None:
         type_select.set_program_select(program_select)
+        type_select.set_dry_select(dry_select)
         entities.insert(0, type_select)
+    if dry_select is not None:
+        dry_select.set_program_select(program_select)
+        entities.append(dry_select)
 
     async_add_entities(entities)
 
@@ -172,9 +186,13 @@ class CandyWashProgramTypeSelect(CandyWashSelectBase):
         super().__init__(coordinator, config_entry, client, programs)
         self._current_option: str | None = None
         self._program_select: WashProgramSelect | None = None
+        self._dry_select: CandyWashDrySelect | None = None
 
     def set_program_select(self, program_select: WashProgramSelect) -> None:
         self._program_select = program_select
+
+    def set_dry_select(self, dry_select: CandyWashDrySelect | None) -> None:
+        self._dry_select = dry_select
 
     @property
     def unique_id(self) -> str:
@@ -223,8 +241,156 @@ class CandyWashProgramTypeSelect(CandyWashSelectBase):
             raise ValueError(f"Invalid program type: {option}")
         self._current_option = option
         self.async_write_ha_state()
+        if self._dry_select is not None:
+            self._dry_select.update_for_program_type(option)
         if self._program_select is not None:
             await self._program_select.async_update_for_program_type(option)
+
+
+class CandyWashDrySelect(CandyWashSelectBase):
+    _attr_has_entity_name = True
+    _attr_name = "Dry setting"
+    _attr_translation_key = "wash_dry_select"
+    _attr_icon = "mdi:tumble-dryer"
+
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        client: CandyClient,
+        programs: list[WashingMachineWashProgram],
+        type_select: CandyWashProgramTypeSelect | None,
+    ) -> None:
+        super().__init__(coordinator, config_entry, client, programs)
+        self._type_select = type_select
+        self._program_select: WashProgramSelect | None = None
+        self._current_option: str | None = None
+        self._selected_program: WashingMachineWashProgram | None = None
+
+    def set_program_select(self, program_select: WashProgramSelect) -> None:
+        self._program_select = program_select
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_DRY_SELECT.format(self.config_id)
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._machine_is_idle()
+
+    def _active_program(self) -> WashingMachineWashProgram | None:
+        if self._selected_program is not None:
+            return self._selected_program
+        if (
+            self._program_select is not None
+            and self._program_select.current_option is not None
+        ):
+            for p in self._programs:
+                if self._program_name(p) == self._program_select.current_option:
+                    return p
+        status = cast(WashingMachineStatus, self.coordinator.data)
+        for p in self._programs:
+            if p.selector_position == status.program:
+                return p
+        return None
+
+    def _active_program_type(self) -> str:
+        if self._type_select is not None:
+            return self._type_select.current_option
+        prog = self._active_program()
+        if prog is not None:
+            if prog.is_dry:
+                return PROGRAM_TYPE_DRYING
+            if prog.is_wash_and_dry:
+                return PROGRAM_TYPE_WASH_AND_DRY
+        return PROGRAM_TYPE_WASHING
+
+    @property
+    def options(self) -> list[str]:
+        current_type = self._active_program_type()
+        if current_type == PROGRAM_TYPE_WASHING:
+            return [DRY_TARGET_NO_DRY]
+        if current_type == PROGRAM_TYPE_DRYING:
+            return list(DRY_TARGET_OPTIONS_ONLY_DRY)
+        prog = self._active_program()
+        if prog is not None and not prog.dry_supported:
+            return [DRY_TARGET_NO_DRY]
+        return list(DRY_TARGET_OPTIONS_FULL)
+
+    @property
+    def current_option(self) -> str | None:
+        opts = self.options
+        if not self._machine_is_idle():
+            status = cast(WashingMachineStatus, self.coordinator.data)
+            if (
+                status.dry_target is not None
+                and status.dry_target != WasherDryerDryTarget.COOLDOWN
+            ):
+                if status.dry_target.label in opts:
+                    return status.dry_target.label
+            return (
+                DRY_TARGET_NO_DRY
+                if DRY_TARGET_NO_DRY in opts
+                else (opts[0] if opts else None)
+            )
+
+        if self._current_option is not None and self._current_option in opts:
+            return self._current_option
+
+        status = cast(WashingMachineStatus, self.coordinator.data)
+        if (
+            status.dry_target is not None
+            and status.dry_target != WasherDryerDryTarget.COOLDOWN
+        ):
+            if status.dry_target.label in opts:
+                return status.dry_target.label
+
+        current_type = self._active_program_type()
+        if current_type == PROGRAM_TYPE_WASHING:
+            return DRY_TARGET_NO_DRY
+        if current_type in (PROGRAM_TYPE_WASH_AND_DRY, PROGRAM_TYPE_DRYING):
+            if DRY_TARGET_CUPBOARD_DRY in opts:
+                return DRY_TARGET_CUPBOARD_DRY
+        return opts[0] if opts else None
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in self.options:
+            raise ValueError(f"Invalid dry target: {option}")
+        self._current_option = option
+        self.async_write_ha_state()
+
+    def update_for_program(self, program: WashingMachineWashProgram | None) -> None:
+        self._selected_program = program
+        opts = self.options
+        if self._current_option not in opts:
+            if DRY_TARGET_CUPBOARD_DRY in opts:
+                self._current_option = DRY_TARGET_CUPBOARD_DRY
+            elif DRY_TARGET_NO_DRY in opts:
+                self._current_option = DRY_TARGET_NO_DRY
+            elif opts:
+                self._current_option = opts[0]
+            else:
+                self._current_option = None
+        self.async_write_ha_state()
+
+    def update_for_program_type(self, program_type: str) -> None:
+        opts = self.options
+        if program_type == PROGRAM_TYPE_WASHING:
+            self._current_option = DRY_TARGET_NO_DRY
+        elif program_type in (PROGRAM_TYPE_WASH_AND_DRY, PROGRAM_TYPE_DRYING):
+            if (
+                self._current_option is None
+                or self._current_option == DRY_TARGET_NO_DRY
+                or self._current_option not in opts
+            ):
+                self._current_option = (
+                    DRY_TARGET_CUPBOARD_DRY
+                    if DRY_TARGET_CUPBOARD_DRY in opts
+                    else opts[0]
+                )
+        elif self._current_option not in opts:
+            self._current_option = opts[0] if opts else None
+        self.async_write_ha_state()
 
 
 class WashProgramSelect(CandyWashSelectBase):
@@ -243,6 +409,7 @@ class WashProgramSelect(CandyWashSelectBase):
         description_sensor: CandyWashProgramDescriptionSensor,
         nfc_entries: list[tuple[DownloadableProgram, WashingMachineWashProgram]],
         type_select: CandyWashProgramTypeSelect | None,
+        dry_select: CandyWashDrySelect | None,
     ) -> None:
         super().__init__(coordinator, config_entry, client, programs)
         self._temp_select = temp_select
@@ -251,6 +418,7 @@ class WashProgramSelect(CandyWashSelectBase):
         self._description_sensor = description_sensor
         self._nfc_entries = nfc_entries
         self._type_select = type_select
+        self._dry_select = dry_select
         self._current_option: str | None = None
 
     def _nfc_enabled(self) -> bool:
@@ -326,6 +494,8 @@ class WashProgramSelect(CandyWashSelectBase):
             await self.async_select_option(opts[0])
         else:
             self.async_write_ha_state()
+            if self._dry_select is not None:
+                self._dry_select.update_for_program_type(program_type)
 
     @property
     def extra_state_attributes(self) -> dict | None:
@@ -368,6 +538,8 @@ class WashProgramSelect(CandyWashSelectBase):
             self._spin_select.update_for_program(None)
             self._soil_select.update_for_program(None)
             self._description_sensor.update_for_program(nfc_match)
+            if self._dry_select is not None:
+                self._dry_select.update_for_program(None)
         else:
             selected = next(
                 (p for p in self._programs if self._program_name(p) == option), None
@@ -377,13 +549,19 @@ class WashProgramSelect(CandyWashSelectBase):
                 self._spin_select.update_for_program(selected)
                 self._soil_select.update_for_program(selected)
                 self._description_sensor.reset_for_standard_program(selected)
+                if self._dry_select is not None:
+                    self._dry_select.update_for_program(selected)
             else:
                 self._description_sensor.reset_for_standard_program(None)
+                if self._dry_select is not None:
+                    self._dry_select.update_for_program(None)
         self.async_write_ha_state()
         self._temp_select.async_write_ha_state()
         self._spin_select.async_write_ha_state()
         self._soil_select.async_write_ha_state()
         self._description_sensor.async_write_ha_state()
+        if self._dry_select is not None:
+            self._dry_select.async_write_ha_state()
 
 
 class CandyWashProgramDescriptionSensor(CoordinatorEntity, SensorEntity):
