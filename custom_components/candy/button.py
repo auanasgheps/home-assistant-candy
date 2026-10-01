@@ -417,23 +417,27 @@ class WashStartButton(CandyWashButtonBase):
             temp = 0
             spin = 0
             soil = 0
-
-        steam_entity_id = registry.async_get_entity_id(
-            "switch", DOMAIN, UNIQUE_ID_WASH_STEAM_SWITCH.format(self.config_id)
-        )
-        steam_state = self.hass.states.get(steam_entity_id) if steam_entity_id else None
-        steam = steam_state.state == "on" if steam_state else False
-
-        opt_mask = 0
-        for bitmask, _translation_key, uid_suffix, _name in WASH_OPTIONS:
-            switch_entity_id = registry.async_get_entity_id(
-                "switch", DOMAIN, f"{self.config_id}-{uid_suffix}"
+            steam = False
+            opt_mask = 0
+        else:
+            steam_entity_id = registry.async_get_entity_id(
+                "switch", DOMAIN, UNIQUE_ID_WASH_STEAM_SWITCH.format(self.config_id)
             )
-            switch_state = (
-                self.hass.states.get(switch_entity_id) if switch_entity_id else None
+            steam_state = (
+                self.hass.states.get(steam_entity_id) if steam_entity_id else None
             )
-            if switch_state and switch_state.state == "on":
-                opt_mask |= bitmask
+            steam = steam_state.state == "on" if steam_state else False
+
+            opt_mask = 0
+            for bitmask, _translation_key, uid_suffix, _name in WASH_OPTIONS:
+                switch_entity_id = registry.async_get_entity_id(
+                    "switch", DOMAIN, f"{self.config_id}-{uid_suffix}"
+                )
+                switch_state = (
+                    self.hass.states.get(switch_entity_id) if switch_entity_id else None
+                )
+                if switch_state and switch_state.state == "on":
+                    opt_mask |= bitmask
 
         checkup = _should_send_checkup(self.config_entry, dt_util.utcnow())
         params = {
