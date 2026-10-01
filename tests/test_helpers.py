@@ -127,5 +127,12 @@ def test_get_wash_error_notification_strings():
     assert title == "Washing machine error: E02"
     assert message.startswith("E02-Troubles with loading water\n\n")
 
+    # E12: Drying system fault
+    e12_result = get_wash_error_notification_strings(12, "en")
+    assert e12_result is not None
+    e12_title, e12_message = e12_result
+    assert e12_title == "Washing machine error: E12"
+    assert e12_message.startswith("E12-Troubles with the drying system")
+
     # Unknown error code returns None
     assert get_wash_error_notification_strings(99, "en") is None

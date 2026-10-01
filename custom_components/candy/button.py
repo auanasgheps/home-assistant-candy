@@ -53,11 +53,13 @@ from .const import (
     DATA_KEY_STATS_COORDINATOR,
     DATA_KEY_WRITE_PENDING,
     DOMAIN,
+    DRY_TARGET_TO_VALUE,
     MODE_FULL_CONTROL,
     NOTIF_ID_FULL_CHECKUP,
     NOTIF_ID_LIMESCALE,
     SOIL_LABELS_REVERSE,
     UNIQUE_ID_WASH_DELAY_NUMBER,
+    UNIQUE_ID_WASH_DRY_SELECT,
     UNIQUE_ID_WASH_FULL_CHECKUP_BUTTON,
     UNIQUE_ID_WASH_LIMESCALE_BUTTON,
     UNIQUE_ID_WASH_MAINT_FILTER_BUTTON,
@@ -261,8 +263,22 @@ class WashStartButton(CandyWashButtonBase):
         status = cast(WashingMachineStatus, self.coordinator.data)
         return status.machine_state == MachineState.IDLE
 
+    def _get_dry_target(self, registry: er.EntityRegistry) -> int:
+        entity_id = registry.async_get_entity_id(
+            "select", DOMAIN, UNIQUE_ID_WASH_DRY_SELECT.format(self.config_id)
+        )
+        if entity_id is None:
+            return 0
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in ("unavailable", "unknown"):
+            return 0
+        if state.state in DRY_TARGET_TO_VALUE:
+            return DRY_TARGET_TO_VALUE[state.state]
+        raise ValueError(f"Unknown dry target: {state.state}")
+
     async def async_press(self) -> None:
         registry = er.async_get(self.hass)
+        dry = self._get_dry_target(registry)
 
         def _get_state(unique_id_template: str) -> str | None:
             entity_id = registry.async_get_entity_id(
@@ -351,7 +367,7 @@ class WashStartButton(CandyWashButtonBase):
                 "OptMsk2": 0,
                 "Lang": 0,
                 "Stm": 1 if steam else 0,
-                "Dry": 0,
+                "Dry": dry,
                 "ED": 0,
                 "RecipeId": nfc.recipe_id,
                 "StartCheckUp": checkup,
@@ -429,7 +445,7 @@ class WashStartButton(CandyWashButtonBase):
             "OptMsk2": 0,
             "Lang": 0,
             "Stm": 1 if steam else 0,
-            "Dry": 0,
+            "Dry": dry,
             "ED": 0,
             "RecipeId": 0,
             "StartCheckUp": checkup,
