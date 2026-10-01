@@ -17,7 +17,7 @@ Whenever Remote Control is off (or when the appliance is powered off), all entit
 
 - **Cycle control buttons**: Start, Pause, Resume, and Stop
 - **Program & parameter selects**: Program, Program Type, Dry Setting, Temperature, Spin Speed, and Soil Level
-- **Option switches**: Prewash, Hygiene, Steam, Anti-crease, Good Night, Extra Rinse, AquaPlus, and Special Programs
+- **Option switches**: Prewash, Hygiene, Steam, Anti-crease, Good Night, Extra Rinse, AquaPlus, and NFC Downloadable Programs
 - **Delay start**: Delay start duration number slider
 - **Diagnostic buttons**: Full Check-up and Limescale Cleaning start buttons
 
