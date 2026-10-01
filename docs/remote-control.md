@@ -113,8 +113,14 @@ Controls the target drying dryness level or timed duration dispatched to the mac
 
 When a running cycle is paused (either via the Pause button, front door opening, or device pause event), Simply-Fi machines report state `PAUSED` (`MachMd == 3`). A dedicated **Resume wash** button dispatches resume instruction `Pa=0`, seamlessly continuing the paused cycle without resetting cycle parameters or remaining runtime (`RemTime`).
 
+### Dashboard Integration
 
-## Polling behaviour
+The ready-made control card in [`dashboard/washing-machine.yaml`](../dashboard/washing-machine.yaml) dynamically adapts to Washer-Dryers without manual reconfiguration:
+- Displays **Program type** and **Dry setting** selection tiles when connected to a washer-dryer.
+- Automatically switches icons and phase displays between washing and drying phases.
+- Shows live **Dry target** telemetry chips during active drying.
+- Features complete 4-state cycle control (**Start**, **Pause**, **Resume**, and **Stop**).
+
 
 The coordinator adapts its polling interval based on device reachability,
 and additionally reacts to write commands:
