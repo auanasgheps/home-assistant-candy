@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.helpers import device_registry as dr
 import pytest
@@ -10,6 +12,7 @@ from custom_components.candy.const import (
     CONF_KEY_IS_WASHER_DRYER,
     CONF_KEY_MAC_ADDRESS,
     CONF_KEY_MODE,
+    CONF_KEY_PROGRAMS,
     CONF_KEY_PURCHASE_DATE,
     CONF_KEY_SERIAL_NUMBER,
     DOMAIN,
@@ -18,6 +21,7 @@ from custom_components.candy.const import (
 from custom_components.candy.helpers import (
     cycles_remaining,
     get_wash_error_notification_strings,
+    is_washer_dryer,
     wash_device_info,
     wash_device_name,
 )
@@ -136,3 +140,65 @@ def test_get_wash_error_notification_strings():
 
     # Unknown error code returns None
     assert get_wash_error_notification_strings(99, "en") is None
+
+
+def test_is_washer_dryer_from_config():
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_KEY_IS_WASHER_DRYER: True,
+        },
+    )
+    assert is_washer_dryer(entry, None) is True
+
+
+def test_is_washer_dryer_from_programs_list():
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    wash_prog = MagicMock(is_dry=False)
+    dry_prog = MagicMock(is_dry=True)
+    assert is_washer_dryer(entry, [wash_prog]) is False
+    assert is_washer_dryer(entry, [wash_prog, dry_prog]) is True
+
+
+def test_is_washer_dryer_from_entry_programs():
+    dry_prog_dict = {
+        "program": {
+            "position": 1,
+            "name": "HIGH_DRY",
+            "command_parameters": [
+                {
+                    "command_parameter": {
+                        "name": "selector_position",
+                        "validation": "16",
+                    }
+                },
+                {"command_parameter": {"name": "pr_code", "validation": "45"}},
+                {"command_parameter": {"name": "program_type", "validation": "D"}},
+            ],
+        }
+    }
+    wash_prog_dict = {
+        "program": {
+            "position": 2,
+            "name": "COTTON",
+            "command_parameters": [
+                {"command_parameter": {"name": "selector_position", "validation": "1"}},
+                {"command_parameter": {"name": "pr_code", "validation": "1"}},
+                {"command_parameter": {"name": "program_type", "validation": "W"}},
+            ],
+        }
+    }
+    entry_wd = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_KEY_PROGRAMS: [wash_prog_dict, dry_prog_dict]},
+    )
+    assert is_washer_dryer(entry_wd, None) is True
+
+    entry_wm = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_KEY_PROGRAMS: [wash_prog_dict]},
+    )
+    assert is_washer_dryer(entry_wm, None) is False
+
+    entry_empty = MockConfigEntry(domain=DOMAIN, data={})
+    assert is_washer_dryer(entry_empty, None) is False

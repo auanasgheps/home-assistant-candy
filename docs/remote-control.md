@@ -122,6 +122,8 @@ The ready-made control card in [`dashboard/washing-machine.yaml`](../dashboard/w
 - Features complete 4-state cycle control (**Start**, **Pause**, **Resume**, and **Stop**).
 
 
+## Polling behaviour
+
 The coordinator adapts its polling interval based on device reachability,
 and additionally reacts to write commands:
 

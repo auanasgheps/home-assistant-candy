@@ -28,6 +28,13 @@
           "mode": "Modalità"
         }
       },
+      "washer_dryer": {
+        "title": "Lavasciuga",
+        "description": "In modalità Solo lettura, gli elettrodomestici Candy non possono essere distinti automaticamente tra una Lavatrice standard e una Lavasciuga. Seleziona questa casella se il tuo elettrodomestico dispone di funzioni di asciugatura.",
+        "data": {
+          "is_washer_dryer": "L'elettrodomestico è una Lavasciuga"
+        }
+      },
       "cloud": {
         "title": "Account Simply-Fi",
         "data": {

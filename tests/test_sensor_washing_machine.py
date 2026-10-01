@@ -1084,10 +1084,12 @@ async def test_washer_dryer_sensor_setup(
     assert main_state.state == "Idle"
     assert main_state.attributes["friendly_name"] == "Washer dryer"
 
-    dry_target_state = hass.states.get("sensor.wash_dry_target")
+    dry_target_state = hass.states.get(
+        "sensor.washer_dryer_dry_target"
+    ) or hass.states.get("sensor.dry_target")
     assert dry_target_state is not None
     assert dry_target_state.state == "extra_dry"
-    assert dry_target_state.attributes["friendly_name"] == "Wash dry target"
+    assert dry_target_state.attributes["friendly_name"] == "Washer dryer Dry target"
 
 
 async def test_washer_dryer_sensor_not_created_for_washing_machine(
@@ -1112,5 +1114,86 @@ async def test_washer_dryer_sensor_not_created_for_washing_machine(
     assert main_state.state == "Idle"
     assert main_state.attributes["friendly_name"] == "Washing machine"
 
-    dry_target_state = hass.states.get("sensor.wash_dry_target")
+    dry_target_state = (
+        hass.states.get("sensor.washer_dryer_dry_target")
+        or hass.states.get("sensor.washing_machine_dry_target")
+        or hass.states.get("sensor.wash_dry_target")
+    )
     assert dry_target_state is None
+
+
+async def test_program_sensor_disambiguation_multi_programs_same_selector(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Test wash program sensor correctly disambiguates between drying programs sharing selector 16."""
+    multi_programs = [
+        {
+            "program": {
+                "position": 16,
+                "name": "DUAL_WM_WD_PROGRAM_NAME_HIGH_DRY",
+                "command_parameters": [
+                    {
+                        "command_parameter": {
+                            "name": "selector_position",
+                            "validation": "16",
+                        }
+                    },
+                    {"command_parameter": {"name": "pr_code", "validation": "45"}},
+                ],
+            }
+        },
+        {
+            "program": {
+                "position": 17,
+                "name": "DUAL_WM_WD_PROGRAM_NAME_LOW_DRY",
+                "command_parameters": [
+                    {
+                        "command_parameter": {
+                            "name": "selector_position",
+                            "validation": "16",
+                        }
+                    },
+                    {"command_parameter": {"name": "pr_code", "validation": "75"}},
+                ],
+            }
+        },
+    ]
+
+    # 1. Appliance reports Pr=16 and PrCode=75 (Low Dry)
+    low_dry_payload = (
+        load_fixture("washing_machine/idle.json")
+        .replace('"Pr": "1"', '"Pr": "16"')
+        .replace('"PrCode": "136"', '"PrCode": "75"')
+    )
+    entry = await init_integration(
+        hass,
+        aioclient_mock,
+        low_dry_payload,
+        statistics_response='{"statusCounters": {"Program1": "10"}}',
+        extra_config_data={
+            CONF_KEY_PROGRAMS: multi_programs,
+            CONF_KEY_IS_WASHER_DRYER: True,
+        },
+    )
+
+    state = hass.states.get("sensor.wash_program")
+    assert state is not None
+    assert state.state == "Low Heat Dry"
+
+    # 2. Appliance updates to Pr=16 and PrCode=45 (High Dry)
+    high_dry_payload = (
+        load_fixture("washing_machine/idle.json")
+        .replace('"Pr": "1"', '"Pr": "16"')
+        .replace('"PrCode": "136"', '"PrCode": "45"')
+    )
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(
+        f"http://{TEST_IP}/http-read.json?encrypted=0", text=high_dry_payload
+    )
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.wash_program")
+    assert state is not None
+    assert state.state == "High Heat Dry"

@@ -26,7 +26,6 @@ from .client import (
 from .client.model import MachineState
 from .const import (
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
-    CONF_KEY_IS_WASHER_DRYER,
     CONF_KEY_MODE,
     CONF_KEY_PROGRAM_LANGUAGE,
     CONF_KEY_PROGRAMS,
@@ -52,7 +51,7 @@ from .const import (
     UNIQUE_ID_WASH_SPIN_SELECT,
     UNIQUE_ID_WASH_TEMP_SELECT,
 )
-from .helpers import remote_control_enabled, wash_device_info
+from .helpers import is_washer_dryer, remote_control_enabled, wash_device_info
 
 _TEMP_STEPS = [0, 20, 30, 40, 60, 90]
 _SPIN_STEPS = [0, 400, 600, 800, 1000, 1200, 1400]
@@ -80,13 +79,11 @@ async def async_setup_entry(
         load_downloadable_programs(raw_dl), programs
     )
 
-    is_washer_dryer = bool(
-        config_entry.data.get(CONF_KEY_IS_WASHER_DRYER, False)
-    ) or any(p.is_dry for p in programs)
+    is_wd = is_washer_dryer(config_entry, programs)
 
     type_select: CandyWashProgramTypeSelect | None = None
     dry_select: CandyWashDrySelect | None = None
-    if is_washer_dryer:
+    if is_wd:
         type_select = CandyWashProgramTypeSelect(
             coordinator, config_entry, client, programs
         )
@@ -160,6 +157,13 @@ class CandyWashSelectBase(CoordinatorEntity, SelectEntity):
 
     def _current_program(self) -> WashingMachineWashProgram | None:
         status = cast(WashingMachineStatus, self.coordinator.data)
+        if status.program_code is not None:
+            for p in self._programs:
+                if (
+                    p.selector_position == status.program
+                    and p.pr_code == status.program_code
+                ):
+                    return p
         for p in self._programs:
             if p.selector_position == status.program:
                 return p
@@ -241,10 +245,10 @@ class CandyWashProgramTypeSelect(CandyWashSelectBase):
             raise ValueError(f"Invalid program type: {option}")
         self._current_option = option
         self.async_write_ha_state()
-        if self._dry_select is not None:
-            self._dry_select.update_for_program_type(option)
         if self._program_select is not None:
             await self._program_select.async_update_for_program_type(option)
+        elif self._dry_select is not None:
+            self._dry_select.update_for_program_type(option)
 
 
 class CandyWashDrySelect(CandyWashSelectBase):
@@ -560,8 +564,6 @@ class WashProgramSelect(CandyWashSelectBase):
         self._spin_select.async_write_ha_state()
         self._soil_select.async_write_ha_state()
         self._description_sensor.async_write_ha_state()
-        if self._dry_select is not None:
-            self._dry_select.async_write_ha_state()
 
 
 class CandyWashProgramDescriptionSensor(CoordinatorEntity, SensorEntity):
@@ -625,6 +627,14 @@ class CandyWashProgramDescriptionSensor(CoordinatorEntity, SensorEntity):
         programs = parse_wash_programs(
             self.config_entry.data.get(CONF_KEY_PROGRAMS, [])
         )
+        if status.program_code is not None:
+            for p in programs:
+                if (
+                    p.selector_position == status.program
+                    and p.pr_code == status.program_code
+                ):
+                    self._description = self._truncate(p.localized_description(lang))
+                    return
         for p in programs:
             if p.selector_position == status.program:
                 self._description = self._truncate(p.localized_description(lang))

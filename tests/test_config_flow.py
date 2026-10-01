@@ -27,6 +27,7 @@ from custom_components.candy.const import (
     CONF_KEY_CHECKUP_SCHEDULE,
     CONF_KEY_DEVICE_MODEL,
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
+    CONF_KEY_IS_WASHER_DRYER,
     CONF_KEY_IS_WASHING_MACHINE,
     CONF_KEY_MAINTENANCE_ENABLED,
     CONF_KEY_MAINTENANCE_FILTER_ENABLED,
@@ -186,6 +187,13 @@ async def test_no_encryption_detected(hass, no_discovery, detect_no_encryption):
     )
 
     assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "washer_dryer"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_IS_WASHER_DRYER: False}
+    )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
     assert result["step_id"] == "maintenance"
 
     result = await hass.config_entries.flow.async_configure(
@@ -220,6 +228,13 @@ async def test_detected_encryption_and_key_found(
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input={CONF_KEY_MODE: MODE_READ_ONLY}
+    )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "washer_dryer"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_IS_WASHER_DRYER: False}
     )
 
     assert result["type"] == data_entry_flow.FlowResultType.FORM
@@ -277,6 +292,13 @@ async def test_detected_encryption_without_key(
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input={CONF_KEY_MODE: MODE_READ_ONLY}
+    )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "washer_dryer"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_IS_WASHER_DRYER: False}
     )
 
     assert result["type"] == data_entry_flow.FlowResultType.FORM
@@ -351,6 +373,13 @@ async def test_discovery_select_device(hass, detect_no_encryption):  # pylint: d
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input={CONF_KEY_MODE: MODE_READ_ONLY}
+    )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "washer_dryer"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_IS_WASHER_DRYER: False}
     )
 
     assert result["type"] == data_entry_flow.FlowResultType.FORM
@@ -628,6 +657,12 @@ async def test_read_only_with_maintenance_disabled(
         result["flow_id"], user_input={CONF_KEY_MODE: MODE_READ_ONLY}
     )
 
+    assert result["step_id"] == "washer_dryer"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_IS_WASHER_DRYER: False}
+    )
+
     assert result["step_id"] == "maintenance"
 
     result = await hass.config_entries.flow.async_configure(
@@ -652,6 +687,13 @@ async def test_read_only_with_maintenance_enabled(
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input={CONF_KEY_MODE: MODE_READ_ONLY}
     )
+
+    assert result["step_id"] == "washer_dryer"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_IS_WASHER_DRYER: False}
+    )
+
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input={CONF_KEY_MAINTENANCE_ENABLED: True}
     )
@@ -809,6 +851,13 @@ async def test_maintenance_only_full_checkup(hass, no_discovery, detect_no_encry
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input={CONF_KEY_MODE: MODE_READ_ONLY}
     )
+
+    assert result["step_id"] == "washer_dryer"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_IS_WASHER_DRYER: False}
+    )
+
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input={CONF_KEY_MAINTENANCE_ENABLED: True}
     )
@@ -854,6 +903,13 @@ async def test_maintenance_limescale_only(hass, no_discovery, detect_no_encrypti
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input={CONF_KEY_MODE: MODE_READ_ONLY}
     )
+
+    assert result["step_id"] == "washer_dryer"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_IS_WASHER_DRYER: False}
+    )
+
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input={CONF_KEY_MAINTENANCE_ENABLED: True}
     )
@@ -1293,3 +1349,59 @@ async def test_full_control_flow_with_checkup_schedule(
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_KEY_CHECKUP_ENABLED] is True
     assert result["data"][CONF_KEY_CHECKUP_SCHEDULE] == CHECKUP_SCHEDULE_EVERY_CYCLE
+
+
+async def test_read_only_flow_with_washer_dryer_selection(
+    hass, no_discovery, detect_no_encryption
+):
+    """Test Read-Only flow when user indicates the appliance is a washer-dryer."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_IP_ADDRESS: "192.168.0.66"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_MODE: MODE_READ_ONLY}
+    )
+    assert result["step_id"] == "washer_dryer"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_IS_WASHER_DRYER: True}
+    )
+    assert result["step_id"] == "maintenance"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_MAINTENANCE_ENABLED: False}
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_KEY_IS_WASHER_DRYER] is True
+    assert result["data"][CONF_KEY_MODE] == MODE_READ_ONLY
+
+
+async def test_read_only_flow_with_washer_dryer_unselected(
+    hass, no_discovery, detect_no_encryption
+):
+    """Test Read-Only flow when user indicates appliance is standard washing machine."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_IP_ADDRESS: "192.168.0.66"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_MODE: MODE_READ_ONLY}
+    )
+    assert result["step_id"] == "washer_dryer"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_IS_WASHER_DRYER: False}
+    )
+    assert result["step_id"] == "maintenance"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_KEY_MAINTENANCE_ENABLED: False}
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_KEY_IS_WASHER_DRYER] is False
+    assert result["data"][CONF_KEY_MODE] == MODE_READ_ONLY

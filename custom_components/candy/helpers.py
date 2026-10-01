@@ -7,13 +7,15 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 
-from .client.model import WashingMachineStatus
+from .client import parse_wash_programs
+from .client.model import WashingMachineStatus, WashingMachineWashProgram
 from .const import (
     CONF_KEY_BRAND,
     CONF_KEY_DEVICE_MODEL,
     CONF_KEY_IS_WASHER_DRYER,
     CONF_KEY_MAC_ADDRESS,
     CONF_KEY_MODE,
+    CONF_KEY_PROGRAMS,
     CONF_KEY_SERIAL_NUMBER,
     DEVICE_NAME_WASHER_DRYER,
     DEVICE_NAME_WASHING_MACHINE,
@@ -54,8 +56,23 @@ def cycles_remaining(total: int, last_reset: int, threshold: int) -> int:
     return threshold - elapsed
 
 
-def wash_device_name(config_entry: ConfigEntry) -> str:
+def is_washer_dryer(
+    config_entry: ConfigEntry,
+    programs: list[WashingMachineWashProgram] | None,
+) -> bool:
+    """Return True if the config entry represents a washer-dryer appliance."""
     if config_entry.data.get(CONF_KEY_IS_WASHER_DRYER, False):
+        return True
+    if programs is not None:
+        return any(p.is_dry for p in programs)
+    raw_programs = config_entry.data.get(CONF_KEY_PROGRAMS, [])
+    if raw_programs:
+        return any(p.is_dry for p in parse_wash_programs(raw_programs))
+    return False
+
+
+def wash_device_name(config_entry: ConfigEntry) -> str:
+    if is_washer_dryer(config_entry, None):
         return DEVICE_NAME_WASHER_DRYER
     return DEVICE_NAME_WASHING_MACHINE
 
