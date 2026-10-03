@@ -350,7 +350,9 @@ class WashingMachineWashProgram:
                 break
 
         raw_program_type: str = params.get("program_type", "").upper()
-        if not raw_program_type:
+        if "WASH_AND_DRY" in raw_name.upper() or "WASH_DRY" in raw_name.upper():
+            raw_program_type = "WD"
+        elif not raw_program_type:
             if "_DRY" in raw_name.upper() or "DRY_" in raw_name.upper():
                 raw_program_type = "D"
             else:
@@ -406,7 +408,12 @@ class WashingMachineWashProgram:
 
     @property
     def is_wash_and_dry(self) -> bool:
-        return (self.program_type == "WD") or (self.is_wash and self.dry_supported)
+        return (
+            (self.program_type == "WD")
+            or (self.is_wash and self.dry_supported)
+            or ("WASH_AND_DRY" in self.name.upper())
+            or ("WASH_DRY" in self.name.upper())
+        )
 
     @property
     def display_name(self) -> str:
