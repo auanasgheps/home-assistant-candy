@@ -21,7 +21,12 @@ from homeassistant.helpers.selector import (
 )
 import voluptuous as vol
 
-from .client import CandyClient, detect_encryption, discover_devices
+from .client import (
+    CandyClient,
+    detect_encryption,
+    discover_devices,
+    parse_wash_programs,
+)
 from .client.cloud import SimplyFiCloudError, fetch_appliance_data
 from .client.decryption import Encryption
 from .client.model import WashingMachineStatus
@@ -66,7 +71,7 @@ from .const import (
     UNIQUE_ID_WASH_MAINT_FULL_CHECKUP,
     UNIQUE_ID_WASH_MAINT_LIMESCALE,
 )
-from .helpers import cycles_remaining
+from .helpers import cycles_remaining, is_washer_dryer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -614,6 +619,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             new_data[CONF_KEY_APPLIANCE_TYPE] = appliance.appliance_type
             if appliance.appliance_type == "washer_dryer":
                 new_data[CONF_KEY_IS_WASHER_DRYER] = True
+        try:
+            if any(p.is_dry for p in parse_wash_programs(appliance.programs)):
+                new_data[CONF_KEY_IS_WASHER_DRYER] = True
+        except (KeyError, TypeError, ValueError):
+            pass
 
         self._pending_data = new_data
         return await self.async_step_language()
@@ -654,6 +664,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         new_data = dict(self.config_entry.data)
         new_data[CONF_KEY_MODE] = MODE_READ_ONLY
+        if is_washer_dryer(self.config_entry, None):
+            new_data[CONF_KEY_IS_WASHER_DRYER] = True
         new_data.pop(CONF_KEY_PROGRAMS, None)
         new_data.pop(CONF_KEY_DOWNLOADABLE_PROGRAMS, None)
 
@@ -899,6 +911,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
             self._config_data[CONF_KEY_APPLIANCE_TYPE] = appliance.appliance_type
             if appliance.appliance_type == "washer_dryer":
                 self._config_data[CONF_KEY_IS_WASHER_DRYER] = True
+        try:
+            if any(p.is_dry for p in parse_wash_programs(appliance.programs)):
+                self._config_data[CONF_KEY_IS_WASHER_DRYER] = True
+        except (KeyError, TypeError, ValueError):
+            pass
 
         return await self.async_step_language()
 

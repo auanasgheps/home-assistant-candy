@@ -292,11 +292,7 @@ class CandyWashDrySelect(CandyWashSelectBase):
             for p in self._programs:
                 if self._program_name(p) == self._program_select.current_option:
                     return p
-        status = cast(WashingMachineStatus, self.coordinator.data)
-        for p in self._programs:
-            if p.selector_position == status.program:
-                return p
-        return None
+        return self._current_program()
 
     def _active_program_type(self) -> str:
         if self._type_select is not None:
@@ -663,7 +659,7 @@ class WashTempSelect(CandyWashSelectBase):
     _attr_name = "Wash temperature"
     _attr_translation_key = "wash_temp_select"
     _current_option: str | None = None
-    _current_program: WashingMachineWashProgram | None = None  # type: ignore[assignment]
+    _selected_program: WashingMachineWashProgram | None = None
     _nfc_active: bool = False
     _nfc_temp: int | None = (
         None  # fixed temperature for the active downloadable program
@@ -716,24 +712,20 @@ class WashTempSelect(CandyWashSelectBase):
 
     def update_for_program(self, program: DownloadableProgram | None) -> None:
         self._nfc_active = True
-        self._current_program = None
+        self._selected_program = None
         self._current_option = None
         self._nfc_temp = program.temperature if program is not None else None
 
     def reset_for_standard_program(self, program: WashingMachineWashProgram) -> None:
         self._nfc_active = False
         self._nfc_temp = None
-        self._current_program = program
+        self._selected_program = program
         self._current_option = str(program.default_temperature)
 
     def _active_program(self) -> WashingMachineWashProgram | None:
-        if self._current_program is not None:
-            return self._current_program
-        status = cast(WashingMachineStatus, self.coordinator.data)
-        for p in self._programs:
-            if p.selector_position == status.program:
-                return p
-        return None
+        if self._selected_program is not None:
+            return self._selected_program
+        return self._current_program()
 
     async def async_select_option(self, option: str) -> None:
         if self._nfc_active:
@@ -746,7 +738,7 @@ class WashSpinSelect(CandyWashSelectBase):
     _attr_name = "Wash spin speed"
     _attr_translation_key = "wash_spin_select"
     _current_option: str | None = None
-    _current_program: WashingMachineWashProgram | None = None  # type: ignore[assignment]
+    _selected_program: WashingMachineWashProgram | None = None
     _nfc_active: bool = False
 
     @property
@@ -788,19 +780,15 @@ class WashSpinSelect(CandyWashSelectBase):
 
     def update_for_program(self, program: WashingMachineWashProgram | None) -> None:
         self._nfc_active = program is None
-        self._current_program = program
+        self._selected_program = program
         self._current_option = (
             str(program.default_spin_speed) if program is not None else None
         )
 
     def _active_program(self) -> WashingMachineWashProgram | None:
-        if self._current_program is not None:
-            return self._current_program
-        status = cast(WashingMachineStatus, self.coordinator.data)
-        for p in self._programs:
-            if p.selector_position == status.program:
-                return p
-        return None
+        if self._selected_program is not None:
+            return self._selected_program
+        return self._current_program()
 
     async def async_select_option(self, option: str) -> None:
         self._current_option = option
@@ -811,7 +799,7 @@ class WashSoilSelect(CandyWashSelectBase):
     _attr_name = "Wash stain level"
     _attr_translation_key = "wash_soil_select"
     _current_option: str | None = None
-    _current_program: WashingMachineWashProgram | None = None  # type: ignore[assignment]
+    _selected_program: WashingMachineWashProgram | None = None
     _nfc_active: bool = False
 
     @property
@@ -863,20 +851,16 @@ class WashSoilSelect(CandyWashSelectBase):
 
     def update_for_program(self, program: WashingMachineWashProgram | None) -> None:
         self._nfc_active = program is None
-        self._current_program = program
+        self._selected_program = program
         if program is not None and program.min_soil_level < program.max_soil_level:
             self._current_option = SOIL_LABELS.get(program.default_soil_level)
         else:
             self._current_option = None
 
     def _active_program(self) -> WashingMachineWashProgram | None:
-        if self._current_program is not None:
-            return self._current_program
-        status = cast(WashingMachineStatus, self.coordinator.data)
-        for p in self._programs:
-            if p.selector_position == status.program:
-                return p
-        return None
+        if self._selected_program is not None:
+            return self._selected_program
+        return self._current_program()
 
     async def async_select_option(self, option: str) -> None:
         self._current_option = option

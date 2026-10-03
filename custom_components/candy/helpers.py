@@ -67,7 +67,10 @@ def is_washer_dryer(
         return any(p.is_dry for p in programs)
     raw_programs = config_entry.data.get(CONF_KEY_PROGRAMS, [])
     if raw_programs:
-        return any(p.is_dry for p in parse_wash_programs(raw_programs))
+        try:
+            return any(p.is_dry for p in parse_wash_programs(raw_programs))
+        except (KeyError, TypeError, ValueError):
+            return False
     return False
 
 

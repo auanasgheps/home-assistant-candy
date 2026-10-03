@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import datetime
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
@@ -19,7 +20,11 @@ from custom_components.candy.client import (
     parse_wash_programs,
     resolve_downloadable_programs,
 )
-from custom_components.candy.client.model import DownloadableProgram, MachineState
+from custom_components.candy.client.model import (
+    DownloadableProgram,
+    MachineState,
+    WashingMachineStatus,
+)
 from custom_components.candy.const import (
     CHECKUP_SCHEDULE_EVERY_CYCLE,
     CONF_KEY_CHECKUP_ENABLED,
@@ -3369,3 +3374,137 @@ async def test_start_button_dry_program_ignores_temp_and_spin_select_values(
     assert "SLevTgt=0" in query_string
     assert "OptMsk1=0" in query_string
     assert "Stm=0" in query_string
+
+
+async def test_start_button_dry_program_with_zero_dry_target_raises(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Attempting to start a drying cycle when dry_target is 0 raises ValueError."""
+    entry = await _init_full_control_wd(hass, aioclient_mock, _IDLE_JSON, _WD_PROGRAMS)
+    registry = er.async_get(hass)
+    type_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT.format(entry.entry_id)
+    )
+    start_id = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    assert type_id is not None
+    assert start_id is not None
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": type_id, "option": PROGRAM_TYPE_DRYING},
+        blocking=True,
+    )
+
+    with (
+        patch(
+            "custom_components.candy.button.WashStartButton._get_dry_target",
+            return_value=0,
+        ),
+        pytest.raises(
+            ValueError,
+            match="Cannot start drying cycle without a valid dry target setting",
+        ),
+    ):
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_id}, blocking=True
+        )
+
+
+async def test_estimated_duration_delayed_start_falls_back_to_telemetry_dry_target(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Estimated duration uses telemetry dry_target when dry_select is unavailable during delayed start."""
+    delayed_json = (
+        _IDLE_JSON.replace('"MachMd": "1"', '"MachMd": "5"')
+        .replace('"DelVal": "0"', '"DelVal": "60"')
+        .replace('"statusLavatrice": {', '"statusLavatrice": {"DryT": "3", ')
+    )
+
+    entry = await _init_full_control_wd(
+        hass, aioclient_mock, delayed_json, _WD_PROGRAMS
+    )
+    registry = er.async_get(hass)
+    dur_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, UNIQUE_ID_WASH_ESTIMATED_DURATION.format(entry.entry_id)
+    )
+    dry_select_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_DRY_SELECT.format(entry.entry_id)
+    )
+    assert dur_id is not None
+    assert dry_select_id is not None
+
+    # The select entity is unavailable while delayed start is active
+    dry_state = hass.states.get(dry_select_id)
+    assert dry_state is not None
+    assert dry_state.state == "unavailable"
+
+    # Cotton default duration = 120 min, telemetry dry_target = Cupboard dry (+120 min) = 240 min
+    dur_state = hass.states.get(dur_id)
+    assert dur_state is not None
+    assert dur_state.state == "240"
+
+
+async def test_sub_selects_and_switch_disambiguate_programs_by_program_code(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Sub-selects and switches match program_code on multiplexed dial selector positions."""
+    cotton_with_steam = copy.deepcopy(_COTTON_WD)
+    for cp in cotton_with_steam["program"]["command_parameters"]:
+        if cp["command_parameter"]["name"] == "steam":
+            cp["command_parameter"]["validation"] = "1"
+
+    entry = await _init_full_control_wd(
+        hass,
+        aioclient_mock,
+        _IDLE_JSON,
+        [cotton_with_steam, _HIGH_DRY_WD, _LOW_DRY_WD],
+    )
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+
+    # Telemetry reports dial position 16 with PrCode 75 (LOW_DRY, max_temp=0, max_spin=0, steam=False)
+    payload = json.loads(_IDLE_JSON)["statusLavatrice"]
+    payload["Pr"] = "16"
+    payload["PrCode"] = "75"
+    status_low = WashingMachineStatus.from_json(payload)
+    coordinator.async_set_updated_data(status_low)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    temp_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_TEMP_SELECT.format(entry.entry_id)
+    )
+    spin_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_SPIN_SELECT.format(entry.entry_id)
+    )
+    soil_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_SOIL_SELECT.format(entry.entry_id)
+    )
+    steam_id = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_STEAM_SWITCH.format(entry.entry_id)
+    )
+
+    assert temp_id is not None
+    assert spin_id is not None
+    assert soil_id is not None
+    assert steam_id is not None
+
+    temp_entity = hass.data["select"].get_entity(temp_id)
+    spin_entity = hass.data["select"].get_entity(spin_id)
+    soil_entity = hass.data["select"].get_entity(soil_id)
+    steam_entity = hass.data["switch"].get_entity(steam_id)
+
+    assert temp_entity._active_program().pr_code == 75
+    assert spin_entity._active_program().pr_code == 75
+    assert soil_entity._active_program().pr_code == 75
+    assert steam_entity._active_program().pr_code == 75
+
+    # When running, wash program select is unavailable and steam switch falls back to telemetry
+    payload["MachMd"] = "2"
+    status_running = WashingMachineStatus.from_json(payload)
+    coordinator.async_set_updated_data(status_running)
+    await hass.async_block_till_done()
+
+    assert steam_entity._active_program().pr_code == 75

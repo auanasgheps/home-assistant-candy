@@ -414,6 +414,10 @@ class WashStartButton(CandyWashButtonBase):
             soil = program.default_soil_level
 
         if program.is_dry:
+            if dry == 0:
+                raise ValueError(
+                    "Cannot start drying cycle without a valid dry target setting"
+                )
             temp = 0
             spin = 0
             soil = 0
