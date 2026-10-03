@@ -389,8 +389,6 @@ cards:
               state_not:
                 - Running
                 - running
-                - Paused
-                - paused
                 - Delayed start programmed
                 - delayed_start_programmed
                 - delayed
@@ -435,29 +433,6 @@ cards:
               perform_action: button.press
               target:
                 entity_id: button.<machine_name>_pause_wash
-        - type: conditional
-          conditions:
-            - condition: state
-              entity: sensor.<machine_name>
-              state:
-                - Paused
-                - paused
-            - condition: state
-              entity: sensor.<machine_name>
-              state_not:
-                - "Off"
-                - "off"
-          card:
-            type: custom:mushroom-template-card
-            primary: Resume
-            icon: mdi:play-circle-outline
-            icon_color: green
-            layout: vertical
-            tap_action:
-              action: perform-action
-              perform_action: button.press
-              target:
-                entity_id: button.<machine_name>_resume_wash
         - type: conditional
           conditions:
             - condition: state
