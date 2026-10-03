@@ -15,10 +15,12 @@ Fully compliant with strictly-typed Home Assistant (>= 2024.x) development stand
 
 - **Supported appliances**:
   - 🧺 Washing Machine — with optional **Full Remote Control** (see below)
+  - 🔄 Washer Dryer combo — with optional **Full Remote Control** (see below)
   - 🌫️ Tumble Dryer
   - 🔪 Dishwasher
   - 🍳 Oven
   - 🍷 Wine Cooler / Cellar
+- **Full Remote Control:** Complete interactive control panel for **washing machines** and **washer-dryer combos**. Select localized programs, adjust wash & dry parameters (temp, spin speed, soil level, drying mode), start/pause/stop cycles, and track remote status.
 - **Zero-Config Decryption:** Say goodbye to manually extracting encryption keys. This integration boasts a natively built-in *sliding-window/known-plaintext* algorithm that unlocks your device seamlessly in fractions of a second during setup.
 - **Strict HA Compatibility:** Follows the rigorous MyPy styling standards enforced by Home Assistant 2025.
 - Uses the local device API for real-time responsiveness. 
@@ -28,9 +30,9 @@ Fully compliant with strictly-typed Home Assistant (>= 2024.x) development stand
 
 ---
 
-## 🧺 Washing Machine — Full Control
+## 🎛️ Full Control Features
 
-Full Control mode turns the integration into a complete remote panel, going beyond status monitoring to let you program, start, and track your washing machine from Home Assistant. The protocol was reverse-engineered from the official Candy/Simply-Fi app, and the feature set matches everything the mobile app offers.
+Full Control mode turns the integration into a complete remote panel, going beyond status monitoring to let you program, start, and track your appliance from Home Assistant. It supports both **Washing Machines** and **Washer Dryer Combos**. The protocol was reverse-engineered from the official Candy/Simply-Fi app, and the feature set matches everything the mobile app offers.
 
 <p float="left">
   <img src="docs//images/dashboard_washing_machine.png" width="300" />
@@ -52,12 +54,12 @@ At setup, you choose between **Read-Only** (sensors only) and **Full Control**. 
 
 ### What you get
 
-**Control entities:** program selector (with localized program names and descriptions), temperature, spin speed, soil level, delay start, extra switches (Prewash, Hygiene, Steam and so on), and Start / Pause / Stop buttons.
+**Control entities:** program selector (with localized program names and descriptions), temperature, spin speed, soil level, delay start, extra switches (Prewash, Hygiene, Steam, and so on), and Start / Pause / Stop buttons. For washer-dryer combos, drying controls are also provided (wash/dry mode, dry level setting, and drying programs).
 
 **Maintenance & diagnostics:** mirrors the Candy app's built-in reminders. 
 Check-up, limescale, and filter counters with configurable water hardness thresholds; self-diagnostic result sensor and last check-up timestamp. When counters reach their thresholds, persistent notifications prompt you to perform maintenance. Starting a diagnostic or limescale routine posts preparation instructions, and completing the cycle automatically resets its counter baseline and dismisses the reminder (manual reset buttons are also available as fallback; the filter counter is cleaned manually and reset via button).
 
-**Proactive error handling:** monitors washing machine fault codes in real time and posts persistent Home Assistant notifications with localized vendor troubleshooting instructions (such as checking water taps, unblocking the pump filter, or adjusting laundry load balance). Notifications update dynamically if codes change and dismiss automatically when the appliance clears the error.
+**Proactive error handling:** monitors appliance fault codes in real time and posts persistent Home Assistant notifications with localized vendor troubleshooting instructions (such as checking water taps, unblocking the pump filter, or adjusting laundry load balance). Notifications update dynamically if codes change and dismiss automatically when the appliance clears the error.
 
 **Remote Control status:** a dedicated sensor tracks whether the machine currently accepts remote commands, and disables every control entity while it doesn't. See [`docs/remote-control.md`](docs/remote-control.md) for details.
 
@@ -88,7 +90,7 @@ To use them, copy the appropriate card YAML into a new manual card in your Lovel
 
 ### Compatibility Note
 
-Full functionality has been tested on the **RAPIDO** series. Other washing machine series may behave differently. If you encounter issues or unexpected behaviour, please share your findings in the [Discussions](https://github.com/bigmoby/home-assistant-candy/discussions/categories/device-support-improvements) section or open an Issue — feedback is very welcome.
+Full functionality has been tested on the **Candy RapidÓ** series (washing machines) and the **Hoover AXI** series (washer-dryer combos). Other appliance series may behave differently. If you encounter issues or unexpected behaviour, please share your findings in the [Discussions](https://github.com/bigmoby/home-assistant-candy/discussions/categories/device-support-improvements) section or open an Issue — feedback is very welcome.
 
 ---
 
