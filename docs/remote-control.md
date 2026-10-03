@@ -61,7 +61,7 @@ For standard washing machines, cycle selection is straightforward:
 
 ### Washer-Dryer Combo Operation
 
-Washer-Dryer combo appliances provide dedicated controls to switch between washing, combined wash & dry, and standalone drying cycles:
+Washer-Dryer combo appliances provide dedicated controls to switch between washing, combined wash & dry, and standalone drying cycles (tested on the **Hoover AXI** series):
 
 #### 1. Program Type Selection (`select.<device>_program_type`)
 
