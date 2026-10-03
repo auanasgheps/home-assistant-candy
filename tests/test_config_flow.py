@@ -1003,7 +1003,111 @@ async def test_options_flow_full_control_switch_to_read_only(hass):
     assert CONF_KEY_DOWNLOADABLE_PROGRAMS not in updated.data
 
 
-async def test_options_flow_full_control_checkup_disabled(hass):
+async def test_options_flow_switch_to_read_only_preserves_washer_dryer(hass):
+    """switch_to_read_only preserves is_washer_dryer flag even after programs are popped."""
+    dry_prog = {
+        "program": {
+            "position": 16,
+            "name": "HIGH_DRY",
+            "command_parameters": [
+                {
+                    "command_parameter": {
+                        "name": "selector_position",
+                        "validation": "16",
+                    }
+                },
+                {"command_parameter": {"name": "pr_code", "validation": "45"}},
+                {"command_parameter": {"name": "program_type", "validation": "D"}},
+            ],
+        }
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="fc-switch-ro-wd",
+        data={
+            **_FC_BASE_DATA,
+            CONF_KEY_PROGRAMS: [dry_prog],
+            CONF_KEY_DOWNLOADABLE_PROGRAMS: [],
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step": "switch_to_read_only"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={}
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.data[CONF_KEY_MODE] == MODE_READ_ONLY
+    assert updated.data.get(CONF_KEY_IS_WASHER_DRYER) is True
+    assert CONF_KEY_PROGRAMS not in updated.data
+
+
+async def test_full_control_cloud_detects_washer_dryer_from_programs(
+    hass, no_discovery, detect_no_encryption
+):
+    """Cloud setup sets CONF_KEY_IS_WASHER_DRYER when program catalog contains dry cycles."""
+    dry_prog = {
+        "program": {
+            "position": 16,
+            "name": "HIGH_DRY",
+            "command_parameters": [
+                {
+                    "command_parameter": {
+                        "name": "selector_position",
+                        "validation": "16",
+                    }
+                },
+                {"command_parameter": {"name": "pr_code", "validation": "45"}},
+                {"command_parameter": {"name": "program_type", "validation": "D"}},
+            ],
+        }
+    }
+    appliance_with_dry = CloudApplianceData(
+        mac_address="AA:BB:CC:DD:EE:FF",
+        encryption_key="testenckey",
+        appliance_model="WD_MODEL",
+        serial_number="1234567890123456",
+        purchase_date="2022-01-01",
+        interface_type="RAPIDO",
+        programs=[dry_prog],
+        downloadable_programs=[],
+        brand="candy",
+        appliance_type="washer",  # Cloud API says washer, but catalog has dry programs
+    )
+    with patch(
+        "custom_components.candy.config_flow.fetch_appliance_data",
+        new_callable=AsyncMock,
+        return_value=appliance_with_dry,
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_IP_ADDRESS: "192.168.0.66"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_KEY_MODE: MODE_FULL_CONTROL}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"email": "user@example.com", "password": "pass"},
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_KEY_PROGRAM_LANGUAGE: "en"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_KEY_MAINTENANCE_ENABLED: False}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_KEY_CHECKUP_ENABLED: False}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert result["data"].get(CONF_KEY_IS_WASHER_DRYER) is True
     """checkup_settings → checkup_enabled=False saves and exits."""
     entry = MockConfigEntry(
         domain=DOMAIN,

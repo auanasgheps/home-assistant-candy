@@ -30,7 +30,7 @@ cards:
       {% set phase = raw_phase | lower %}
       {% set prog = states('sensor.<machine_name>_wash_program') %}
       {% set ptype = states('select.<machine_name>_program_type') | lower %}
-      {% set dry_tgt = states('sensor.<machine_name>_wash_dry_target') | lower %}
+      {% set dry_tgt = states('sensor.<machine_name>_dry_target') | lower %}
       {% if state == 'running' %}
         {% if phase in ['stopped', 'idle', 'unknown', 'unavailable', ''] %}
           Starting...
@@ -153,27 +153,27 @@ cards:
         - type: conditional
           conditions:
             - condition: state
-              entity: sensor.<machine_name>_wash_dry_target
+              entity: sensor.<machine_name>_dry_target
               state_not: unavailable
             - condition: state
-              entity: sensor.<machine_name>_wash_dry_target
+              entity: sensor.<machine_name>_dry_target
               state_not: no_dry
           chip:
             type: template
             icon: >-
-              {% set t = states('sensor.<machine_name>_wash_dry_target') | lower %}
+              {% set t = states('sensor.<machine_name>_dry_target') | lower %}
               {% if 'cooldown' in t %} mdi:fan
               {% elif 'minutes' in t %} mdi:timer-sand
               {% else %} mdi:tumble-dryer {% endif %}
             content: >-
-              {% set t = states('sensor.<machine_name>_wash_dry_target') %}
+              {% set t = states('sensor.<machine_name>_dry_target') %}
               {% if t not in ['unknown', 'unavailable', 'no_dry', ''] %}
                 {{ t | replace('_', ' ') | title }}
               {% else %}—{% endif %}
             icon_color: amber
             tap_action:
               action: more-info
-              entity: sensor.<machine_name>_wash_dry_target
+              entity: sensor.<machine_name>_dry_target
         - type: template
           icon: mdi:progress-clock
           content: >-

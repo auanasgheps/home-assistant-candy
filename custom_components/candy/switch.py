@@ -153,6 +153,13 @@ class _WashSwitchBase(CoordinatorEntity, SwitchEntity):
                     None,
                 )
         status = cast(WashingMachineStatus, self.coordinator.data)
+        if status.program_code is not None:
+            for p in self._programs:
+                if (
+                    p.selector_position == status.program
+                    and p.pr_code == status.program_code
+                ):
+                    return p
         for p in self._programs:
             if p.selector_position == status.program:
                 return p

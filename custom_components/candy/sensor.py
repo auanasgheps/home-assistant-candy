@@ -1282,6 +1282,13 @@ class CandyWashEstimatedDurationSensor(CandyBaseSensor):
             if dry_state and dry_state.state not in ("unavailable", "unknown")
             else None
         )
+        if dry_target is None:
+            device_status = cast(WashingMachineStatus, self.coordinator.data)
+            if (
+                device_status.dry_target is not None
+                and device_status.dry_target.label in DRY_TARGET_DURATIONS
+            ):
+                dry_target = device_status.dry_target.label
 
         if program.is_dry:
             dry_duration = DRY_TARGET_DURATIONS.get(dry_target, 0) if dry_target else 0
