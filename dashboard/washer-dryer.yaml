@@ -34,7 +34,7 @@ cards:
       {% if state == 'running' %}
         {% if phase in ['stopped', 'idle', 'unknown', 'unavailable', ''] %}
           Starting...
-        {% elif 'cooldown' in phase %}
+        {% elif dry_tgt == 'cooldown' or 'cooldown' in phase %}
           Cooling down
         {% elif 'dry' in phase and dry_tgt not in ['unknown', 'unavailable', 'no_dry', ''] %}
           Drying ({{ dry_tgt | replace('_', ' ') | title }})
@@ -61,7 +61,8 @@ cards:
     icon: >-
       {% set phase = states('sensor.<machine_name>_wash_cycle_status') | lower %}
       {% set ptype = states('select.<machine_name>_program_type') | lower %}
-      {% if 'dry' in phase or 'cooldown' in phase or ptype == 'drying' %}
+      {% set dry_tgt = states('sensor.<machine_name>_dry_target') | lower %}
+      {% if 'dry' in phase or dry_tgt == 'cooldown' or 'cooldown' in phase or ptype == 'drying' %}
         mdi:tumble-dryer
       {% else %}
         mdi:washing-machine
@@ -114,7 +115,8 @@ cards:
           icon: >-
             {% set phase = states('sensor.<machine_name>_wash_cycle_status') | lower %}
             {% set ptype = states('select.<machine_name>_program_type') | lower %}
-            {% if 'dry' in phase or 'cooldown' in phase or ptype == 'drying' %}
+            {% set dry_tgt = states('sensor.<machine_name>_dry_target') | lower %}
+            {% if 'dry' in phase or dry_tgt == 'cooldown' or 'cooldown' in phase or ptype == 'drying' %}
               mdi:tumble-dryer
             {% else %}
               mdi:washing-machine
@@ -473,6 +475,8 @@ cards:
                 - delayed_start_programmed
                 - delayed
                 - Delayed
+                - Finished
+                - finished
                 - "Off"
                 - "off"
                 - Sending command

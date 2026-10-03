@@ -2581,6 +2581,28 @@ _LOW_DRY_WD = {
 
 _WD_MULTI_DRY_PROGRAMS = [_COTTON_WD, _DELICATES_WD, _HIGH_DRY_WD, _LOW_DRY_WD]
 
+_RAPID_WD = {
+    "program": {
+        "position": 16,
+        "name": "DUAL_WM_WD_PROGRAM_NAME_RAPID_WASH_AND_DRY_59_MIN",
+        "command_parameters": [
+            {"command_parameter": {"name": "selector_position", "validation": "14"}},
+            {"command_parameter": {"name": "pr_code", "validation": "16"}},
+            {"command_parameter": {"name": "program_type", "validation": "W"}},
+            {"command_parameter": {"name": "maximum_temperature", "validation": "30"}},
+            {"command_parameter": {"name": "default_temperature", "validation": "30"}},
+            {"command_parameter": {"name": "maximum_spin_speed", "validation": "1000"}},
+            {"command_parameter": {"name": "default_spin_speed", "validation": "1000"}},
+            {"command_parameter": {"name": "minimum_soil_level", "validation": "0"}},
+            {"command_parameter": {"name": "maximum_soil_level", "validation": "0"}},
+            {"command_parameter": {"name": "default_soil_level", "validation": "0"}},
+            {"command_parameter": {"name": "steam", "validation": "0"}},
+            {"command_parameter": {"name": "default_duration", "validation": "59"}},
+            {"command_parameter": {"name": "dry", "validation": "0"}},
+        ],
+    }
+}
+
 
 async def _init_full_control_wd(
     hass: HomeAssistant,
@@ -2677,6 +2699,35 @@ async def test_program_select_filtering_across_program_types(
     assert prog_state is not None
     assert prog_state.attributes["options"] == ["Whites"]
     assert prog_state.state == "Whites"
+
+
+async def test_program_select_includes_rapid_wash_and_dry(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Rapid wash and dry appears in wash_and_dry mode even when catalog specifies program_type W."""
+    programs = [_COTTON_WD, _DELICATES_WD, _HIGH_DRY_WD, _RAPID_WD]
+    entry = await _init_full_control_wd(hass, aioclient_mock, _IDLE_JSON, programs)
+
+    registry = er.async_get(hass)
+    type_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT.format(entry.entry_id)
+    )
+    prog_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    assert type_id is not None
+    assert prog_id is not None
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": type_id, "option": PROGRAM_TYPE_WASH_AND_DRY},
+        blocking=True,
+    )
+    prog_state = hass.states.get(prog_id)
+    assert prog_state is not None
+    assert "Wash and Dry 59 Min." in prog_state.attributes["options"]
+    assert "Whites" in prog_state.attributes["options"]
 
 
 async def test_program_type_select_reflects_idle_dry_cycle(

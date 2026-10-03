@@ -389,10 +389,14 @@ cards:
               state_not:
                 - Running
                 - running
+                - Paused
+                - paused
                 - Delayed start programmed
                 - delayed_start_programmed
                 - delayed
                 - Delayed
+                - Finished
+                - finished
                 - "Off"
                 - "off"
                 - Sending command

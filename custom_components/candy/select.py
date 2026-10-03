@@ -217,6 +217,8 @@ class CandyWashProgramTypeSelect(CandyWashSelectBase):
             if prog is not None:
                 if prog.is_dry:
                     return PROGRAM_TYPE_DRYING
+                if prog.program_type == "WD":
+                    return PROGRAM_TYPE_WASH_AND_DRY
                 status = cast(WashingMachineStatus, self.coordinator.data)
                 if (
                     status.dry_target is not None
@@ -232,6 +234,8 @@ class CandyWashProgramTypeSelect(CandyWashSelectBase):
         if prog is not None:
             if prog.is_dry:
                 return PROGRAM_TYPE_DRYING
+            if prog.program_type == "WD":
+                return PROGRAM_TYPE_WASH_AND_DRY
             status = cast(WashingMachineStatus, self.coordinator.data)
             if (
                 status.dry_target is not None

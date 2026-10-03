@@ -587,3 +587,28 @@ def test_wash_program_from_dict_combo_cycle():
     assert prog.is_wash is True
     assert prog.is_dry is False
     assert prog.is_wash_and_dry is True
+
+
+def test_wash_program_from_dict_combo_cycle_with_wash_type():
+    raw = {
+        "program": {
+            "position": "16",
+            "name": "DUAL_WM_WD_PROGRAM_NAME_RAPID_WASH_AND_DRY_59_MIN",
+            "command_parameters": [
+                {
+                    "command_parameter": {
+                        "name": "selector_position",
+                        "validation": "14",
+                    }
+                },
+                {"command_parameter": {"name": "pr_code", "validation": "16"}},
+                {"command_parameter": {"name": "program_type", "validation": "W"}},
+                {"command_parameter": {"name": "dry", "validation": "0"}},
+            ],
+        }
+    }
+    prog = WashingMachineWashProgram.from_dict(raw)
+    assert prog.program_type == "WD"
+    assert prog.is_wash is True
+    assert prog.is_dry is False
+    assert prog.is_wash_and_dry is True
