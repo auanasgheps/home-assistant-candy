@@ -82,8 +82,8 @@ Ready-made Lovelace cards are included in the [`dashboard/`](dashboard/) folder.
 
 [Mushroom](https://github.com/piitaya/lovelace-mushroom) custom card is required.
 
-- [`washing-machine.yaml`](dashboard/washing-machine.yaml) — dedicated control card for **standard washing machines** (status, running cycle info, program & spin/temp/stain settings, start/pause/resume/stop buttons, and scheduled start/finish times).
-- [`washer-dryer.yaml`](dashboard/washer-dryer.yaml) — dedicated control card for **washer-dryer combos** (includes all washing controls plus wash/dry mode, dry level setting, dry target chip, dynamic drying icons, and drying special programs).
+- [`washing-machine.yaml`](dashboard/washing-machine.yaml) — dedicated control card for **standard washing machines** (status, running cycle info, program & spin/temp/stain settings, start/pause/stop buttons, and scheduled start/finish times).
+- [`washer-dryer.yaml`](dashboard/washer-dryer.yaml) — dedicated control card for **washer-dryer combos** (includes all washing controls plus wash/dry mode, dry level setting, dry target chip, dynamic drying icons, resume wash button, and drying special programs).
 - [`maintenance.yaml`](dashboard/maintenance.yaml) — maintenance card: check-up, limescale, and filter counters with reset buttons and check-up result.
 
 To use them, copy the appropriate card YAML into a new manual card in your Lovelace dashboard and replace every occurrence of `<machine_name>` with your own machine's entity ID prefix (e.g. `washing_machine` or `washer_dryer`).

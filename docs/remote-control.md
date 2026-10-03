@@ -132,8 +132,8 @@ When the appliance reports an operational fault or hardware issue (`Err` code in
 
 Ready-made control cards are provided in the [`dashboard/`](../dashboard/) directory:
 
-- **Standard Washing Machines** ([`dashboard/washing-machine.yaml`](../dashboard/washing-machine.yaml)): Displays cycle control buttons (Start/Pause/Resume/Stop), wash program selector, temperature/spin/soil controls, and scheduled start/finish chips.
-- **Washer-Dryer Combos** ([`dashboard/washer-dryer.yaml`](../dashboard/washer-dryer.yaml)): Includes all washing machine controls plus wash/dry mode selector (`select.<device>_program_type`), dry setting selector (`select.<device>_dry_setting`), live **Dry target** telemetry chips during active drying, dynamic washing/tumble-dryer icon transitions, and drying special programs.
+- **Standard Washing Machines** ([`dashboard/washing-machine.yaml`](../dashboard/washing-machine.yaml)): Displays cycle control buttons (Start/Pause/Stop), wash program selector, temperature/spin/soil controls, and scheduled start/finish chips.
+- **Washer-Dryer Combos** ([`dashboard/washer-dryer.yaml`](../dashboard/washer-dryer.yaml)): Includes all washing machine controls (with cycle Resume button) plus wash/dry mode selector (`select.<device>_program_type`), dry setting selector (`select.<device>_dry_setting`), live **Dry target** telemetry chips during active drying, dynamic washing/tumble-dryer icon transitions, and drying special programs.
 
 ---
 
