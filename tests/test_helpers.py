@@ -21,7 +21,9 @@ from custom_components.candy.const import (
 from custom_components.candy.helpers import (
     cycles_remaining,
     get_wash_error_notification_strings,
+    is_dualtech,
     is_washer_dryer,
+    supports_remote_pause,
     wash_device_info,
     wash_device_name,
 )
@@ -202,3 +204,37 @@ def test_is_washer_dryer_from_entry_programs():
 
     entry_empty = MockConfigEntry(domain=DOMAIN, data={})
     assert is_washer_dryer(entry_empty, None) is False
+
+
+@pytest.mark.parametrize(
+    ("interface_type", "expected"),
+    [
+        ("3D_DUAL", True),
+        ("3d_dual_bi", True),
+        ("3D_DUAL_TOP", True),
+        ("3D_DUAL_KPAD", True),
+        ("3D_DUAL_KPAD_TOP", True),
+        ("dual_simple", True),
+        ("RAPIDO_4DIG_STM_NEL", False),
+        ("BIANCA_SOME_MODEL", False),
+        ("", False),
+    ],
+)
+def test_is_dualtech(interface_type: str, expected: bool) -> None:
+    assert is_dualtech(interface_type) is expected
+
+
+@pytest.mark.parametrize(
+    ("interface_type", "expected"),
+    [
+        ("RAPIDO_4DIG_STM_NEL", True),
+        ("SMART_PRO", True),
+        ("", True),
+        ("BIANCA_TOUCH", False),
+        ("bianca_classic", False),
+        ("3D_DUAL", False),
+        ("3D_DUAL_BI", False),
+    ],
+)
+def test_supports_remote_pause(interface_type: str, expected: bool) -> None:
+    assert supports_remote_pause(interface_type) is expected

@@ -317,6 +317,7 @@ class WashingMachineWashProgram:
     program_type: str
     selector_position_dry: int | None
     dry_supported: bool
+    dry: int
 
     @classmethod
     def from_dict(cls, program_dict: dict) -> "WashingMachineWashProgram":
@@ -387,6 +388,7 @@ class WashingMachineWashProgram:
             program_type=raw_program_type,
             selector_position_dry=selector_position_dry,
             dry_supported=dry_supported,
+            dry=dry_val,
         )
 
     @property

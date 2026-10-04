@@ -15,6 +15,7 @@ from homeassistant.helpers.update_coordinator import (
 from .client import CandyClient, WashingMachineStatus
 from .client.model import MachineState
 from .const import (
+    CONF_KEY_INTERFACE_TYPE,
     CONF_KEY_MODE,
     DATA_KEY_CLIENT,
     DATA_KEY_COORDINATOR,
@@ -22,7 +23,7 @@ from .const import (
     MODE_FULL_CONTROL,
     UNIQUE_ID_WASH_DELAY_NUMBER,
 )
-from .helpers import remote_control_enabled, wash_device_info
+from .helpers import is_dualtech, remote_control_enabled, wash_device_info
 
 
 async def async_setup_entry(
@@ -64,6 +65,8 @@ class WashDelayNumber(CoordinatorEntity, NumberEntity):
         self.config_id = config_entry.entry_id
         self._client = client
         self._delay_minutes: int = 0
+        if is_dualtech(config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")):
+            self._attr_native_step = 60
 
     @property
     def unique_id(self) -> str:
