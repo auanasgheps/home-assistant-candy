@@ -1224,6 +1224,7 @@ class CandyWashEstimatedDurationSensor(CandyBaseSensor):
             "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_SELECT.format(self.config_id)
         )
         prog_state = self.hass.states.get(prog_eid) if prog_eid else None
+        program: WashingMachineWashProgram | None = None
         if prog_state is not None and prog_state.state not in (
             "unavailable",
             "unknown",
@@ -1241,7 +1242,7 @@ class CandyWashEstimatedDurationSensor(CandyBaseSensor):
                 ),
                 None,
             )
-        else:
+        elif self.coordinator.data is not None:
             status = cast(WashingMachineStatus, self.coordinator.data)
             if status.program_code is not None:
                 program = next(

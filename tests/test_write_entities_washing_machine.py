@@ -942,6 +942,28 @@ async def test_estimated_duration_not_registered_in_read_only(
     )
 
 
+async def test_estimated_duration_telemetry_no_program_code_fallback(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Estimated duration does not raise UnboundLocalError when program_code is None in telemetry."""
+    no_prcode_json = _IDLE_JSON.replace('"PrCode": "136", ', "")
+    entry = await _init_full_control(hass, aioclient_mock, no_prcode_json)
+    registry = er.async_get(hass)
+    prog_select_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    # Set the program select state to unavailable to test the fallback branch
+    hass.states.async_set(prog_select_id, "unavailable")
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+    coordinator.async_set_updated_data(coordinator.data)
+    await hass.async_block_till_done()
+
+    dur_state = _state(hass, entry, "sensor", UNIQUE_ID_WASH_ESTIMATED_DURATION)
+    assert dur_state is not None
+    # Cotton (pos 1) resolved via selector_position alone, default soil=2 -> 90 min
+    assert dur_state.state == "90"
+
+
 # ---------------------------------------------------------------------------
 # Scheduled start / finish sensors
 # ---------------------------------------------------------------------------
