@@ -42,6 +42,18 @@ def remote_control_enabled(data: object) -> bool:
     return isinstance(data, WashingMachineStatus) and data.remote_control
 
 
+def is_dualtech(interface_type: str) -> bool:
+    """Return True if the interface_type belongs to the DualTech appliance family."""
+    return "DUAL" in interface_type.upper()
+
+
+def supports_remote_pause(interface_type: str) -> bool:
+    """Return True if the appliance interface supports remote pause/resume."""
+    return not (
+        interface_type.upper().startswith("BIANCA") or is_dualtech(interface_type)
+    )
+
+
 def cycles_remaining(total: int, last_reset: int, threshold: int) -> int:
     """Return cycles until next maintenance alert, or 0 when due (including overdue).
 

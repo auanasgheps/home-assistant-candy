@@ -54,6 +54,7 @@ def test_display_name_returns_english_localized_name():
         program_type="W",
         selector_position_dry=None,
         dry_supported=False,
+        dry=0,
     )
     assert program.display_name == program.localized_name("en")
 
@@ -84,6 +85,7 @@ def test_display_name_falls_back_to_title_case_for_unknown_program():
         program_type="W",
         selector_position_dry=None,
         dry_supported=False,
+        dry=0,
     )
     assert program.display_name == "Totally Unknown Program"
 
@@ -258,6 +260,7 @@ def test_duration_for_soil_variable_soil():
         program_type="W",
         selector_position_dry=None,
         dry_supported=False,
+        dry=0,
     )
     assert program.duration_for_soil(1) == 96
     assert program.duration_for_soil(2) == 131
@@ -292,6 +295,7 @@ def test_duration_for_soil_fixed_soil():
         program_type="W",
         selector_position_dry=None,
         dry_supported=False,
+        dry=0,
     )
     assert program.duration_for_soil(1) == 44
     assert program.duration_for_soil(2) == 44
@@ -324,6 +328,7 @@ def test_resolve_soil_target():
         program_type="W",
         selector_position_dry=None,
         dry_supported=False,
+        dry=0,
     )
     base_fixed = WashingMachineWashProgram(
         position=9,
@@ -350,6 +355,7 @@ def test_resolve_soil_target():
         program_type="W",
         selector_position_dry=None,
         dry_supported=False,
+        dry=0,
     )
     nfc_valid = DownloadableProgram(
         position=56,

@@ -33,6 +33,7 @@ from .client.model import MachineState
 from .const import (
     CHECKUP_SCHEDULE_EVERY_CYCLE,
     CHECKUP_SCHEDULE_WEEKLY,
+    CONF_KEY_BRAND,
     CONF_KEY_CHECKUP_ENABLED,
     CONF_KEY_CHECKUP_LAST_DATE,
     CONF_KEY_CHECKUP_PENDING,
@@ -78,8 +79,11 @@ from .const import (
     WASH_OPTIONS,
 )
 from .helpers import (
+    is_dualtech,
+    is_washer_dryer,
     localized_notification_text,
     remote_control_enabled,
+    supports_remote_pause,
     wash_device_info,
 )
 
@@ -123,7 +127,7 @@ async def async_setup_entry(
     )
 
     interface_type = config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
-    supports_pause = not interface_type.upper().startswith("BIANCA")
+    supports_pause = supports_remote_pause(interface_type)
 
     buttons: list = [
         WashStartButton(coordinator, config_entry, client, programs, nfc_entries),
@@ -187,6 +191,132 @@ async def async_setup_entry(
                     )
                 )
             async_add_entities(buttons)
+
+
+def _build_bianca_start_params(
+    selector_position: int,
+    pr_code: int,
+    pr_str: str,
+    temp: int,
+    soil: int,
+    spin: int,
+    opt_mask: int,
+    steam: bool,
+    dry: int,
+    recipe_id: str | int,
+    checkup: int,
+    delay_minutes: int,
+) -> dict[str, str | int]:
+    """Build URL parameters for starting a wash cycle on Bianca/Rapido platforms."""
+    return {
+        "Write": 1,
+        "StSt": 1,
+        "DelVl": delay_minutes // 30,
+        "PrNm": selector_position,
+        "PrCode": pr_code,
+        "PrStr": pr_str,
+        "TmpTgt": temp,
+        "SLevTgt": soil,
+        "SpdTgt": spin // 100,
+        "OptMsk1": opt_mask,
+        "OptMsk2": 0,
+        "Lang": 0,
+        "Stm": 1 if steam else 0,
+        "Dry": dry,
+        "ED": 0,
+        "RecipeId": recipe_id,
+        "StartCheckUp": checkup,
+        "DispTestOn": 1,
+    }
+
+
+def _build_dualtech_start_params(
+    program: WashingMachineWashProgram,
+    temp: int,
+    soil: int,
+    spin: int,
+    opt_mask: int,
+    steam: bool,
+    dry: int,
+    recipe_id: str | int,
+    checkup: int,
+    delay_minutes: int,
+    is_washer_dryer: bool,
+    is_hoover: bool,
+    interface_type: str,
+) -> dict[str, str | int]:
+    """Build URL parameters for starting a wash cycle on DualTech platforms."""
+    params: dict[str, str | int] = {
+        "Write": 1,
+        "Pa": 0,
+        "Sel": 0,
+        "PrNm": program.selector_position,
+    }
+    delay_hours = delay_minutes // 60
+    if delay_hours > 0:
+        params["DelMd"] = 1
+        params["DelVl"] = delay_hours
+    else:
+        params["StSt"] = 1
+
+    effective_opt_mask = opt_mask
+    if interface_type.upper() == "3D_DUAL" and is_hoover and effective_opt_mask == 16:
+        effective_opt_mask = 128
+
+    if not program.is_dry:
+        if temp not in (program.default_temperature, 255):
+            params["TmpTgt"] = temp
+            params["TmpDf"] = program.default_temperature
+
+        effective_soil = soil
+        if effective_soil == 9:
+            effective_soil = program.min_soil_level
+        if effective_soil not in (program.default_soil_level, 255):
+            if temp == 90 and effective_soil == 1:
+                effective_soil = 2
+            params["SLevTgt"] = effective_soil
+
+        if spin not in (program.default_spin_speed, 255):
+            params["SpdTgt"] = spin // 100
+            params["SpdDef"] = program.default_spin_speed // 100
+
+    if effective_opt_mask > 0:
+        params["OptMsk"] = effective_opt_mask
+
+    params["Stm"] = 1 if steam else 0
+
+    if is_washer_dryer:
+        if dry > 0:
+            dry_val = dry
+        elif program.dry != 0:
+            dry_val = program.dry
+        else:
+            dry_val = 255
+        params["Option"] = dry_val
+
+    params["RecipeId"] = recipe_id
+    params["CheckUpState"] = checkup
+    return params
+
+
+def _build_bianca_stop_params(program: int) -> dict[str, int]:
+    """Build URL parameters for stopping a wash cycle on Bianca/Rapido platforms."""
+    return {
+        "Write": 1,
+        "StSt": 0,
+        "PrNm": program,
+        "DelVl": 0,
+    }
+
+
+def _build_dualtech_stop_params(program: int) -> dict[str, int]:
+    """Build URL parameters for stopping a wash cycle on DualTech platforms."""
+    return {
+        "Write": 1,
+        "StSt": 0,
+        "DelMd": 0,
+        "PrNm": program,
+    }
 
 
 class CandyWashButtonBase(CoordinatorEntity, ButtonEntity):
@@ -351,28 +481,44 @@ class WashStartButton(CandyWashButtonBase):
             steam = steam_state.state == "on" if steam_state else False
             checkup = _should_send_checkup(self.config_entry, dt_util.utcnow())
             soil_target = nfc.resolve_soil_target(base)
-            params = {
-                "Write": 1,
-                "StSt": 1,
-                "DelVl": delay // 30,
-                "PrNm": base.selector_position,
-                "PrCode": base.pr_code,
-                "PrStr": nfc.display_name(lang),
-                "TmpTgt": nfc.temperature,
-                "SLevTgt": soil_target,
-                "SpdTgt": nfc.spin_speed // 100
-                if nfc.spin_speed is not None
-                else base.max_spin_speed // 100,
-                "OptMsk1": nfc.options | opt_mask,
-                "OptMsk2": 0,
-                "Lang": 0,
-                "Stm": 1 if steam else 0,
-                "Dry": dry,
-                "ED": 0,
-                "RecipeId": nfc.recipe_id,
-                "StartCheckUp": checkup,
-                "DispTestOn": 1,
-            }
+            spin_target = (
+                nfc.spin_speed if nfc.spin_speed is not None else base.max_spin_speed
+            )
+            interface_type = self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+            if is_dualtech(interface_type):
+                brand = self.config_entry.data.get(CONF_KEY_BRAND, "candy")
+                is_hoover = str(brand).lower() == "hoover"
+                is_wd = is_washer_dryer(self.config_entry, self._programs)
+                params = _build_dualtech_start_params(
+                    base,
+                    nfc.temperature,
+                    soil_target,
+                    spin_target,
+                    nfc.options | opt_mask,
+                    steam,
+                    dry,
+                    nfc.recipe_id,
+                    checkup,
+                    delay,
+                    is_wd,
+                    is_hoover,
+                    interface_type,
+                )
+            else:
+                params = _build_bianca_start_params(
+                    base.selector_position,
+                    base.pr_code,
+                    nfc.display_name(lang),
+                    nfc.temperature,
+                    soil_target,
+                    spin_target,
+                    nfc.options | opt_mask,
+                    steam,
+                    dry,
+                    nfc.recipe_id,
+                    checkup,
+                    delay,
+                )
             await self._send_command_and_refresh(urlencode(params, quote_via=quote))
             if checkup == 1:
                 self._record_checkup_pending()
@@ -444,26 +590,41 @@ class WashStartButton(CandyWashButtonBase):
                     opt_mask |= bitmask
 
         checkup = _should_send_checkup(self.config_entry, dt_util.utcnow())
-        params = {
-            "Write": 1,
-            "StSt": 1,
-            "DelVl": delay // 30,  # device uses 30-min increments
-            "PrNm": program.selector_position,
-            "PrCode": program.pr_code,
-            "PrStr": program.localized_name(lang),
-            "TmpTgt": temp,
-            "SLevTgt": soil,
-            "SpdTgt": spin // 100,
-            "OptMsk1": opt_mask,
-            "OptMsk2": 0,
-            "Lang": 0,
-            "Stm": 1 if steam else 0,
-            "Dry": dry,
-            "ED": 0,
-            "RecipeId": 0,
-            "StartCheckUp": checkup,
-            "DispTestOn": 1,
-        }
+        interface_type = self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        if is_dualtech(interface_type):
+            brand = self.config_entry.data.get(CONF_KEY_BRAND, "candy")
+            is_hoover = str(brand).lower() == "hoover"
+            is_wd = is_washer_dryer(self.config_entry, self._programs)
+            params = _build_dualtech_start_params(
+                program,
+                temp,
+                soil,
+                spin,
+                opt_mask,
+                steam,
+                dry,
+                0,
+                checkup,
+                delay,
+                is_wd,
+                is_hoover,
+                interface_type,
+            )
+        else:
+            params = _build_bianca_start_params(
+                program.selector_position,
+                program.pr_code,
+                program.localized_name(lang),
+                temp,
+                soil,
+                spin,
+                opt_mask,
+                steam,
+                dry,
+                0,
+                checkup,
+                delay,
+            )
         await self._send_command_and_refresh(urlencode(params, quote_via=quote))
         if checkup == 1:
             self._record_checkup_pending()
@@ -577,12 +738,11 @@ class WashStopButton(CandyWashButtonBase):
 
     async def async_press(self) -> None:
         status = cast(WashingMachineStatus, self.coordinator.data)
-        params = {
-            "Write": 1,
-            "StSt": 0,
-            "PrNm": status.program,
-            "DelVl": 0,
-        }
+        interface_type = self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        if is_dualtech(interface_type):
+            params = _build_dualtech_stop_params(status.program)
+        else:
+            params = _build_bianca_stop_params(status.program)
         await self._send_command_and_refresh(urlencode(params, quote_via=quote))
 
 

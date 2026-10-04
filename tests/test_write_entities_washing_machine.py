@@ -27,6 +27,7 @@ from custom_components.candy.client.model import (
 )
 from custom_components.candy.const import (
     CHECKUP_SCHEDULE_EVERY_CYCLE,
+    CONF_KEY_BRAND,
     CONF_KEY_CHECKUP_ENABLED,
     CONF_KEY_CHECKUP_PENDING,
     CONF_KEY_CHECKUP_SCHEDULE,
@@ -493,6 +494,7 @@ async def test_delay_number_available_when_idle(
     assert state is not None
     assert state.state not in ("unavailable", "unknown")
     assert state.state == "0"
+    assert state.attributes.get("step") == 30
 
 
 async def test_delay_number_unavailable_when_running(
@@ -2217,6 +2219,545 @@ async def test_pause_button_present_when_no_interface_type(
     entry = await _init_full_control(hass, aioclient_mock, _IDLE_JSON)
     state = _state(hass, entry, "button", UNIQUE_ID_WASH_PAUSE_BUTTON)
     assert state is not None
+
+
+async def test_pause_button_absent_for_dualtech(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control_with_interface_type(
+        hass, aioclient_mock, "3D_DUAL"
+    )
+    state = _state(hass, entry, "button", UNIQUE_ID_WASH_PAUSE_BUTTON)
+    assert state is None
+
+
+async def test_delay_number_step_dualtech(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control_with_interface_type(
+        hass, aioclient_mock, "3D_DUAL"
+    )
+    state = _state(hass, entry, "number", UNIQUE_ID_WASH_DELAY_NUMBER)
+    assert state is not None
+    assert state.attributes.get("step") == 60
+
+
+async def _init_full_control_dualtech(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    interface_type: str,
+    brand: str,
+    is_washer_dryer_flag: bool,
+    programs: list,
+    status_json: str,
+) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="test-dualtech",
+        data={
+            CONF_IP_ADDRESS: TEST_IP,
+            CONF_KEY_USE_ENCRYPTION: False,
+            CONF_PASSWORD: "",
+            CONF_KEY_MODE: MODE_FULL_CONTROL,
+            CONF_KEY_PROGRAMS: programs,
+            CONF_KEY_INTERFACE_TYPE: interface_type,
+            CONF_KEY_BRAND: brand,
+            CONF_KEY_IS_WASHER_DRYER: is_washer_dryer_flag,
+        },
+    )
+    aioclient_mock.get(f"http://{TEST_IP}/http-read.json?encrypted=0", text=status_json)
+    _add_stats_mocks(aioclient_mock)
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_dualtech_start_command_defaults(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control_dualtech(
+        hass,
+        aioclient_mock,
+        "3D_DUAL",
+        "candy",
+        False,
+        _PROGRAMS,
+        _IDLE_JSON,
+    )
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    assert entity_id is not None
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": entity_id}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs: str = mock_send.call_args[0][0]
+    assert "Write=1" in qs
+    assert "Pa=0" in qs
+    assert "Sel=0" in qs
+    assert "PrNm=1" in qs
+    assert "StSt=1" in qs
+    assert "Stm=0" in qs
+    assert "RecipeId=0" in qs
+    assert "CheckUpState=0" in qs
+    assert "TmpTgt=" not in qs
+    assert "TmpDf=" not in qs
+    assert "SLevTgt=" not in qs
+    assert "SpdTgt=" not in qs
+    assert "SpdDef=" not in qs
+    assert "OptMsk=" not in qs
+    assert "Option=" not in qs
+
+
+async def test_dualtech_start_command_custom_temp_spin_soil(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control_dualtech(
+        hass,
+        aioclient_mock,
+        "3D_DUAL",
+        "candy",
+        False,
+        _PROGRAMS,
+        _IDLE_JSON,
+    )
+    registry = er.async_get(hass)
+    temp_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_TEMP_SELECT.format(entry.entry_id)
+    )
+    spin_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_SPIN_SELECT.format(entry.entry_id)
+    )
+    soil_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_SOIL_SELECT.format(entry.entry_id)
+    )
+    assert temp_eid is not None
+    assert spin_eid is not None
+    assert soil_eid is not None
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": temp_eid, "option": "60"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": spin_eid, "option": "1200"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": soil_eid, "option": "high"},
+        blocking=True,
+    )
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs: str = mock_send.call_args[0][0]
+    assert "TmpTgt=60" in qs
+    assert "TmpDf=40" in qs
+    assert "SpdTgt=12" in qs
+    assert "SpdDef=8" in qs
+    assert "SLevTgt=3" in qs
+
+
+async def test_dualtech_start_command_delayed_start(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control_dualtech(
+        hass,
+        aioclient_mock,
+        "3D_DUAL",
+        "candy",
+        False,
+        _PROGRAMS,
+        _IDLE_JSON,
+    )
+    registry = er.async_get(hass)
+    delay_eid = registry.async_get_entity_id(
+        "number", DOMAIN, UNIQUE_ID_WASH_DELAY_NUMBER.format(entry.entry_id)
+    )
+    assert delay_eid is not None
+    await hass.services.async_call(
+        "number", "set_value", {"entity_id": delay_eid, "value": 120}, blocking=True
+    )
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs: str = mock_send.call_args[0][0]
+    assert "DelMd=1" in qs
+    assert "DelVl=2" in qs
+    assert "StSt=1" not in qs
+
+
+async def test_dualtech_start_command_washer_dryer_option(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control_dualtech(
+        hass,
+        aioclient_mock,
+        "3D_DUAL",
+        "hoover",
+        True,
+        _PROGRAMS,
+        _IDLE_JSON,
+    )
+    registry = er.async_get(hass)
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs: str = mock_send.call_args[0][0]
+    assert "Option=255" in qs
+
+
+async def test_dualtech_start_command_pink_rule(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    cotton_with_options = copy.deepcopy(_COTTON)
+    cotton_with_options["program"]["command_parameters"].append(
+        {"command_parameter": {"name": "available_options", "validation": "255"}}
+    )
+    entry = await _init_full_control_dualtech(
+        hass,
+        aioclient_mock,
+        "3D_DUAL",
+        "hoover",
+        False,
+        [cotton_with_options],
+        _IDLE_JSON,
+    )
+    registry = er.async_get(hass)
+    rinse_eid = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_OPTION_RINSE_1.format(entry.entry_id)
+    )
+    assert rinse_eid is not None
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": rinse_eid}, blocking=True
+    )
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs: str = mock_send.call_args[0][0]
+    assert "OptMsk=128" in qs
+
+
+async def test_dualtech_stop_command(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control_dualtech(
+        hass,
+        aioclient_mock,
+        "3D_DUAL",
+        "candy",
+        False,
+        _PROGRAMS,
+        _RUNNING_JSON,
+    )
+    registry = er.async_get(hass)
+    stop_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_STOP_BUTTON.format(entry.entry_id)
+    )
+    assert stop_eid is not None
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": stop_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs: str = mock_send.call_args[0][0]
+    assert "Write=1" in qs
+    assert "StSt=0" in qs
+    assert "DelMd=0" in qs
+    assert "PrNm=1" in qs
+    assert "DelVl=" not in qs
+
+
+async def _init_full_control_nfc_dualtech(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    status_json: str,
+    interface_type: str,
+) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="test-full-control-nfc-dualtech",
+        data={
+            CONF_IP_ADDRESS: TEST_IP,
+            CONF_KEY_USE_ENCRYPTION: False,
+            CONF_PASSWORD: "",
+            CONF_KEY_MODE: MODE_FULL_CONTROL,
+            CONF_KEY_PROGRAMS: _PROGRAMS,
+            CONF_KEY_DOWNLOADABLE_PROGRAMS: [],
+            CONF_KEY_INTERFACE_TYPE: interface_type,
+        },
+    )
+    aioclient_mock.get(f"http://{TEST_IP}/http-read.json?encrypted=0", text=status_json)
+    _add_stats_mocks(aioclient_mock)
+    entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.candy.select.load_downloadable_programs",
+            return_value=_NFC_PROGRAMS,
+        ),
+        patch(
+            "custom_components.candy.button.load_downloadable_programs",
+            return_value=_NFC_PROGRAMS,
+        ),
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    nfc_switch_eid = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_NFC_SWITCH.format(entry.entry_id)
+    )
+    assert nfc_switch_eid is not None
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": nfc_switch_eid}, blocking=True
+    )
+    return entry
+
+
+async def test_start_button_sends_nfc_dualtech(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control_nfc_dualtech(
+        hass, aioclient_mock, _IDLE_JSON, "3D_DUAL"
+    )
+    registry = er.async_get(hass)
+
+    program_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    assert program_eid is not None
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": program_eid, "option": "Home Care - Bathrobe"},
+        blocking=True,
+    )
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs: str = mock_send.call_args[0][0]
+    assert "Write=1" in qs
+    assert "Pa=0" in qs
+    assert "Sel=0" in qs
+    assert "PrNm=1" in qs
+    assert "StSt=1" in qs
+    assert "SpdTgt=10" in qs
+    assert "SpdDef=8" in qs
+    assert "OptMsk=16" in qs
+    assert "RecipeId=D_56" in qs
+    assert "CheckUpState=0" in qs
+    assert "PrCode=" not in qs
+    assert "PrStr=" not in qs
+
+
+async def test_dualtech_start_command_default_soil_9(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control_dualtech(
+        hass,
+        aioclient_mock,
+        "3D_DUAL",
+        "candy",
+        False,
+        [_RAPID],
+        _IDLE_JSON,
+    )
+    registry = er.async_get(hass)
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs: str = mock_send.call_args[0][0]
+    # default_soil_level is 9, minimum_soil_level is 2 -> sends SLevTgt=2
+    assert "SLevTgt=2" in qs
+
+
+async def test_dualtech_start_command_90c_soil_clamping(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    cotton_prog = copy.deepcopy(_COTTON)
+    for cp in cotton_prog["program"]["command_parameters"]:
+        if cp["command_parameter"]["name"] == "default_soil_level":
+            cp["command_parameter"]["validation"] = "3"
+    entry = await _init_full_control_dualtech(
+        hass,
+        aioclient_mock,
+        "3D_DUAL",
+        "candy",
+        False,
+        [cotton_prog],
+        _IDLE_JSON,
+    )
+    registry = er.async_get(hass)
+    temp_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_TEMP_SELECT.format(entry.entry_id)
+    )
+    soil_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_SOIL_SELECT.format(entry.entry_id)
+    )
+    assert temp_eid is not None
+    assert soil_eid is not None
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": temp_eid, "option": "90"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": soil_eid, "option": "low"},
+        blocking=True,
+    )
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs: str = mock_send.call_args[0][0]
+    assert "SLevTgt=2" in qs
+    assert "TmpTgt=90" in qs
+
+
+async def test_dualtech_start_command_dry_program(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    entry = await _init_full_control_dualtech(
+        hass,
+        aioclient_mock,
+        "3D_DUAL",
+        "candy",
+        True,
+        _WD_PROGRAMS,
+        _IDLE_JSON,
+    )
+    registry = er.async_get(hass)
+    type_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT.format(entry.entry_id)
+    )
+    dry_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_DRY_SELECT.format(entry.entry_id)
+    )
+    assert type_eid is not None
+    assert dry_eid is not None
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": type_eid, "option": PROGRAM_TYPE_DRYING},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": dry_eid, "option": DRY_TARGET_EXTRA_DRY},
+        blocking=True,
+    )
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs: str = mock_send.call_args[0][0]
+    assert "Write=1" in qs
+    assert "Pa=0" in qs
+    assert "Sel=0" in qs
+    assert "PrNm=16" in qs
+    assert "StSt=1" in qs
+    assert "Option=1" in qs
+    assert "TmpTgt=" not in qs
+    assert "SLevTgt=" not in qs
+    assert "SpdTgt=" not in qs
 
 
 # ---------------------------------------------------------------------------
