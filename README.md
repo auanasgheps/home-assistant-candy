@@ -20,7 +20,7 @@ Fully compliant with strictly-typed Home Assistant (>= 2024.x) development stand
   - 🔪 Dishwasher
   - 🍳 Oven
   - 🍷 Wine Cooler / Cellar
-- **Full Remote Control:** Complete interactive control panel for **washing machines** and **washer-dryer combos**. Select localized programs, adjust wash & dry parameters (temp, spin speed, soil level, drying mode), start/pause/stop cycles, and track remote status.
+- **Full Remote Control:** Complete interactive control panel for **washing machines** and **washer-dryer combos** (see the [compatibility matrix](#compatibility-note) for supported and tested models). Select localized programs, adjust wash & dry parameters (temp, spin speed, soil level, drying mode), start/pause/stop cycles, and track remote status.
 - **Zero-Config Decryption:** Say goodbye to manually extracting encryption keys. This integration boasts a natively built-in *sliding-window/known-plaintext* algorithm that unlocks your device seamlessly in fractions of a second during setup.
 - **Strict HA Compatibility:** Follows the rigorous MyPy styling standards enforced by Home Assistant 2025.
 - Uses the local device API for real-time responsiveness. 
@@ -32,7 +32,7 @@ Fully compliant with strictly-typed Home Assistant (>= 2024.x) development stand
 
 ## 🎛️ Full Control Features
 
-Full Control mode turns the integration into a complete remote panel, going beyond status monitoring to let you program, start, and track your appliance from Home Assistant. It supports both **Washing Machines** and **Washer Dryer Combos**. The protocol was reverse-engineered from the official Candy/Simply-Fi app, and the feature set matches everything the mobile app offers.
+Full Control mode turns the integration into a complete remote panel, going beyond status monitoring to let you program, start, and track your appliance from Home Assistant. It supports both **Washing Machines** and **Washer Dryer Combos** (see the [Compatibility Note](#compatibility-note) for supported interface families and hardware test status). The protocol was reverse-engineered from the official Candy/Simply-Fi app, and the feature set matches everything the mobile app offers.
 
 <p float="left">
   <img src="docs//images/dashboard_washing_machine.png" width="300" />
@@ -90,7 +90,18 @@ To use them, copy the appropriate card YAML into a new manual card in your Lovel
 
 ### Compatibility Note
 
-Full functionality has been tested on the **Candy RapidÓ** series (washing machines) and the **Hoover AXI** series (washer-dryer combos). Other appliance series may behave differently. If you encounter issues or unexpected behaviour, please share your findings in the [Discussions](https://github.com/bigmoby/home-assistant-candy/discussions/categories/device-support-improvements) section or open an Issue — feedback is very welcome.
+Full functionality has been tested on physical hardware for the **Candy RapidÓ** series (washing machines), the **Hoover AXI** series (washer-dryer combos), and **DualTech** (`3D_DUAL`) appliances. Support for other interface families is implemented according to vendor app specifications and protocol reverse engineering.
+
+| Appliance | Interface / Family | Tested | Notes |
+|---|---|---|---|
+| Washing Machine | Candy RapidÓ (`RAPIDO`, `RAPIDO_4DIG_STM_NEL`) | Yes | Reference hardware (`RO41274DWMSE/1-S`). Supports start, pause, resume, stop, wash options, and maintenance counters. |
+| Washer Dryer | Hoover AXI (`red_devil_axi*`, `hwash700`) | Yes | Reference hardware (`AWDPD4138LHR/1`). Supports wash & dry, standalone drying presets, pause/resume, and autodose. |
+| Washing Machine / Washer Dryer | DualTech (`3D_DUAL`, `4D_DUAL`, `DUALTECH`) | Yes | Tested on `3D_DUAL` hardware. Implemented using legacy DualTech command grammar (`TmpDf`, `SpdDef`, `Option`). Remote pause and stats counters are unsupported by hardware. |
+| Washer Dryer | Candy RapidÓ (`ROW` series) | No | Shares RapidÓ protocol with generic washer-dryer engine. Untested on physical hardware. |
+| Washing Machine / Washer Dryer | Candy Bianca (`BIANCA`, `BWD` series) | No | Implemented from cloud catalog and protocol specifications. Remote pause/resume is unsupported by Bianca hardware. |
+| Washing Machine | Candy Smart Pro / Hoover H-WASH 300 / X-Care (`SMARTPRO`, `HWASH300`, `XCARE`) | No | Implemented from protocol specifications. |
+
+Other appliance series may behave differently. If you encounter issues or unexpected behaviour, please share your findings in the [Discussions](https://github.com/bigmoby/home-assistant-candy/discussions/categories/device-support-improvements) section or open an Issue — feedback is very welcome.
 
 ---
 
