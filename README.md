@@ -94,9 +94,9 @@ Full functionality has been tested on physical hardware for the **Candy RapidÓ*
 
 | Appliance | Interface / Family | Tested | Notes |
 |---|---|---|---|
-| Washing Machine | Candy RapidÓ (`RAPIDO`, `RAPIDO_4DIG_STM_NEL`) | Yes | Reference hardware (`RO41274DWMSE/1-S`). Supports start, pause, resume, stop, wash options, and maintenance counters. |
-| Washer Dryer | Hoover AXI (`red_devil_axi*`, `hwash700`) | Yes | Reference hardware (`AWDPD4138LHR/1`). Supports wash & dry, standalone drying presets, pause/resume, and autodose. |
-| Washing Machine / Washer Dryer | DualTech (`3D_DUAL`, `4D_DUAL`, `DUALTECH`) | Yes | Tested on `3D_DUAL` hardware. Implemented using legacy DualTech command grammar (`TmpDf`, `SpdDef`, `Option`). Remote pause and stats counters are unsupported by hardware. |
+| Washing Machine | Candy RapidÓ (`RAPIDO`, `RAPIDO_4DIG_STM_NEL`) | Yes | Reference hardware (`RO41274DWMSE/1-S`).|
+| Washer Dryer | Hoover AXI (`red_devil_axi*`, `hwash700`) | Yes | Reference hardware (`AWDPD4138LHR/1`). |
+| Washing Machine / Washer Dryer | DualTech (`3D_DUAL`, `4D_DUAL`, `DUALTECH`) | Yes | Tested on `3D_DUAL` hardware. Remote pause and stats counters are unsupported by hardware. |
 | Washer Dryer | Candy RapidÓ (`ROW` series) | No | Shares RapidÓ protocol with generic washer-dryer engine. Untested on physical hardware. |
 | Washing Machine / Washer Dryer | Candy Bianca (`BIANCA`, `BWD` series) | No | Implemented from cloud catalog and protocol specifications. Remote pause/resume is unsupported by Bianca hardware. |
 | Washing Machine | Candy Smart Pro / Hoover H-WASH 300 / X-Care (`SMARTPRO`, `HWASH300`, `XCARE`) | No | Implemented from protocol specifications. |
