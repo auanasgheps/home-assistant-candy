@@ -42,13 +42,17 @@ def remote_control_enabled(data: object) -> bool:
     return isinstance(data, WashingMachineStatus) and data.remote_control
 
 
-def is_dualtech(interface_type: str) -> bool:
+def is_dualtech(interface_type: str | None) -> bool:
     """Return True if the interface_type belongs to the DualTech appliance family."""
+    if not interface_type:
+        return False
     return "DUAL" in interface_type.upper()
 
 
-def supports_remote_pause(interface_type: str) -> bool:
+def supports_remote_pause(interface_type: str | None) -> bool:
     """Return True if the appliance interface supports remote pause/resume."""
+    if not interface_type:
+        return True
     return not (
         interface_type.upper().startswith("BIANCA") or is_dualtech(interface_type)
     )

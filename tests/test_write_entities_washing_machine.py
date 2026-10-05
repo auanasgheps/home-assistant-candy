@@ -2494,6 +2494,56 @@ async def test_dualtech_start_command_pink_rule(
     assert "OptMsk=128" in qs
 
 
+async def test_dualtech_start_command_pink_rule_multiple_options(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """When extra rinse (+1, bit 16) is combined with other options, it is remapped to bit 128."""
+    cotton_with_options = copy.deepcopy(_COTTON)
+    cotton_with_options["program"]["command_parameters"].append(
+        {"command_parameter": {"name": "available_options", "validation": "255"}}
+    )
+    entry = await _init_full_control_dualtech(
+        hass,
+        aioclient_mock,
+        "3D_DUAL",
+        "hoover",
+        False,
+        [cotton_with_options],
+        _IDLE_JSON,
+    )
+    registry = er.async_get(hass)
+    rinse_eid = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_OPTION_RINSE_1.format(entry.entry_id)
+    )
+    prewash_eid = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_OPTION_PREWASH.format(entry.entry_id)
+    )
+    assert rinse_eid is not None
+    assert prewash_eid is not None
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": rinse_eid}, blocking=True
+    )
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": prewash_eid}, blocking=True
+    )
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs: str = mock_send.call_args[0][0]
+    # Bit 1 (prewash) + Bit 128 (remapped extra rinse +1) = 129
+    assert "OptMsk=129" in qs
+
+
 async def test_dualtech_stop_command(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
@@ -3000,7 +3050,7 @@ async def test_full_checkup_button_in_diagnostics_when_maintenance_enabled(
 async def test_full_checkup_button_absent_when_maintenance_disabled(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
-    """Full Check-up button requires maintenance_enabled."""
+    """Full Check-up button requires maintenance_enabled or checkup_enabled."""
     entry = await _init_full_control_with_maintenance(
         hass,
         aioclient_mock,
@@ -3010,6 +3060,41 @@ async def test_full_checkup_button_absent_when_maintenance_disabled(
     )
     state = _state(hass, entry, "button", UNIQUE_ID_WASH_FULL_CHECKUP_BUTTON)
     assert state is None
+
+
+async def test_full_checkup_button_present_when_checkup_enabled_without_maintenance(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Full Check-up button is present if checkup_enabled is True even without maintenance counters."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="test-checkup-no-maint",
+        data={
+            CONF_IP_ADDRESS: TEST_IP,
+            CONF_KEY_USE_ENCRYPTION: False,
+            CONF_PASSWORD: "",
+            CONF_KEY_MODE: MODE_FULL_CONTROL,
+            CONF_KEY_PROGRAMS: _PROGRAMS_WITH_AUTOCLEAN,
+            CONF_KEY_MAINTENANCE_ENABLED: False,
+            CONF_KEY_CHECKUP_ENABLED: True,
+            CONF_KEY_PROGRAM_LANGUAGE: "en",
+        },
+    )
+    aioclient_mock.get(f"http://{TEST_IP}/http-read.json?encrypted=0", text=_IDLE_JSON)
+    aioclient_mock.get(
+        f"http://{TEST_IP}/http-prepareStatistics.json?encrypted=0",
+        text='{"response":"SUCCESS"}',
+    )
+    aioclient_mock.get(
+        f"http://{TEST_IP}/http-getStatistics.json?encrypted=0",
+        text=_STATS_OK,
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = _state(hass, entry, "button", UNIQUE_ID_WASH_FULL_CHECKUP_BUTTON)
+    assert state is not None
 
 
 async def test_full_checkup_button_unavailable_when_running(

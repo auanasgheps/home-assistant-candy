@@ -71,7 +71,7 @@ from .const import (
     UNIQUE_ID_WASH_MAINT_FULL_CHECKUP,
     UNIQUE_ID_WASH_MAINT_LIMESCALE,
 )
-from .helpers import cycles_remaining, is_washer_dryer
+from .helpers import cycles_remaining, is_dualtech, is_washer_dryer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -301,6 +301,16 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             CONF_KEY_MAINTENANCE_ENABLED
         ]
         if not user_input[CONF_KEY_MAINTENANCE_ENABLED]:
+            if self.config_entry.data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
+                return await self.async_step_checkup()
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=self._pending_data
+            )
+            self.hass.async_create_task(
+                self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            )
+            return self.async_create_entry(data={})
+        if is_dualtech(self._pending_data.get(CONF_KEY_INTERFACE_TYPE, "")):
             if self.config_entry.data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
                 return await self.async_step_checkup()
             self.hass.config_entries.async_update_entry(
@@ -952,6 +962,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
             CONF_KEY_MAINTENANCE_ENABLED
         ]
         if not user_input[CONF_KEY_MAINTENANCE_ENABLED]:
+            if self._config_data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
+                return await self.async_step_checkup()
+            return self.async_create_entry(
+                title=CONF_INTEGRATION_TITLE, data=self._config_data
+            )
+        if is_dualtech(self._config_data.get(CONF_KEY_INTERFACE_TYPE, "")):
             if self._config_data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
                 return await self.async_step_checkup()
             return self.async_create_entry(
