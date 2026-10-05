@@ -3151,12 +3151,10 @@ async def test_dualtech_omits_maintenance_reset_buttons_and_sensors(
     assert _state(hass, entry, "button", UNIQUE_ID_WASH_LIMESCALE_BUTTON) is not None
     # Reset buttons require stats_coordinator and must not be present
     assert (
-        _state(hass, entry, "button", UNIQUE_ID_WASH_MAINT_FULL_CHECKUP_BUTTON)
-        is None
+        _state(hass, entry, "button", UNIQUE_ID_WASH_MAINT_FULL_CHECKUP_BUTTON) is None
     )
     assert _state(hass, entry, "button", UNIQUE_ID_WASH_MAINT_LIMESCALE_BUTTON) is None
     assert _state(hass, entry, "button", UNIQUE_ID_WASH_MAINT_FILTER_BUTTON) is None
-
 
 
 # ---------------------------------------------------------------------------

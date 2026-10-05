@@ -610,4 +610,3 @@ async def test_full_checkup_completion_dualtech(
     assert "StSt=0" in qs
     assert "PrNm=2" in qs
     assert any(c.args == (5,) for c in mock_sleep.call_args_list)
-

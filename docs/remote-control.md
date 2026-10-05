@@ -132,8 +132,9 @@ When the appliance reports an operational fault or hardware issue (`Err` code in
 
 Ready-made control cards are provided in the [`dashboard/`](../dashboard/) directory:
 
-- **Standard Washing Machines** ([`dashboard/washing-machine.yaml`](../dashboard/washing-machine.yaml)): Displays cycle control buttons (Start/Pause/Stop), wash program selector, temperature/spin/soil controls, and scheduled start/finish chips.
-- **Washer-Dryer Combos** ([`dashboard/washer-dryer.yaml`](../dashboard/washer-dryer.yaml)): Includes all washing machine controls (with cycle Resume button) plus wash/dry mode selector (`select.<device>_program_type`), dry setting selector (`select.<device>_dry_setting`), live **Dry target** telemetry chips during active drying, dynamic washing/tumble-dryer icon transitions, and drying special programs.
+- **Standard Washing Machines** ([`dashboard/washing-machine.yaml`](../dashboard/washing-machine.yaml)): Displays cycle control buttons (Start, Pause, Resume, Stop), wash program selector, temperature/spin/soil controls, detergent dosing chips, and scheduled start/finish chips. Automatically hides Pause and Resume on appliances without remote pause support (e.g. `3D_DUAL`, `DUALTECH`, `BIANCA`).
+- **Washer-Dryer Combos** ([`dashboard/washer-dryer.yaml`](../dashboard/washer-dryer.yaml)): Includes all washing machine controls (Start, Pause, Resume, Stop) plus wash/dry mode selector (`select.<device>_program_type`), dry setting selector (`select.<device>_dry_setting`), live **Dry target** telemetry chips during active drying, dynamic washing/tumble-dryer icon transitions, and drying special programs.
+- **Maintenance & Diagnostics** ([`dashboard/maintenance.yaml`](../dashboard/maintenance.yaml)): Dedicated card for diagnostic triggers (Full Check-up, Limescale Cleaning), cycle counter tracking, and recent check-up test results. Automatically adapts for DualTech appliances (where cycle-derived counters and reset buttons are omitted while diagnostic triggers remain active).
 
 ---
 
