@@ -139,20 +139,20 @@ async def async_setup_entry(
     async_add_entities(buttons)
 
     if config_entry.data.get(CONF_KEY_MAINTENANCE_ENABLED):
+        maint_buttons: list = [WashFullCheckUpButton(coordinator, config_entry, client)]
+        autoclean = next(
+            (p for p in programs if "autoclean" in p.name.lower()),
+            None,
+        )
+        if autoclean is not None:
+            maint_buttons.append(
+                WashLimescaleCleanButton(
+                    coordinator, config_entry, client, autoclean
+                )
+            )
         stats_coordinator = hass.data[DOMAIN][config_id].get(DATA_KEY_STATS_COORDINATOR)
         if stats_coordinator is not None:
-            buttons = [WashFullCheckUpButton(coordinator, config_entry, client)]
-            autoclean = next(
-                (p for p in programs if "autoclean" in p.name.lower()),
-                None,
-            )
-            if autoclean is not None:
-                buttons.append(
-                    WashLimescaleCleanButton(
-                        coordinator, config_entry, client, autoclean
-                    )
-                )
-            buttons.append(
+            maint_buttons.append(
                 WashMaintResetButton(
                     coordinator,
                     config_entry,
@@ -165,7 +165,7 @@ async def async_setup_entry(
                 ),
             )
             if config_entry.data.get(CONF_KEY_MAINTENANCE_LIMESCALE_ENABLED, True):
-                buttons.append(
+                maint_buttons.append(
                     WashMaintResetButton(
                         coordinator,
                         config_entry,
@@ -178,7 +178,7 @@ async def async_setup_entry(
                     )
                 )
             if config_entry.data.get(CONF_KEY_MAINTENANCE_FILTER_ENABLED, True):
-                buttons.append(
+                maint_buttons.append(
                     WashMaintResetButton(
                         coordinator,
                         config_entry,
@@ -190,7 +190,7 @@ async def async_setup_entry(
                         "mdi:filter-remove",
                     )
                 )
-            async_add_entities(buttons)
+        async_add_entities(maint_buttons)
 
 
 def _build_bianca_start_params(
@@ -765,8 +765,14 @@ class WashFullCheckUpButton(CandyWashButtonBase):
         return status.machine_state == MachineState.IDLE
 
     async def async_press(self) -> None:
+        interface_type = self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        cmd = (
+            {"Write": 1, "CheckUpState": 1}
+            if is_dualtech(interface_type)
+            else {"CheckUpState": 1}
+        )
         await self._send_command_and_refresh(
-            urlencode({"CheckUpState": 1}, quote_via=quote)
+            urlencode(cmd, quote_via=quote)
         )
         lang = self.config_entry.data.get(
             CONF_KEY_PROGRAM_LANGUAGE, self.hass.config.language
@@ -811,24 +817,45 @@ class WashLimescaleCleanButton(CandyWashButtonBase):
         lang = self.config_entry.data.get(
             CONF_KEY_PROGRAM_LANGUAGE, self.hass.config.language
         )
-        params = {
-            "Write": 1,
-            "StSt": 1,
-            "PrNm": self._program.selector_position,
-            "PrCode": self._program.pr_code,
-            "PrStr": self._program.localized_name(lang),
-            "TmpTgt": 255,
-            "SpdTgt": 0,
-            "OptMsk1": 0,
-            "OptMsk2": 0,
-            "Lang": 0,
-            "Stm": 0,
-            "Dry": 0,
-            "ED": 0,
-            "RecipeId": 0,
-            "StartCheckUp": 0,
-            "DispTestOn": 1,
-        }
+        interface_type = self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        if is_dualtech(interface_type):
+            brand = self.config_entry.data.get(CONF_KEY_BRAND, "candy")
+            is_hoover = str(brand).lower() == "hoover"
+            is_wd = is_washer_dryer(self.config_entry, [self._program])
+            params: dict[str, str | int] = _build_dualtech_start_params(
+                self._program,
+                255,
+                255,
+                0,
+                0,
+                False,
+                0,
+                0,
+                0,
+                0,
+                is_wd,
+                is_hoover,
+                interface_type,
+            )
+        else:
+            params = {
+                "Write": 1,
+                "StSt": 1,
+                "PrNm": self._program.selector_position,
+                "PrCode": self._program.pr_code,
+                "PrStr": self._program.localized_name(lang),
+                "TmpTgt": 255,
+                "SpdTgt": 0,
+                "OptMsk1": 0,
+                "OptMsk2": 0,
+                "Lang": 0,
+                "Stm": 0,
+                "Dry": 0,
+                "ED": 0,
+                "RecipeId": 0,
+                "StartCheckUp": 0,
+                "DispTestOn": 1,
+            }
         await self._send_command_and_refresh(urlencode(params, quote_via=quote))
         pn_async_create(
             self.hass,

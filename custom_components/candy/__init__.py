@@ -50,6 +50,7 @@ from .const import (
     CONF_KEY_CHECKUP_LAST_RESULT,
     CONF_KEY_CHECKUP_PENDING,
     CONF_KEY_CHECKUP_SCHEDULE,
+    CONF_KEY_INTERFACE_TYPE,
     CONF_KEY_MAINTENANCE_ENABLED,
     CONF_KEY_MAINTENANCE_FILTER_ENABLED,
     CONF_KEY_MAINTENANCE_LAST_FILTER,
@@ -92,6 +93,7 @@ from .const import (
 from .helpers import (
     cycles_remaining,
     get_wash_error_notification_strings,
+    is_dualtech,
     localized_notification_text,
 )
 
@@ -403,59 +405,66 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     }
 
     if isinstance(coordinator.data, WashingMachineStatus):
-        last_known_statistics = _restore_last_known_statistics(
-            hass, config_entry.entry_id
-        )
+        interface_type = config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        stats_coordinator: DataUpdateCoordinator[WashingMachineStatistics] | None = None
 
-        async def update_statistics() -> WashingMachineStatistics:
-            nonlocal last_known_statistics
-            if getattr(coordinator.data, "machine_state", None) == MachineState.OFF:
-                if last_known_statistics is not None:
-                    return last_known_statistics
-                raise UpdateFailed("Machine is OFF; statistics unavailable.")
-            try:
-                async with async_timeout.timeout(40):
-                    stats = await client.statistics_with_retry()
-                    last_known_statistics = stats
-                    return stats
-            except (aiohttp.ClientError, TimeoutError, json.JSONDecodeError) as err:
-                if last_known_statistics is not None:
-                    _LOGGER.warning(
-                        "Failed to fetch statistics (%s); returning last known value.",
-                        repr(err),
-                    )
-                    return last_known_statistics
-                raise UpdateFailed(f"Error fetching statistics: {err!r}") from err
-
-        stats_coordinator = DataUpdateCoordinator(
-            hass,
-            _LOGGER,
-            name=f"{DOMAIN}_statistics",
-            update_interval=timedelta(hours=1),
-            update_method=update_statistics,
-        )
-        machine_is_off = (
-            getattr(coordinator.data, "machine_state", None) == MachineState.OFF
-        )
-        if last_known_statistics is not None:
-            # Seed the coordinator with the restored value so we skip the initial
-            # network fetch (which would retry 3× against an offline machine).
-            stats_coordinator.async_set_updated_data(last_known_statistics)
-        elif machine_is_off:
-            # Device is off — total_cycles cannot have changed, skip the fetch.
-            # The hourly poll will retrieve it once the device is reachable.
-            pass
-        else:
-            await stats_coordinator.async_refresh()
-        stats_entity_id = er.async_get(hass).async_get_entity_id(
-            "sensor", DOMAIN, UNIQUE_ID_WASH_TOTAL_CYCLES.format(config_entry.entry_id)
-        )
-        if stats_coordinator.last_update_success or stats_entity_id is not None:
-            hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_STATS_COORDINATOR] = (
-                stats_coordinator
+        if not is_dualtech(interface_type):
+            last_known_statistics = _restore_last_known_statistics(
+                hass, config_entry.entry_id
             )
 
-        if config_entry.data.get(CONF_KEY_MAINTENANCE_ENABLED):
+            async def update_statistics() -> WashingMachineStatistics:
+                nonlocal last_known_statistics
+                if getattr(coordinator.data, "machine_state", None) == MachineState.OFF:
+                    if last_known_statistics is not None:
+                        return last_known_statistics
+                    raise UpdateFailed("Machine is OFF; statistics unavailable.")
+                try:
+                    async with async_timeout.timeout(40):
+                        stats = await client.statistics_with_retry()
+                        last_known_statistics = stats
+                        return stats
+                except (aiohttp.ClientError, TimeoutError, json.JSONDecodeError) as err:
+                    if last_known_statistics is not None:
+                        _LOGGER.warning(
+                            "Failed to fetch statistics (%s); returning last known value.",
+                            repr(err),
+                        )
+                        return last_known_statistics
+                    raise UpdateFailed(f"Error fetching statistics: {err!r}") from err
+
+            stats_coordinator = DataUpdateCoordinator(
+                hass,
+                _LOGGER,
+                name=f"{DOMAIN}_statistics",
+                update_interval=timedelta(hours=1),
+                update_method=update_statistics,
+            )
+            machine_is_off = (
+                getattr(coordinator.data, "machine_state", None) == MachineState.OFF
+            )
+            if last_known_statistics is not None:
+                # Seed the coordinator with the restored value so we skip the initial
+                # network fetch (which would retry 3× against an offline machine).
+                stats_coordinator.async_set_updated_data(last_known_statistics)
+            elif machine_is_off:
+                # Device is off — total_cycles cannot have changed, skip the fetch.
+                # The hourly poll will retrieve it once the device is reachable.
+                pass
+            else:
+                await stats_coordinator.async_refresh()
+            stats_entity_id = er.async_get(hass).async_get_entity_id(
+                "sensor", DOMAIN, UNIQUE_ID_WASH_TOTAL_CYCLES.format(config_entry.entry_id)
+            )
+            if stats_coordinator.last_update_success or stats_entity_id is not None:
+                hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_STATS_COORDINATOR] = (
+                    stats_coordinator
+                )
+
+        if (
+            config_entry.data.get(CONF_KEY_MAINTENANCE_ENABLED)
+            and stats_coordinator is not None
+        ):
             unsub = _register_maintenance_notifications(
                 hass, config_entry, stats_coordinator
             )
@@ -467,12 +476,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                 unsub_checkup
             )
 
-        unsub_stats_refresh = _register_stats_refresh_listener(
-            hass, coordinator, stats_coordinator
-        )
-        hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_STATS_REFRESH_UNSUB] = (
-            unsub_stats_refresh
-        )
+        if stats_coordinator is not None:
+            unsub_stats_refresh = _register_stats_refresh_listener(
+                hass, coordinator, stats_coordinator
+            )
+            hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_STATS_REFRESH_UNSUB] = (
+                unsub_stats_refresh
+            )
 
         unsub_full_checkup = _register_full_checkup_listener(
             hass, config_entry, coordinator, stats_coordinator, client
@@ -638,7 +648,7 @@ def _register_full_checkup_listener(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     coordinator: DataUpdateCoordinator[Any],
-    stats_coordinator: DataUpdateCoordinator[WashingMachineStatistics],
+    stats_coordinator: DataUpdateCoordinator[WashingMachineStatistics] | None,
     client: CandyClient,
 ) -> Callable[[], None]:
     """Register a coordinator listener that handles Full Check-up completion."""
@@ -678,34 +688,41 @@ def _register_full_checkup_listener(
             )
             pn_async_dismiss(hass, NOTIF_ID_MAINT_FULL_CHECKUP.format(entry_id))
 
-            async def _update_baseline() -> None:
-                await stats_coordinator.async_request_refresh()
-                total: int | None = None
-                if stats_coordinator.data is not None:
-                    total = stats_coordinator.data.total_cycles
-                else:
-                    restored = _restore_last_known_statistics(hass, entry_id)
-                    if restored is not None:
-                        total = restored.total_cycles
+            if stats_coordinator is not None:
 
-                if total is not None:
-                    new_data = dict(config_entry.data)
-                    new_data[CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP] = total
-                    hass.config_entries.async_update_entry(config_entry, data=new_data)
-                    stats_coordinator.async_update_listeners()
+                async def _update_baseline() -> None:
+                    await stats_coordinator.async_request_refresh()
+                    total: int | None = None
+                    if stats_coordinator.data is not None:
+                        total = stats_coordinator.data.total_cycles
+                    else:
+                        restored = _restore_last_known_statistics(hass, entry_id)
+                        if restored is not None:
+                            total = restored.total_cycles
 
-            hass.async_create_task(_update_baseline())
+                    if total is not None:
+                        new_data = dict(config_entry.data)
+                        new_data[CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP] = total
+                        hass.config_entries.async_update_entry(
+                            config_entry, data=new_data
+                        )
+                        stats_coordinator.async_update_listeners()
+
+                hass.async_create_task(_update_baseline())
 
             if (
                 config_entry.data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL
                 and status.remote_control
             ):
+                interface_type = config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+                reset_prnm = 2 if is_dualtech(interface_type) else 11
 
                 async def _send_reset() -> None:
                     try:
                         await client.send_command(
                             urlencode(
-                                {"Write": 1, "StSt": 0, "PrNm": 11}, quote_via=quote
+                                {"Write": 1, "StSt": 0, "PrNm": reset_prnm},
+                                quote_via=quote,
                             )
                         )
                         await asyncio.sleep(5)
@@ -724,7 +741,7 @@ def _register_limescale_listener(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     coordinator: DataUpdateCoordinator[Any],
-    stats_coordinator: DataUpdateCoordinator[WashingMachineStatistics],
+    stats_coordinator: DataUpdateCoordinator[WashingMachineStatistics] | None,
 ) -> Callable[[], None]:
     """Register a coordinator listener that handles Limescale Cleaning completion."""
     if not config_entry.data.get(CONF_KEY_MAINTENANCE_LIMESCALE_ENABLED, True):
@@ -782,25 +799,27 @@ def _register_limescale_listener(
                 )
                 pn_async_dismiss(hass, NOTIF_ID_MAINT_LIMESCALE.format(entry_id))
 
-                async def _update_baseline() -> None:
-                    await stats_coordinator.async_request_refresh()
-                    total: int | None = None
-                    if stats_coordinator.data is not None:
-                        total = stats_coordinator.data.total_cycles
-                    else:
-                        restored = _restore_last_known_statistics(hass, entry_id)
-                        if restored is not None:
-                            total = restored.total_cycles
+                if stats_coordinator is not None:
 
-                    if total is not None:
-                        new_data = dict(config_entry.data)
-                        new_data[CONF_KEY_MAINTENANCE_LAST_LIMESCALE] = total
-                        hass.config_entries.async_update_entry(
-                            config_entry, data=new_data
-                        )
-                        stats_coordinator.async_update_listeners()
+                    async def _update_baseline() -> None:
+                        await stats_coordinator.async_request_refresh()
+                        total: int | None = None
+                        if stats_coordinator.data is not None:
+                            total = stats_coordinator.data.total_cycles
+                        else:
+                            restored = _restore_last_known_statistics(hass, entry_id)
+                            if restored is not None:
+                                total = restored.total_cycles
 
-                hass.async_create_task(_update_baseline())
+                        if total is not None:
+                            new_data = dict(config_entry.data)
+                            new_data[CONF_KEY_MAINTENANCE_LAST_LIMESCALE] = total
+                            hass.config_entries.async_update_entry(
+                                config_entry, data=new_data
+                            )
+                            stats_coordinator.async_update_listeners()
+
+                    hass.async_create_task(_update_baseline())
         elif curr_state in (MachineState.IDLE, MachineState.OFF):
             was_running_autoclean[0] = False
 

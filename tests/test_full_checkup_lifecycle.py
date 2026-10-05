@@ -11,6 +11,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.candy import (
+    CONF_KEY_INTERFACE_TYPE,
     CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP,
     CONF_KEY_MODE,
     CONF_KEY_PROGRAM_LANGUAGE,
@@ -561,3 +562,52 @@ async def test_full_checkup_completion_restores_from_storage_when_stats_none(
         await hass.async_block_till_done()
 
     assert entry.data[CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP] == 388
+
+
+async def test_full_checkup_completion_dualtech(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+):
+    """DualTech appliances send PrNm=2 for reset and skip stats coordinator refresh."""
+    entry = await _setup(
+        hass,
+        aioclient_mock,
+        _RUNNING_CHECKUP_JSON,
+        **{
+            CONF_KEY_INTERFACE_TYPE: "3D_DUAL",
+            CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP: 0,
+        },
+    )
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+    assert DATA_KEY_STATS_COORDINATOR not in hass.data[DOMAIN][entry.entry_id]
+
+    with (
+        patch("custom_components.candy.pn_async_create") as mock_notify,
+        patch("custom_components.candy.pn_async_dismiss") as mock_dismiss,
+        patch(
+            "custom_components.candy.client.CandyClient.send_command",
+            new_callable=AsyncMock,
+        ) as mock_send,
+        patch("custom_components.candy.asyncio.sleep") as mock_sleep,
+    ):
+        _mock_status(aioclient_mock, _COMPLETED_CHECKUP_JSON, _STATS_51_CYCLES)
+        await coordinator.async_request_refresh()
+        await hass.async_block_till_done()
+
+    # 1. Notification posted and old notification dismissed
+    mock_notify.assert_called_once()
+    mock_dismiss.assert_called_once_with(
+        hass, NOTIF_ID_MAINT_FULL_CHECKUP.format(entry.entry_id)
+    )
+
+    # 2. Stats baseline unchanged because DualTech has no statistics coordinator
+    assert entry.data[CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP] == 0
+
+    # 3. DualTech appliance reset sent with PrNm=2 (not 11)
+    mock_send.assert_called_once()
+    qs = mock_send.call_args[0][0]
+    assert "Write=1" in qs
+    assert "StSt=0" in qs
+    assert "PrNm=2" in qs
+    assert any(c.args == (5,) for c in mock_sleep.call_args_list)
+
