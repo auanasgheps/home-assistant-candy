@@ -138,16 +138,21 @@ async def async_setup_entry(
         buttons.append(WashResumeButton(coordinator, config_entry, client))
     async_add_entities(buttons)
 
-    if config_entry.data.get(CONF_KEY_MAINTENANCE_ENABLED):
+    has_maint = bool(config_entry.data.get(CONF_KEY_MAINTENANCE_ENABLED, False))
+    has_checkup = bool(config_entry.data.get(CONF_KEY_CHECKUP_ENABLED, False))
+    if has_maint or has_checkup:
         maint_buttons: list = [WashFullCheckUpButton(coordinator, config_entry, client)]
-        autoclean = next(
-            (p for p in programs if "autoclean" in p.name.lower()),
-            None,
-        )
-        if autoclean is not None:
-            maint_buttons.append(
-                WashLimescaleCleanButton(coordinator, config_entry, client, autoclean)
+        if has_maint:
+            autoclean = next(
+                (p for p in programs if "autoclean" in p.name.lower()),
+                None,
             )
+            if autoclean is not None:
+                maint_buttons.append(
+                    WashLimescaleCleanButton(
+                        coordinator, config_entry, client, autoclean
+                    )
+                )
         stats_coordinator = hass.data[DOMAIN][config_id].get(DATA_KEY_STATS_COORDINATOR)
         if stats_coordinator is not None:
             maint_buttons.append(
@@ -258,8 +263,12 @@ def _build_dualtech_start_params(
         params["StSt"] = 1
 
     effective_opt_mask = opt_mask
-    if interface_type.upper() == "3D_DUAL" and is_hoover and effective_opt_mask == 16:
-        effective_opt_mask = 128
+    if (
+        interface_type.upper().startswith("3D_DUAL")
+        and is_hoover
+        and bool(effective_opt_mask & 16)
+    ):
+        effective_opt_mask = (effective_opt_mask & ~16) | 128
 
     if not program.is_dry:
         if temp not in (program.default_temperature, 255):

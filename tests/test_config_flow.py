@@ -1509,3 +1509,53 @@ async def test_read_only_flow_with_washer_dryer_unselected(
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_KEY_IS_WASHER_DRYER] is False
     assert result["data"][CONF_KEY_MODE] == MODE_READ_ONLY
+
+
+async def test_full_control_dualtech_skips_counter_types_when_maintenance_enabled(
+    hass, no_discovery, detect_no_encryption
+):
+    """DualTech appliances skip maintenance_types and water_hardness when maintenance is enabled."""
+    dualtech_appliance = CloudApplianceData(
+        mac_address="AA:BB:CC:DD:EE:FF",
+        encryption_key="testenckey",
+        appliance_model="HBDOS695",
+        serial_number="1234567890123456",
+        purchase_date="2022-01-13",
+        interface_type="3D_DUAL",
+        programs=_MOCK_APPLIANCE.programs,
+        downloadable_programs=[],
+        brand="hoover",
+        appliance_type="washer",
+    )
+    with patch(
+        "custom_components.candy.config_flow.fetch_appliance_data",
+        new_callable=AsyncMock,
+        return_value=dualtech_appliance,
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_IP_ADDRESS: "192.168.0.66"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_KEY_MODE: MODE_FULL_CONTROL}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"email": "user@example.com", "password": "pass"},
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_KEY_PROGRAM_LANGUAGE: "en"}
+        )
+
+        assert result["type"] == data_entry_flow.FlowResultType.FORM
+        assert result["step_id"] == "maintenance"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_KEY_MAINTENANCE_ENABLED: True}
+        )
+
+        # Directly skips maintenance_types and water_hardness to checkup
+        assert result["type"] == data_entry_flow.FlowResultType.FORM
+        assert result["step_id"] == "checkup"

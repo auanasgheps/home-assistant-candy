@@ -218,9 +218,10 @@ def test_is_washer_dryer_from_entry_programs():
         ("RAPIDO_4DIG_STM_NEL", False),
         ("BIANCA_SOME_MODEL", False),
         ("", False),
+        (None, False),
     ],
 )
-def test_is_dualtech(interface_type: str, expected: bool) -> None:
+def test_is_dualtech(interface_type: str | None, expected: bool) -> None:
     assert is_dualtech(interface_type) is expected
 
 
@@ -230,11 +231,12 @@ def test_is_dualtech(interface_type: str, expected: bool) -> None:
         ("RAPIDO_4DIG_STM_NEL", True),
         ("SMART_PRO", True),
         ("", True),
+        (None, True),
         ("BIANCA_TOUCH", False),
         ("bianca_classic", False),
         ("3D_DUAL", False),
         ("3D_DUAL_BI", False),
     ],
 )
-def test_supports_remote_pause(interface_type: str, expected: bool) -> None:
+def test_supports_remote_pause(interface_type: str | None, expected: bool) -> None:
     assert supports_remote_pause(interface_type) is expected
