@@ -32,61 +32,35 @@ Fully compliant with strictly-typed Home Assistant (>= 2024.x) development stand
 
 ## 🎛️ Full Control Features
 
-Full Control mode turns the integration into a complete remote panel, going beyond status monitoring to let you program, start, and track your appliance from Home Assistant. It supports both **Washing Machines** and **Washer Dryer Combos** (see the [Compatibility Note](#compatibility-note) for supported interface families and hardware test status). The protocol was reverse-engineered from the official Candy/Simply-Fi app, and the feature set matches everything the mobile app offers.
+Full Control mode turns the integration into an interactive remote panel for **washing machines** and **washer-dryer combos**, matching and enhancing the official Simply-Fi mobile app experience directly within Home Assistant.
 
 <p float="left">
-  <img src="docs//images/dashboard_washing_machine.png" width="300" />
-  <img src="docs//images/dashboard_maintenance.png" width="300" /> 
+  <img src="docs/images/dashboard_washing_machine.png" width="300" />
+  <img src="docs/images/dashboard_maintenance.png" width="300" /> 
 </p>
 
-### How it works
+### What it provides
 
-At setup, you choose between **Read-Only** (sensors only) and **Full Control**. Full Control prompts for your Simply-Fi cloud credentials once — they are used to download the program catalog, encryption key, and device metadata, then immediately discarded and never stored. Program names, descriptions, and option labels come directly from the official app, available in 17 languages, and default to your Home Assistant language.
+- **Complete Cycle Control:** Select official localized programs, adjust temperature, spin speed, soil level, drying presets, and trigger Start, Pause, Resume, or Stop.
+- **Smart Safety Gating:** Automatically tracks the machine's physical dial position and disables controls when manual or local operation takes precedence.
+- **Proactive Maintenance & Diagnostics:** Cycle-based reminders for Full Check-up, Limescale cleaning, and Filter care with automatic reset upon cycle completion.
+- **Vendor Troubleshooting:** Automatic Home Assistant notifications with authentic step-by-step guidance when the appliance encounters a fault.
+- **Ready-to-Use Dashboards:** Pre-built Lovelace cards for standard washers, washer-dryer combos, and maintenance (see [`dashboard/`](dashboard/)).
 
-### Setup flow
+📖 **For detailed instructions, washer-dryer workflows, and safety rules, see the [Remote Control Guide](docs/remote-control.md).**
 
-1. Device is discovered automatically on the local network (or enter the IP manually).
-2. Choose mode: **Read-Only** or **Full Control**.
-3. *(Full Control)* Enter your Simply-Fi email and password — programs and device info are downloaded, credentials are discarded.
-4. Select the display language for program names and description, pick your favourite language indipendently the Home Assistant language.
-5. Optionally enable maintenance cycle counters (check-up, limescale, filter) and set water hardness.
-6. Optionally enable automatic self-diagnostic scheduling (every cycle / weekly / monthly).
+### Quick Setup
 
-### What you get
+1. **Choose Full Control:** When adding the appliance, select **Full Control** mode.
+2. **One-Time Cloud Sign-In:** Enter your Simply-Fi credentials once to download your device's program catalog and encryption key. Credentials are discarded immediately and never stored.
+3. **Customize:** Choose your preferred display language for program names and descriptions (17 languages available), and optionally configure maintenance thresholds.
 
-**Control entities:** program selector (with localized program names and descriptions), temperature, spin speed, soil level, delay start, extra switches (Prewash, Hygiene, Steam, and so on), and Start / Pause / Stop buttons. For washer-dryer combos, drying controls are also provided (wash/dry mode, dry level setting, and drying programs).
+### Key Improvements Over the Official App
 
-**Maintenance & diagnostics:** mirrors the Candy app's built-in reminders. 
-Check-up, limescale, and filter counters with configurable water hardness thresholds; self-diagnostic result sensor and last check-up timestamp. When counters reach their thresholds, persistent notifications prompt you to perform maintenance. Starting a diagnostic or limescale routine posts preparation instructions, and completing the cycle automatically resets its counter baseline and dismisses the reminder (manual reset buttons are also available as fallback; the filter counter is cleaned manually and reset via button).
-
-**Proactive error handling:** monitors appliance fault codes in real time and posts persistent Home Assistant notifications with localized vendor troubleshooting instructions (such as checking water taps, unblocking the pump filter, or adjusting laundry load balance). Notifications update dynamically if codes change and dismiss automatically when the appliance clears the error.
-
-**Remote Control status:** a dedicated sensor tracks whether the machine currently accepts remote commands, and disables every control entity while it doesn't. See [`docs/remote-control.md`](docs/remote-control.md) for details.
-
-### Improvements over the official app
-
-- **Proactive troubleshooting & reminders:** Home Assistant immediately presents vendor troubleshooting guidance on errors and clears alerts when resolved, plus manages the full maintenance notification lifecycle without opening the Simply-Fi app.
-
-- **Faster feedback:** every write command locks the controls, waits for the machine to process it, then forces an immediate refresh — so the dashboard reflects the new state in a few seconds instead of waiting for the next 60-second poll.
-- **Faster wake-up:** while the machine is off, Home Assistant polls every 20 seconds instead of 60, so it notices when the machine turns back on much sooner.
-- **Accurate end-time calculation:** The integration computes an accurate scheduled finish timestamp, accounting for all variables.
-- **Always-on visibility:** Machine state and controls are available on your dashboard without opening the app.
-- **Correct lifetime cycle count:** the official app derives total wash cycles from per-program
-  counters that are 8-bit and silently wrap at 256 — after enough washes on one program its
-  total jumps *backwards* by 256. This integration reads the wide temperature counters instead,
-  so the total keeps climbing correctly.
-
-### Dashboard cards
-
-Ready-made Lovelace cards are included in the [`dashboard/`](dashboard/) folder. 
-
-[Mushroom](https://github.com/piitaya/lovelace-mushroom) custom card is required.
-
-- [`washing-machine.yaml`](dashboard/washing-machine.yaml) — dedicated control card for **standard washing machines** (status, running cycle info, program & spin/temp/stain settings, start/pause/resume/stop buttons, and scheduled start/finish times; automatically hides pause/resume on unsupported models like 3D_DUAL).
-- [`washer-dryer.yaml`](dashboard/washer-dryer.yaml) — dedicated control card for **washer-dryer combos** (includes all washing controls plus wash/dry mode, dry level setting, dry target chip, dynamic drying icons, pause/resume/stop buttons, and drying special programs).
-- [`maintenance.yaml`](dashboard/maintenance.yaml) — maintenance card: check-up, limescale, and filter counters with reset buttons and check-up result (automatically adapts for DualTech and models without statistics).
-
-To use them, copy the appropriate card YAML into a new manual card in your Lovelace dashboard and replace every occurrence of `<machine_name>` with your own machine's entity ID prefix (e.g. `washing_machine` or `washer_dryer`).
+- **Direct Dashboard Control:** Monitor and run cycles directly from Home Assistant without opening the mobile app.
+- **Faster Responsiveness:** Fast 20-second wake-up detection when the machine turns on, plus immediate state refresh (~5s) after sending commands.
+- **Persistent Error Guidance:** Troubleshooting instructions appear right in Home Assistant and clear automatically once the machine fault is resolved.
+- **Accurate Cycle Tracking:** Fixes the vendor app's 8-bit counter overflow bug (which resets total wash counts after 256 cycles) and provides precise finish time estimates.
 
 ### Compatibility Note
 

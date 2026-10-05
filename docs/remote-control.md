@@ -1,164 +1,163 @@
-# Remote Control — Washing Machines & Washer-Dryer Combos
+# Remote Control Guide — Washing Machines & Washer-Dryers
 
-This page documents remote control operation, cycle configuration, washer-dryer differences, maintenance counters, error handling, and polling behaviour for Candy and Hoover washing machines and washer-dryer combos in Full Control mode.
+This guide explains how to use Full Control mode in Home Assistant to monitor, configure, and operate Candy and Hoover washing machines and washer-dryer combos.
 
-## Remote Control Status
+---
 
-The appliance reports whether it currently accepts remote commands via the `WiFiStatus` field in its local status telemetry. This is exposed in Home Assistant as:
+## Table of Contents
 
-- `binary_sensor.<machine>_remote_control` (diagnostic entity, `mdi:remote`)
-- The `remote_control` attribute on the main status sensor (`sensor.<machine>`)
+- [Quick Start: Enabling Remote Control](#quick-start-enabling-remote-control)
+- [Remote Control Status & Safety Gating](#remote-control-status--safety-gating)
+- [Cycle Controls (Start, Pause, Resume, Stop)](#cycle-controls-start-pause-resume-stop)
+- [Configuring Programs & Options](#configuring-programs--options)
+  - [Standard Washing Machines](#standard-washing-machines)
+  - [Washer-Dryer Combos](#washer-dryer-combos)
+- [Maintenance Counters & Diagnostics](#maintenance-counters--diagnostics)
+- [Smart Fault & Error Notifications](#smart-fault--error-notifications)
+- [Ready-Made Dashboards](#ready-made-dashboards)
+- [Behind the Scenes: Polling & Response Times](#behind-the-scenes-polling--response-times)
 
-`WiFiStatus` can report `0` (off) even while the machine is online on Wi-Fi and streaming telemetry normally. This occurs whenever the appliance is operated **physically from its front panel dial**: it stays connected to your local network and reports real-time state, but rejects incoming remote write commands until control is transferred back to the network/app position (or the running cycle completes).
+---
 
-### Gated Entities When Remote Control is Off
+## Quick Start: Enabling Remote Control
 
-Whenever Remote Control is off (or when the appliance is powered off), all entities that send write instructions to the machine become `unavailable`:
+To control your appliance from Home Assistant, remote operation must be enabled on the physical machine:
 
-- **Cycle control buttons**: Start, Pause, Resume, and Stop
-- **Program & parameter selects**: Program, Program Type, Dry Setting, Temperature, Spin Speed, and Soil Level
-- **Option switches**: Prewash, Hygiene, Steam, Anti-crease, Good Night, Extra Rinse, AquaPlus, and NFC Downloadable Programs
-- **Delay start**: Delay start duration number slider
-- **Diagnostic buttons**: Full Check-up and Limescale Cleaning start buttons
+1. Turn the appliance on.
+2. Turn the physical program dial/knob to the dedicated **Wi-Fi** or **Remote** position (depending on your model, labeled as `Wi-Fi`, `Remote Control`, or `One Touch / Wi-Fi`).
+3. Ensure the door is securely closed.
+
+When enabled, the integration reports Remote Control as active:
+- `binary_sensor.<device>_remote_control` turns **On**.
+- The `remote_control` attribute on your main status sensor (`sensor.<device>`) reports `true`.
+- All control buttons, program selectors, and option switches in Home Assistant become active and ready for use.
+
+---
+
+## Remote Control Status & Safety Gating
+
+Candy and Hoover appliances enforce local safety: **the physical dial always takes precedence over the network**.
+
+If someone turns the machine's dial to a physical wash cycle (e.g., *Cottons 60°*), the appliance switches to local mode. It continues streaming live sensor data and progress to Home Assistant, but safely ignores incoming network commands.
+
+### Which entities are gated?
+
+When Remote Control is off (or when the appliance is powered off), Home Assistant marks all command entities as `unavailable` to prevent sending commands that the machine would reject:
+
+- **Cycle buttons:** Start, Pause, Resume, and Stop
+- **Program & parameter selectors:** Program, Program Type, Dry Setting, Temperature, Spin Speed, Soil Level
+- **Option switches:** Prewash, Hygiene, Steam, Anti-Crease, Night Cycle, Extra Rinse, AquaPlus, Downloaded Programs
+- **Delay timer:** Delay start duration slider
+- **Diagnostic buttons:** Full Check-up and Limescale Cleaning buttons
 
 > [!NOTE]
-> Maintenance **counter reset buttons** remain available regardless of Remote Control status because they update config-entry baseline data locally in Home Assistant without dispatching commands to the appliance hardware.
+> **Maintenance reset buttons** remain available even when Remote Control is off or the appliance is powered off. These buttons update your maintenance counter baselines locally within Home Assistant without sending commands to the appliance.
 
 ---
 
-## Cycle Controls & Execution
+## Cycle Controls (Start, Pause, Resume, Stop)
 
-Both standard washing machines and washer-dryer combos support complete 4-state cycle control:
+The integration provides complete cycle management:
 
-- **Start (`button.<device>_start_wash`)**: Dispatches `Write=1&StSt=1` with all selected program, temperature, spin, soil, delay, and option parameters.
-- **Pause (`button.<device>_pause_wash`)**: Pauses an active cycle (`Write=1&StSt=2`).
-- **Resume (`button.<device>_resume_wash`)**: When a cycle is paused (via Home Assistant, door opening, or the physical pause button), the machine reports state `PAUSED` (`MachMd == 3`). The dedicated Resume button dispatches `Write=1&Pa=0`, continuing the cycle without resetting remaining runtime or parameters.
-- **Stop (`button.<device>_stop_wash`)**: Cancels the running cycle (`Write=1&StSt=0`).
-
----
-
-## Program Selection: Washing Machines vs Washer-Dryer Combos
-
-The integration automatically adapts its entity model based on appliance capabilities:
-
-| Feature / Capability | Standard Washing Machine | Washer-Dryer Combo (`is_washer_dryer`) |
+| Button | Entity | Description |
 |---|---|---|
-| **Program Type Selector** | Not present | `select.<device>_program_type` (`washing`, `wash_and_dry`, `drying`) |
-| **Dry Setting Selector** | Not present | `select.<device>_dry_setting` (dryness presets + timed dry) |
-| **Dry Target Sensor** | Not present | `sensor.<device>_dry_target` (live active dry preset & cooldown) |
-| **Program Filtering** | Shows all wash & special programs | Dynamically filtered according to active Program Type |
-| **Duration Estimation** | Based on wash soil level + steam offset | Includes drying target duration in wash+dry and drying modes |
-| **Scheduled Finish** | Now + delay + wash duration | Now + delay + combined wash & dry duration |
+| **Start** | `button.<device>_start_wash` | Starts the cycle with your currently selected program, temperature, spin speed, soil level, delay, and options. |
+| **Pause** | `button.<device>_pause_wash` | Pauses an active wash or dry cycle. |
+| **Resume** | `button.<device>_resume_wash` | Resumes a paused cycle (paused via Home Assistant, the front panel button, or opening the door) without losing remaining time or resetting settings. |
+| **Stop** | `button.<device>_stop_wash` | Cancels the active cycle and drains/unlocks the machine according to its built-in safety sequence. |
 
-### Standard Washing Machine Operation
+> [!TIP]
+> **Pause & Resume Compatibility:** Most modern Candy and Hoover appliances support remote Pause and Resume. However, select hardware series (such as Candy Bianca or DualTech appliances) do not support remote pause at the firmware level. On these models, Pause and Resume buttons are automatically hidden.
 
-For standard washing machines, cycle selection is straightforward:
+---
 
-1. Select the desired program via `select.<device>_wash_program` (or activate a special program via `switch.<device>_special_program`).
-2. Adjust temperature (`select.<device>_wash_temperature`), spin speed (`select.<device>_wash_spin_speed`), and soil level (`select.<device>_wash_soil_level`).
-3. Optionally enable wash option switches (e.g. Steam, Prewash, Extra Rinse) or set a delay timer.
-4. Press **Start wash**.
+## Configuring Programs & Options
 
-### Washer-Dryer Combo Operation
+The interface automatically tailors its options depending on whether your appliance is a standard washing machine or a washer-dryer combo.
 
-Washer-Dryer combo appliances provide dedicated controls to switch between washing, combined wash & dry, and standalone drying cycles (tested on the **Hoover AXI** series):
+| Feature | Standard Washing Machine | Washer-Dryer Combo |
+|---|---|---|
+| **Program Type Selector** | Not needed | `select.<device>_program_type` (Washing, Wash & Dry, Drying) |
+| **Dry Setting Selector** | Not needed | `select.<device>_dry_setting` (Dryness presets & timed dry) |
+| **Active Dry Target Sensor** | Not needed | `sensor.<device>_dry_target` (Live dry stage & cooldown) |
+| **Program List** | All wash & special cycles | Dynamically filtered based on selected Program Type |
+| **Estimated Duration** | Wash cycle + soil + steam time | Combined wash and dry estimation |
+| **Scheduled End Time** | Current time + delay + wash time | Current time + delay + combined wash & dry time |
 
-#### 1. Program Type Selection (`select.<device>_program_type`)
+### Standard Washing Machines
 
-- **Washing (`washing`)**: Standard wash cycle. The dry setting is locked to `No dry`.
-- **Wash & Dry (`wash_and_dry`)**: Seamless combined cycle that completes washing and automatically transitions into drying. The wash program selector automatically filters to only show cycles compatible with automatic drying transition (`selector_position_dry > 0`), and the dry setting defaults to `Cupboard dry`.
-- **Drying (`drying`)**: Standalone dry cycle without water wash (e.g. High Heat Dry, Low Heat Dry, Wool Dry). Spin speed and temperature selectors are automatically zeroed out, and only standalone drying programs appear in the program dropdown.
+Starting a cycle is a simple 4-step process:
 
-#### 2. Dry Setting Selection (`select.<device>_dry_setting`)
+1. **Select a program:** Choose from `select.<device>_wash_program` (or toggle a downloadable/special program).
+2. **Adjust parameters:** Customize temperature (`select.<device>_wash_temperature`), spin speed (`select.<device>_wash_spin_speed`), and soil level (`select.<device>_wash_soil_level`).
+3. **Set options & delay (optional):** Toggle option switches (e.g. Steam, Prewash, Extra Rinse) or set a delay duration slider.
+4. **Press Start:** Tap `button.<device>_start_wash`.
 
-Controls the target drying dryness level or timed duration dispatched to the machine (`Dry` wire parameter):
+### Washer-Dryer Combos
 
-- **Dryness Presets**: `Cupboard dry` (`Dry=2`, standard default), `Iron dry` (`Dry=3`), or `Extra dry` (`Dry=1`).
-- **Timed Drying**: `30 minutes` (`Dry=8`), `60 minutes` (`Dry=7`), `90 minutes` (`Dry=6`), or `120 minutes` (`Dry=5`).
-- **`No dry` (`Dry=0`)**: Used when operating in standard `washing` mode.
-- **Dynamic Safety Gating**: Selecting an incompatible wash cycle (such as Delicates or Rapid cycles that do not support drying) automatically clamps the dry setting back to `No dry`. In standalone `drying` mode, `No dry` is hidden.
-- **Running Lockout**: The dry setting selector reports `unavailable` while the appliance is running (`MachMd == 2`).
+Washer-dryer combos offer dedicated controls to seamlessly handle washing, combined wash & dry, and standalone drying cycles:
 
-#### 3. Start Command Safety on Drying Cycles
+#### 1. Choose the Program Type (`select.<device>_program_type`)
+- **Washing:** Standard wash cycle only. The dry setting is locked to *No dry*.
+- **Wash & Dry:** Automatic continuous cycle that washes and immediately transitions into drying. The program selector automatically filters to show only programs compatible with continuous drying, and sets the default dry setting to *Cupboard dry*.
+- **Drying:** Standalone dry cycle without water washing. Only dedicated drying cycles (e.g. High Heat, Low Heat, Wool Dry) appear in the program dropdown.
 
-When starting a standalone drying program (`program.is_dry`), the integration automatically sets target temperature, spin speed, and soil level to `0` (`TmpTgt=0`, `SpdTgt=0`, `SLevTgt=0`), matching Simply-Fi hardware protocol requirements regardless of any previous wash selections.
+#### 2. Select the Dry Setting (`select.<device>_dry_setting`)
+Choose your target drying level or timed duration:
+- **Dryness Presets:** `Cupboard dry` (standard default), `Iron dry`, or `Extra dry`.
+- **Timed Drying:** `30 minutes`, `60 minutes`, `90 minutes`, or `120 minutes`.
+- **`No dry`:** Used when operating in standard wash-only mode.
 
-#### 4. Live Telemetry: Dry Target Sensor (`sensor.<device>_dry_target`)
-
-Reflects the machine's real-time active dry target (`DryT`), including intermediate drying phases and the drum `cooldown` phase at the end of drying.
+#### 3. Automatic Safeguards
+- **Incompatible Program Protection:** Selecting a wash cycle that cannot be machine-dried (such as Delicates or Rapid cycles) automatically reverts the dry setting to *No dry*.
+- **Automatic Parameter Zeroing:** When starting a standalone drying program, the integration automatically zeroes out wash temperature, spin speed, and soil levels so the machine accepts the drying instruction without errors.
+- **Running Lockout:** Dry settings cannot be modified while a cycle is actively running.
+- **Cool-down Monitoring:** The `sensor.<device>_dry_target` sensor reports the active drying target and tracks the drum cooldown phase at the end of drying.
 
 ---
 
 ## Maintenance Counters & Diagnostics
 
-Three maintenance counters mirror the Simply-Fi app's built-in reminders. All three are driven by the **cumulative total wash cycle count** reported by the device's statistics endpoint — not by elapsed calendar time.
+The integration tracks cycle counts and alerts you when periodic maintenance is needed, mirroring the official app's reminders:
 
-| Counter | Threshold | Cycle to run | Auto-reset? |
+| Routine | Threshold | Recommended Action | Reset Behavior |
 |---|---|---|---|
-| **Check-up** | 100 cycles (fixed) | Full Check-up button | Yes — automatic on completion (manual button fallback) |
-| **Limescale** | 85–110 cycles, based on water hardness | Limescale Cleaning button (`AUTOCLEAN`) | Yes — automatic on completion (manual button fallback) |
-| **Filter** | 100 cycles (fixed) | Physical cleaning required | No — manual reset button |
+| **Full Check-up** | Every 100 cycles | Run diagnostic via `button.<device>_full_checkup` | **Automatic:** Resets when test completes (manual reset button fallback available) |
+| **Limescale Cleaning** | Every 85–110 cycles (based on water hardness) | Run autoclean via `button.<device>_limescale_cleaning` | **Automatic:** Resets when autoclean completes (manual reset button fallback available) |
+| **Filter Cleaning** | Every 100 cycles | Physically inspect and clean the debris filter | **Manual:** Press `button.<device>_reset_filter_counter` after cleaning |
 
-### Maintenance Resets and Lifecycle
-
-- **Full Check-up**: Resets its counter automatically when the cycle completes successfully (`CheckUpState == 2`). Home Assistant posts a completion notification matching the Simply-Fi app, clears any active check-up reminder, commits the updated `total_cycles` baseline, and resets the appliance diagnostic register. A manual reset button is also available as a fallback.
-- **Limescale Cleaning**: Resets its counter automatically when the `AUTOCLEAN` cycle completes successfully (`MachMd` reaches `FINISHED1` or `FINISHED2` without errors). Home Assistant dismisses any active limescale reminder, posts a cycle completion notification (matching the Simply-Fi app), commits the updated `total_cycles` baseline, and refreshes statistics. A manual reset button is also available as a fallback.
-- **Filter**: Requires manual reset. Cleaning the pump filter is a physical task without machine feedback; after cleaning, press the matching **Filter maintenance reset** button.
-
-Each reset button writes the current `total_cycles` value into the config entry as the new baseline (`CONF_KEY_MAINTENANCE_LAST_FULL_CHECKUP` / `_LIMESCALE` / `_FILTER`). The remaining-cycles sensor is a clamp: once a counter reaches 0 it stays at 0 (and keeps re-firing its notification) on every subsequent wash until reset, rather than silently restarting.
-
-### Maintenance Notifications
-
-- **Due reminders**: When any maintenance counter reaches 0 remaining cycles, Home Assistant posts a persistent notification prompting you to perform the required maintenance. Messages are fully localized in your chosen language.
-- **Start instructions**: When starting a Full Check-up or Limescale Cleaning cycle from Home Assistant, a notification is posted with official preparation instructions (e.g. running the drum empty, adding descaling solution).
-- **Completion notices & auto-dismissal**: When a Full Check-up or Limescale Cleaning cycle finishes successfully without errors, Home Assistant posts a completion notification and automatically dismisses the active due reminder.
+### How Maintenance Lifecycle Works
+- **Due Alerts:** When a counter reaches 0 remaining cycles, Home Assistant posts a persistent notification in your language. The counter stays at 0 (and keeps you reminded) until reset.
+- **Cycle Preparation Guidance:** When you start a Full Check-up or Limescale Cleaning cycle from Home Assistant, a notification appears with official preparation instructions (e.g. ensuring drum is empty, adding descaler).
+- **Automatic Completion & Dismissal:** Once a Check-up or Limescale Cleaning cycle finishes successfully, Home Assistant automatically updates the counter baseline, clears the alert, and notifies you of successful completion.
 
 ---
 
-## Fault & Error Code Handling
+## Smart Fault & Error Notifications
 
-When the appliance reports an operational fault or hardware issue (`Err` code in telemetry), Home Assistant automatically captures the error and displays a persistent notification:
+When the appliance reports a problem (such as an error code):
 
-- **Official troubleshooting steps**: Rather than displaying an obscure error code, the notification provides authentic vendor troubleshooting instructions extracted directly from Simply-Fi resources (e.g. checking water pressure and inlet tap, cleaning pump filter, checking drain hose, or balancing load).
-- **Localized guidance**: Troubleshooting instructions match your configured appliance language (or Home Assistant language).
-- **Dynamic updates**: If the machine's reported error code changes while a fault is active, the persistent notification updates in-place.
-- **Automatic dismissal**: Once the issue is resolved on the appliance and the error code clears (`Err` returns to 0), Home Assistant automatically clears and dismisses the notification.
-- **Universal availability**: Error notifications run for all washing machines and washer-dryers in both Read-Only and Full Control modes.
-- **Washer-Dryer specific faults**: Faults such as `E12` (drying system fault) provide specific troubleshooting guidance to restart drying or verify airflow.
+- **Vendor Troubleshooting Steps:** Home Assistant displays a persistent notification with official, step-by-step guidance translated into your configured language (e.g., checking water pressure, clearing the inlet filter, balancing the load, or unblocking the pump).
+- **Real-Time Updates:** If the machine's reported error code changes, the notification automatically updates with the new diagnosis.
+- **Auto-Dismissal:** As soon as you resolve the issue on the appliance and the machine clears the fault, the notification automatically dismisses itself.
+- **Washer-Dryer Diagnostics:** Specific faults (such as drying airflow issues) include tailored advice to check ventilation or cool-down.
 
 ---
 
-## Dashboard Integration
+## Ready-Made Dashboards
 
-Ready-made control cards are provided in the [`dashboard/`](../dashboard/) directory:
+Pre-configured Lovelace dashboard cards are available in the [`dashboard/`](../dashboard/) directory (requires the [Mushroom](https://github.com/piitaya/lovelace-mushroom) card):
 
-- **Standard Washing Machines** ([`dashboard/washing-machine.yaml`](../dashboard/washing-machine.yaml)): Displays cycle control buttons (Start, Pause, Resume, Stop), wash program selector, temperature/spin/soil controls, detergent dosing chips, and scheduled start/finish chips. Automatically hides Pause and Resume on appliances without remote pause support (e.g. `3D_DUAL`, `DUALTECH`, `BIANCA`).
-- **Washer-Dryer Combos** ([`dashboard/washer-dryer.yaml`](../dashboard/washer-dryer.yaml)): Includes all washing machine controls (Start, Pause, Resume, Stop) plus wash/dry mode selector (`select.<device>_program_type`), dry setting selector (`select.<device>_dry_setting`), live **Dry target** telemetry chips during active drying, dynamic washing/tumble-dryer icon transitions, and drying special programs.
-- **Maintenance & Diagnostics** ([`dashboard/maintenance.yaml`](../dashboard/maintenance.yaml)): Dedicated card for diagnostic triggers (Full Check-up, Limescale Cleaning), cycle counter tracking, and recent check-up test results. Automatically adapts for DualTech appliances (where cycle-derived counters and reset buttons are omitted while diagnostic triggers remain active).
+- **[Standard Washing Machine Card](../dashboard/washing-machine.yaml):** Full control panel with program selection, spin/temp adjustments, start/pause/stop buttons, detergent dosing chips, and finish time estimates.
+- **[Washer-Dryer Card](../dashboard/washer-dryer.yaml):** All washing controls plus program type switching (wash/dry/both), dry setting selectors, live dry target chips, and animated drying state icons.
+- **[Maintenance & Diagnostics Card](../dashboard/maintenance.yaml):** Live counter progress bars, one-click diagnostic test buttons, and counter reset controls.
 
 ---
 
-## Polling Behaviour
+## Behind the Scenes: Polling & Response Times
 
-The coordinator adapts its polling interval based on device reachability and write operations:
+The integration is optimized to balance fast dashboard feedback with minimal network traffic:
 
-| Situation | Interval | Purpose |
-|---|---|---|
-| **Machine reachable (active)** | 60 s | Regular status updates during normal operation |
-| **Machine unreachable / Off** | 20 s | Fast wake-up detection without overloading the network |
-| **Post-command settling** | ~5 s | Settling window allowing the appliance firmware to apply changes |
-
-### Normal and Resting Intervals
-
-`coordinator.update_interval` adapts dynamically: 60 seconds while fetches succeed, dropping to 20 seconds once the appliance is powered off or disconnected. Connection failures are treated as "powered off" rather than errors using a synthetic offline status, ensuring fast wake-up detection when you turn on the machine.
-
-### Post-Command Refresh
-
-Write commands (Start, Pause, Resume, Stop, Full Check-up, Limescale Cleaning, and parameter changes) do not wait for the next scheduled poll:
-
-1. A `write_pending` counter is incremented and coordinator listeners are notified immediately — every gated control goes `unavailable` for the duration.
-2. The command is dispatched to the appliance.
-3. The integration pauses 5 seconds, giving appliance firmware time to process the instruction before polling.
-4. The counter is decremented; once it reaches zero, a coordinator refresh is requested, pulling the updated appliance state.
-5. Overlapping commands share the counter, preventing premature unlocking while any command is still settling.
-
+- **Instant Command Settling (~5 seconds):** When you tap a button (such as Start or Pause), Home Assistant temporarily disables the controls for 5 seconds. This brief window gives the appliance firmware time to acknowledge the command and update its internal state before Home Assistant requests a fresh status update.
+- **Active Polling (60 seconds):** While the appliance is turned on and connected, Home Assistant refreshes telemetry every 60 seconds.
+- **Fast Wake-up Detection (20 seconds):** When the machine is turned off or in standby, the integration checks every 20 seconds. This allows Home Assistant to detect when you turn on the appliance at the dial almost immediately without overloading your local network.
