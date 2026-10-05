@@ -146,9 +146,7 @@ async def async_setup_entry(
         )
         if autoclean is not None:
             maint_buttons.append(
-                WashLimescaleCleanButton(
-                    coordinator, config_entry, client, autoclean
-                )
+                WashLimescaleCleanButton(coordinator, config_entry, client, autoclean)
             )
         stats_coordinator = hass.data[DOMAIN][config_id].get(DATA_KEY_STATS_COORDINATOR)
         if stats_coordinator is not None:
@@ -771,9 +769,7 @@ class WashFullCheckUpButton(CandyWashButtonBase):
             if is_dualtech(interface_type)
             else {"CheckUpState": 1}
         )
-        await self._send_command_and_refresh(
-            urlencode(cmd, quote_via=quote)
-        )
+        await self._send_command_and_refresh(urlencode(cmd, quote_via=quote))
         lang = self.config_entry.data.get(
             CONF_KEY_PROGRAM_LANGUAGE, self.hass.config.language
         )

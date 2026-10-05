@@ -506,6 +506,9 @@ cards:
               state_not:
                 - "Off"
                 - "off"
+            - condition: state
+              entity: button.<machine_name>_pause_wash
+              state_not: unavailable
           card:
             type: custom:mushroom-template-card
             primary: Pause
@@ -529,6 +532,9 @@ cards:
               state_not:
                 - "Off"
                 - "off"
+            - condition: state
+              entity: button.<machine_name>_resume_wash
+              state_not: unavailable
           card:
             type: custom:mushroom-template-card
             primary: Resume
