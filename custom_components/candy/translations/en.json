@@ -179,6 +179,15 @@
     "binary_sensor": {
       "remote_control": {
         "name": "Remote control"
+      },
+      "door": {
+        "name": "Door"
+      },
+      "clean_filter": {
+        "name": "Clean filter"
+      },
+      "water_tank_full": {
+        "name": "Water tank full"
       }
     },
     "sensor": {
@@ -305,6 +314,21 @@
       "tumble_program": {
         "name": "Dryer program"
       },
+      "tumble_dry_level": {
+        "name": "Dry level",
+        "state": {
+          "iron_dry": "Iron dry",
+          "hang_dry": "Hang dry",
+          "store_dry": "Store dry",
+          "bone_dry": "Bone dry"
+        }
+      },
+      "tumble_error": {
+        "name": "Dryer error"
+      },
+      "tumble_checkup_state": {
+        "name": "Check-up state"
+      },
       "oven": {
         "name": "Oven"
       },
@@ -382,10 +406,36 @@
           "60_minutes": "60 minutes",
           "30_minutes": "30 minutes"
         }
+      },
+      "dryer_program_select": {
+        "name": "Dryer program"
+      },
+      "dryer_level_select": {
+        "name": "Dry level",
+        "state": {
+          "iron_dry": "Iron dry",
+          "hang_dry": "Hang dry",
+          "store_dry": "Store dry",
+          "bone_dry": "Bone dry"
+        }
+      },
+      "dryer_time_select": {
+        "name": "Timed drying",
+        "state": {
+          "off": "Off",
+          "30": "30 minutes",
+          "45": "45 minutes",
+          "60": "60 minutes",
+          "90": "90 minutes",
+          "120": "120 minutes"
+        }
       }
     },
     "number": {
       "wash_delay_number": {
+        "name": "Delay"
+      },
+      "dryer_delay_number": {
         "name": "Delay"
       }
     },
@@ -448,6 +498,27 @@
       },
       "wash_maint_filter_reset": {
         "name": "Filter maintenance reset"
+      },
+      "dryer_start_button": {
+        "name": "Start drying"
+      },
+      "dryer_pause_button": {
+        "name": "Pause drying"
+      },
+      "dryer_resume_button": {
+        "name": "Resume drying"
+      },
+      "dryer_stop_button": {
+        "name": "Stop drying"
+      },
+      "dryer_anti_crease_cancel_button": {
+        "name": "Cancel anti-crease"
+      },
+      "dryer_checkup_button": {
+        "name": "Check-up"
+      },
+      "dryer_reset_warnings_button": {
+        "name": "Reset warnings"
       }
     }
   },

@@ -29,7 +29,7 @@ from .client import (
 )
 from .client.cloud import SimplyFiCloudError, fetch_appliance_data
 from .client.decryption import Encryption
-from .client.model import WashingMachineStatus
+from .client.model import TumbleDryerStatus, WashingMachineStatus
 from .const import (
     CHECKUP_SCHEDULE_EVERY_CYCLE,
     CHECKUP_SCHEDULE_MONTHLY,
@@ -42,6 +42,7 @@ from .const import (
     CONF_KEY_DEVICE_MODEL,
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
     CONF_KEY_INTERFACE_TYPE,
+    CONF_KEY_IS_TUMBLE_DRYER,
     CONF_KEY_IS_WASHER_DRYER,
     CONF_KEY_IS_WASHING_MACHINE,
     CONF_KEY_MAC_ADDRESS,
@@ -259,18 +260,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 if user_input["next_step"] == "checkup_settings":
                     return await self.async_step_checkup()
                 return await self.async_step_update_cloud_data()
+            options = ["update_cloud_data", "switch_to_read_only"]
+            if is_washing_machine:
+                options.append("maintenance_settings")
+            options.append("checkup_settings")
             return self.async_show_form(
                 step_id="init",
                 data_schema=vol.Schema(
                     {
                         vol.Required("next_step"): SelectSelector(
                             SelectSelectorConfig(
-                                options=[
-                                    "update_cloud_data",
-                                    "switch_to_read_only",
-                                    "maintenance_settings",
-                                    "checkup_settings",
-                                ],
+                                options=options,
                                 mode=SelectSelectorMode.LIST,
                                 translation_key="next_step",
                             )
@@ -705,6 +705,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
         self._ip_address: str = ""
         self._config_data: dict[str, Any] = {}  # accumulated config entry data
         self._is_washing_machine: bool = False
+        self._is_tumble_dryer: bool = False
         self._total_cycles: int = (
             0  # fetched once after device probe; used for baselines
         )
@@ -806,6 +807,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
             async with async_timeout.timeout(10):
                 status = await client.status()
             self._is_washing_machine = isinstance(status, WashingMachineStatus)
+            self._is_tumble_dryer = isinstance(status, TumbleDryerStatus)
             if self._is_washing_machine:
                 try:
                     async with async_timeout.timeout(20):
@@ -817,11 +819,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
                     )
                     self._total_cycles = 0
         except Exception:  # pylint: disable=broad-except
-            _LOGGER.debug("Device type probe failed, assuming non-washing-machine")
+            _LOGGER.debug("Device type probe failed, assuming non-controllable machine")
             self._is_washing_machine = False
+            self._is_tumble_dryer = False
 
         if self._is_washing_machine:
             self._config_data[CONF_KEY_IS_WASHING_MACHINE] = True
+        if self._is_tumble_dryer:
+            self._config_data[CONF_KEY_IS_TUMBLE_DRYER] = True
 
         return await self.async_step_mode()
 
@@ -829,7 +834,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Ask the user whether they want Read-Only or Full Control mode."""
-        if not self._is_washing_machine:
+        if not (self._is_washing_machine or self._is_tumble_dryer):
             self._config_data[CONF_KEY_MODE] = MODE_READ_ONLY
             return self.async_create_entry(
                 title=CONF_INTEGRATION_TITLE, data=self._config_data
@@ -845,7 +850,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
             return await self.async_step_cloud()
 
         # Read-only washing machine: ask whether appliance is a washer-dryer
-        return await self.async_step_washer_dryer()
+        if self._is_washing_machine:
+            return await self.async_step_washer_dryer()
+
+        return self.async_create_entry(
+            title=CONF_INTEGRATION_TITLE, data=self._config_data
+        )
 
     async def async_step_washer_dryer(
         self, user_input: dict[str, Any] | None = None
@@ -921,11 +931,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
             self._config_data[CONF_KEY_APPLIANCE_TYPE] = appliance.appliance_type
             if appliance.appliance_type == "washer_dryer":
                 self._config_data[CONF_KEY_IS_WASHER_DRYER] = True
-        try:
-            if any(p.is_dry for p in parse_wash_programs(appliance.programs)):
-                self._config_data[CONF_KEY_IS_WASHER_DRYER] = True
-        except (KeyError, TypeError, ValueError):
-            pass
+        if not self._is_tumble_dryer:
+            try:
+                if any(p.is_dry for p in parse_wash_programs(appliance.programs)):
+                    self._config_data[CONF_KEY_IS_WASHER_DRYER] = True
+            except (KeyError, TypeError, ValueError):
+                pass
 
         return await self.async_step_language()
 
@@ -948,6 +959,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
         self._config_data[CONF_KEY_PROGRAM_LANGUAGE] = user_input[
             CONF_KEY_PROGRAM_LANGUAGE
         ]
+        if self._is_tumble_dryer:
+            if self._config_data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
+                return await self.async_step_checkup()
+            return self.async_create_entry(
+                title=CONF_INTEGRATION_TITLE, data=self._config_data
+            )
         return await self.async_step_maintenance()
 
     async def async_step_maintenance(

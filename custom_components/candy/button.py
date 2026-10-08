@@ -22,10 +22,14 @@ from homeassistant.util import dt as dt_util
 from .client import (
     CandyClient,
     DownloadableProgram,
+    TumbleDryerProgram,
+    TumbleDryerStatus,
     WashingMachineStatistics,
     WashingMachineStatus,
     WashingMachineWashProgram,
+    get_dryer_command_builder,
     load_downloadable_programs,
+    parse_dryer_programs,
     parse_wash_programs,
     resolve_downloadable_programs,
 )
@@ -54,11 +58,23 @@ from .const import (
     DATA_KEY_STATS_COORDINATOR,
     DATA_KEY_WRITE_PENDING,
     DOMAIN,
+    DRY_LEVEL_TO_VALUE,
     DRY_TARGET_TO_VALUE,
     MODE_FULL_CONTROL,
     NOTIF_ID_FULL_CHECKUP,
     NOTIF_ID_LIMESCALE,
     SOIL_LABELS_REVERSE,
+    UNIQUE_ID_TUMBLE_ANTI_CREASE_BUTTON,
+    UNIQUE_ID_TUMBLE_CHECKUP_BUTTON,
+    UNIQUE_ID_TUMBLE_DELAY_NUMBER,
+    UNIQUE_ID_TUMBLE_DRY_LEVEL_SELECT,
+    UNIQUE_ID_TUMBLE_PAUSE_BUTTON,
+    UNIQUE_ID_TUMBLE_PROGRAM_SELECT,
+    UNIQUE_ID_TUMBLE_RESET_WARNINGS_BUTTON,
+    UNIQUE_ID_TUMBLE_RESUME_BUTTON,
+    UNIQUE_ID_TUMBLE_START_BUTTON,
+    UNIQUE_ID_TUMBLE_STOP_BUTTON,
+    UNIQUE_ID_TUMBLE_TIME_SELECT,
     UNIQUE_ID_WASH_DELAY_NUMBER,
     UNIQUE_ID_WASH_DRY_SELECT,
     UNIQUE_ID_WASH_FULL_CHECKUP_BUTTON,
@@ -79,6 +95,7 @@ from .const import (
     WASH_OPTIONS,
 )
 from .helpers import (
+    dryer_device_info,
     is_dualtech,
     is_washer_dryer,
     localized_notification_text,
@@ -116,6 +133,25 @@ async def async_setup_entry(
     coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config_id][
         DATA_KEY_COORDINATOR
     ]
+    if isinstance(coordinator.data, TumbleDryerStatus):
+        dryer_client: CandyClient = hass.data[DOMAIN][config_id][DATA_KEY_CLIENT]
+        raw_programs = config_entry.data.get(CONF_KEY_PROGRAMS, [])
+        dryer_programs = parse_dryer_programs(raw_programs)
+
+        dryer_buttons: list[ButtonEntity] = [
+            CandyDryerStartButton(
+                coordinator, config_entry, dryer_client, dryer_programs
+            ),
+            CandyDryerStopButton(coordinator, config_entry, dryer_client),
+            CandyDryerPauseButton(coordinator, config_entry, dryer_client),
+            CandyDryerResumeButton(coordinator, config_entry, dryer_client),
+            CandyDryerAntiCreaseCancelButton(coordinator, config_entry, dryer_client),
+            CandyDryerCheckUpButton(coordinator, config_entry, dryer_client),
+            CandyDryerResetWarningsButton(coordinator, config_entry, dryer_client),
+        ]
+        async_add_entities(dryer_buttons)
+        return
+
     if not isinstance(coordinator.data, WashingMachineStatus):
         return
 
@@ -868,3 +904,292 @@ class WashLimescaleCleanButton(CandyWashButtonBase):
             title=localized_notification_text("limescale_title", lang),
             notification_id=NOTIF_ID_LIMESCALE.format(self.config_id),
         )
+
+
+class CandyDryerButtonBase(CoordinatorEntity, ButtonEntity):
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        client: CandyClient,
+    ) -> None:
+        super().__init__(coordinator)
+        self.config_entry = config_entry
+        self.config_id = config_entry.entry_id
+        self._client = client
+
+    @property
+    def available(self) -> bool:
+        return self.hass.data[DOMAIN][self.config_id].get(
+            DATA_KEY_WRITE_PENDING, 0
+        ) == 0 and remote_control_enabled(self.coordinator.data)
+
+    async def _send_command_and_refresh(self, query_string: str) -> None:
+        data = self.hass.data[DOMAIN][self.config_id]
+        data[DATA_KEY_WRITE_PENDING] = data.get(DATA_KEY_WRITE_PENDING, 0) + 1
+        self.coordinator.async_update_listeners()
+        try:
+            await self._client.send_command(query_string)
+            await asyncio.sleep(5)
+        except Exception:
+            await asyncio.sleep(5)
+            raise
+        finally:
+            data[DATA_KEY_WRITE_PENDING] -= 1
+            if data[DATA_KEY_WRITE_PENDING] == 0:
+                await self.coordinator.async_request_refresh()
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return dryer_device_info(self.config_entry)
+
+
+class CandyDryerStartButton(CandyDryerButtonBase):
+    _attr_translation_key = "dryer_start_button"
+    _attr_icon = "mdi:play-circle-outline"
+
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        client: CandyClient,
+        programs: list[TumbleDryerProgram],
+    ) -> None:
+        super().__init__(coordinator, config_entry, client)
+        self._programs = programs
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_START_BUTTON.format(self.config_id)
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        status = cast(TumbleDryerStatus, self.coordinator.data)
+        return (
+            status.machine_state
+            in (
+                MachineState.IDLE,
+                MachineState.OFF,
+                MachineState.FINISHED1,
+                MachineState.FINISHED2,
+            )
+            and status.door_closed
+        )
+
+    async def async_press(self) -> None:
+        registry = er.async_get(self.hass)
+
+        def _get_select_state(unique_id_template: str) -> str | None:
+            entity_id = registry.async_get_entity_id(
+                "select", DOMAIN, unique_id_template.format(self.config_id)
+            )
+            if entity_id is None:
+                return None
+            state = self.hass.states.get(entity_id)
+            return (
+                state.state
+                if state and state.state not in ("unavailable", "unknown")
+                else None
+            )
+
+        def _get_number_state(unique_id_template: str) -> float:
+            entity_id = registry.async_get_entity_id(
+                "number", DOMAIN, unique_id_template.format(self.config_id)
+            )
+            if entity_id is None:
+                return 0.0
+            state = self.hass.states.get(entity_id)
+            try:
+                return (
+                    float(state.state)
+                    if state and state.state not in ("unavailable", "unknown")
+                    else 0.0
+                )
+            except (ValueError, TypeError):
+                return 0.0
+
+        program_name = _get_select_state(UNIQUE_ID_TUMBLE_PROGRAM_SELECT)
+        dry_level_option = _get_select_state(UNIQUE_ID_TUMBLE_DRY_LEVEL_SELECT)
+        time_option = _get_select_state(UNIQUE_ID_TUMBLE_TIME_SELECT)
+        delay_minutes = int(_get_number_state(UNIQUE_ID_TUMBLE_DELAY_NUMBER))
+
+        lang = self.config_entry.data.get(
+            CONF_KEY_PROGRAM_LANGUAGE, self.hass.config.language
+        )
+        program = next(
+            (p for p in self._programs if p.localized_name(lang) == program_name),
+            None,
+        )
+        if program is None:
+            if self._programs:
+                program = self._programs[0]
+            else:
+                raise ValueError("No dryer program available to start")
+
+        dry_level = DRY_LEVEL_TO_VALUE.get(
+            dry_level_option or "", program.default_drying_level
+        )
+
+        builder = get_dryer_command_builder(
+            self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        )
+
+        if delay_minutes > 0:
+            params = builder.build_delay_start(
+                program.selector_position, dry_level, delay_minutes
+            )
+        elif time_option is not None and time_option.isdigit() and int(time_option) > 0:
+            params = builder.build_timed_start(
+                program.selector_position, int(time_option)
+            )
+        else:
+            params = builder.build_standard_start(program.selector_position, dry_level)
+
+        await self._send_command_and_refresh(urlencode(params, quote_via=quote))
+
+
+class CandyDryerStopButton(CandyDryerButtonBase):
+    _attr_translation_key = "dryer_stop_button"
+    _attr_icon = "mdi:stop-circle-outline"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_STOP_BUTTON.format(self.config_id)
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        status = cast(TumbleDryerStatus, self.coordinator.data)
+        return status.machine_state not in {MachineState.IDLE, MachineState.OFF}
+
+    async def async_press(self) -> None:
+        status = cast(TumbleDryerStatus, self.coordinator.data)
+        builder = get_dryer_command_builder(
+            self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        )
+        params = builder.build_stop(status.program)
+        await self._send_command_and_refresh(urlencode(params, quote_via=quote))
+
+
+class CandyDryerPauseButton(CandyDryerButtonBase):
+    _attr_translation_key = "dryer_pause_button"
+    _attr_icon = "mdi:pause-circle-outline"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_PAUSE_BUTTON.format(self.config_id)
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        status = cast(TumbleDryerStatus, self.coordinator.data)
+        return status.machine_state == MachineState.RUNNING
+
+    async def async_press(self) -> None:
+        builder = get_dryer_command_builder(
+            self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        )
+        params = builder.build_pause()
+        await self._send_command_and_refresh(urlencode(params, quote_via=quote))
+
+
+class CandyDryerResumeButton(CandyDryerButtonBase):
+    _attr_translation_key = "dryer_resume_button"
+    _attr_icon = "mdi:play-circle-outline"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_RESUME_BUTTON.format(self.config_id)
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        status = cast(TumbleDryerStatus, self.coordinator.data)
+        return status.machine_state == MachineState.PAUSED
+
+    async def async_press(self) -> None:
+        builder = get_dryer_command_builder(
+            self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        )
+        params = builder.build_resume()
+        await self._send_command_and_refresh(urlencode(params, quote_via=quote))
+
+
+class CandyDryerAntiCreaseCancelButton(CandyDryerButtonBase):
+    _attr_translation_key = "dryer_anti_crease_cancel_button"
+    _attr_icon = "mdi:cancel"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_ANTI_CREASE_BUTTON.format(self.config_id)
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        status = cast(TumbleDryerStatus, self.coordinator.data)
+        return status.machine_state in {MachineState.FINISHED1, MachineState.FINISHED2}
+
+    async def async_press(self) -> None:
+        builder = get_dryer_command_builder(
+            self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        )
+        params = builder.build_cancel_anticrease()
+        await self._send_command_and_refresh(urlencode(params, quote_via=quote))
+
+
+class CandyDryerCheckUpButton(CandyDryerButtonBase):
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_translation_key = "dryer_checkup_button"
+    _attr_icon = "mdi:stethoscope"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_CHECKUP_BUTTON.format(self.config_id)
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        status = cast(TumbleDryerStatus, self.coordinator.data)
+        return status.machine_state == MachineState.IDLE and status.door_closed
+
+    async def async_press(self) -> None:
+        builder = get_dryer_command_builder(
+            self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        )
+        params = builder.build_checkup_start()
+        await self._send_command_and_refresh(urlencode(params, quote_via=quote))
+
+
+class CandyDryerResetWarningsButton(CandyDryerButtonBase):
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_translation_key = "dryer_reset_warnings_button"
+    _attr_icon = "mdi:alert-remove-outline"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_RESET_WARNINGS_BUTTON.format(self.config_id)
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        status = cast(TumbleDryerStatus, self.coordinator.data)
+        return status.need_clean_filter or status.water_tank_full
+
+    async def async_press(self) -> None:
+        builder = get_dryer_command_builder(
+            self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        )
+        params = builder.build_reset_warnings()
+        await self._send_command_and_refresh(urlencode(params, quote_via=quote))

@@ -151,6 +151,7 @@ DRY_TARGET_DURATIONS: dict[str, int] = {
 
 CONF_KEY_IS_WASHING_MACHINE = "is_washing_machine"
 CONF_KEY_IS_WASHER_DRYER = "is_washer_dryer"
+CONF_KEY_IS_TUMBLE_DRYER = "is_tumble_dryer"
 CONF_KEY_INTERFACE_TYPE = "interface_type"
 
 CONF_KEY_MAINTENANCE_ENABLED = "maintenance_enabled"
@@ -240,6 +241,52 @@ UNIQUE_ID_TUMBLE_DRYER = "{0}-tumble_dryer"
 UNIQUE_ID_TUMBLE_PROGRAM = "{0}-tumble_program"
 UNIQUE_ID_TUMBLE_CYCLE_STATUS = "{0}-tumble_cycle_status"
 UNIQUE_ID_TUMBLE_REMAINING_TIME = "{0}-tumble_remaining_time"
+UNIQUE_ID_TUMBLE_DRY_LEVEL = "{0}-tumble_dry_level"
+UNIQUE_ID_TUMBLE_ERROR = "{0}-tumble_error"
+UNIQUE_ID_TUMBLE_CHECKUP_STATE = "{0}-tumble_checkup_state"
+
+UNIQUE_ID_TUMBLE_REMOTE_CONTROL = "{0}-tumble_remote_control"
+UNIQUE_ID_TUMBLE_DOOR = "{0}-tumble_door"
+UNIQUE_ID_TUMBLE_CLEAN_FILTER = "{0}-tumble_clean_filter"
+UNIQUE_ID_TUMBLE_WATER_TANK = "{0}-tumble_water_tank"
+
+UNIQUE_ID_TUMBLE_PROGRAM_SELECT = "{0}-tumble_program_select"
+UNIQUE_ID_TUMBLE_DRY_LEVEL_SELECT = "{0}-tumble_dry_level_select"
+UNIQUE_ID_TUMBLE_TIME_SELECT = "{0}-tumble_time_select"
+UNIQUE_ID_TUMBLE_DELAY_NUMBER = "{0}-tumble_delay_number"
+UNIQUE_ID_TUMBLE_START_BUTTON = "{0}-tumble_start_button"
+UNIQUE_ID_TUMBLE_STOP_BUTTON = "{0}-tumble_stop_button"
+UNIQUE_ID_TUMBLE_PAUSE_BUTTON = "{0}-tumble_pause_button"
+UNIQUE_ID_TUMBLE_RESUME_BUTTON = "{0}-tumble_resume_button"
+UNIQUE_ID_TUMBLE_ANTI_CREASE_BUTTON = "{0}-tumble_anti_crease_button"
+UNIQUE_ID_TUMBLE_CHECKUP_BUTTON = "{0}-tumble_checkup_button"
+UNIQUE_ID_TUMBLE_RESET_WARNINGS_BUTTON = "{0}-tumble_reset_warnings_button"
+
+DRY_LEVEL_IRON = "iron_dry"
+DRY_LEVEL_HANG = "hang_dry"
+DRY_LEVEL_STORE = "store_dry"
+DRY_LEVEL_BONE = "bone_dry"
+
+DRY_LEVEL_OPTIONS: list[str] = [
+    DRY_LEVEL_IRON,
+    DRY_LEVEL_HANG,
+    DRY_LEVEL_STORE,
+    DRY_LEVEL_BONE,
+]
+
+DRY_LEVEL_TO_VALUE: dict[str, int] = {
+    DRY_LEVEL_IRON: 1,
+    DRY_LEVEL_HANG: 2,
+    DRY_LEVEL_STORE: 3,
+    DRY_LEVEL_BONE: 4,
+}
+
+DRY_LEVEL_FROM_VALUE: dict[int, str] = {
+    1: DRY_LEVEL_IRON,
+    2: DRY_LEVEL_HANG,
+    3: DRY_LEVEL_STORE,
+    4: DRY_LEVEL_BONE,
+}
 
 UNIQUE_ID_OVEN = "{0}-oven"
 UNIQUE_ID_OVEN_PROGRAM = "{0}-oven_program"

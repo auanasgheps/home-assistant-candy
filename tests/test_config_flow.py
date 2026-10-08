@@ -11,6 +11,8 @@ from custom_components.candy import CONF_KEY_USE_ENCRYPTION, DOMAIN
 from custom_components.candy.client import Encryption
 from custom_components.candy.client.cloud import CloudApplianceData, SimplyFiCloudError
 from custom_components.candy.client.model import (
+    DishwasherState,
+    DishwasherStatus,
     DryerCycleState,
     DryerProgramState,
     MachineState,
@@ -619,6 +621,25 @@ _IDLE_TUMBLE_DRYER = TumbleDryerStatus(
     need_clean_filter=False,
     water_tank_full=False,
     door_closed=True,
+    error=None,
+    delay_value=None,
+    checkup_state=None,
+    recipe_id=None,
+    time=None,
+    rapido=None,
+)
+
+_IDLE_DISHWASHER = DishwasherStatus(
+    machine_state=DishwasherState.IDLE,
+    program="",
+    remaining_minutes=0,
+    delayed_start_hours=None,
+    door_open=False,
+    door_open_allowed=None,
+    eco_mode=False,
+    remote_control=False,
+    salt_empty=False,
+    rinse_aid_empty=False,
 )
 
 
@@ -629,6 +650,27 @@ async def test_maintenance_step_skipped_for_non_washing_machine(
     with patch(
         "custom_components.candy.config_flow.CandyClient.status",
         new_callable=AsyncMock,
+        return_value=_IDLE_DISHWASHER,
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_IP_ADDRESS: "192.168.0.66"}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert CONF_KEY_IS_WASHING_MACHINE not in result["data"]
+    assert CONF_KEY_MAINTENANCE_ENABLED not in result["data"]
+
+
+async def test_tumble_dryer_read_only_skips_maintenance(
+    hass, no_discovery, detect_no_encryption
+):
+    """Tumble dryer in Read-Only mode skips maintenance step and creates entry."""
+    with patch(
+        "custom_components.candy.config_flow.CandyClient.status",
+        new_callable=AsyncMock,
         return_value=_IDLE_TUMBLE_DRYER,
     ):
         result = await hass.config_entries.flow.async_init(
@@ -636,6 +678,12 @@ async def test_maintenance_step_skipped_for_non_washing_machine(
         )
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], user_input={CONF_IP_ADDRESS: "192.168.0.66"}
+        )
+        assert result["type"] == data_entry_flow.FlowResultType.FORM
+        assert result["step_id"] == "mode"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_KEY_MODE: MODE_READ_ONLY}
         )
 
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY

@@ -185,9 +185,21 @@ class TumbleDryerStatus:
     need_clean_filter: bool
     water_tank_full: bool
     door_closed: bool
+    error: str | None
+    delay_value: int | None
+    checkup_state: CheckUpState | None
+    recipe_id: str | None
+    time: int | None
+    rapido: int | None
 
     @classmethod
     def from_json(cls, json):
+        err = json.get("CodiceErrore")
+        error_val = (
+            str(err).strip()
+            if err is not None and str(err).strip() not in ("0", "E0", "")
+            else None
+        )
         return cls(
             machine_state=MachineState.from_code(int(json["StatoTD"])),
             program_state=DryerProgramState.from_code(int(json["PrPh"])),
@@ -201,6 +213,22 @@ class TumbleDryerStatus:
             need_clean_filter=json["CleanFilter"] == "1",
             water_tank_full=json["WaterTankFull"] == "1",
             door_closed=json["DoorState"] == "1",
+            error=error_val,
+            delay_value=int(json["DelVal"])
+            if "DelVal" in json and str(json["DelVal"]).isdigit()
+            else None,
+            checkup_state=CheckUpState.from_code(int(json["CheckUpState"]))
+            if "CheckUpState" in json and str(json["CheckUpState"]).isdigit()
+            else None,
+            recipe_id=str(json["RecipeId"]).strip()
+            if json.get("RecipeId") not in (None, "NULL", "")
+            else None,
+            time=int(json["Time"])
+            if "Time" in json and str(json["Time"]).isdigit()
+            else None,
+            rapido=int(json["Rapido"])
+            if "Rapido" in json and str(json["Rapido"]).isdigit()
+            else None,
         )
 
 
@@ -447,6 +475,85 @@ class WashingMachineWashProgram:
                 return self.duration_soil_medium or self.default_duration
             return self.duration_soil_max or self.default_duration
         return self.default_duration
+
+
+@dataclass
+class TumbleDryerProgram:
+    position: int
+    selector_position: int
+    name: str
+    default_drying_level: int
+    max_time_level: int
+    default_time_level: int
+    set_dry_level: bool
+    set_time_level: bool
+    set_rapido: bool
+    duration: int
+    mask1: int
+    mask2: int
+
+    @classmethod
+    def from_dict(cls, program_dict: dict) -> "TumbleDryerProgram":
+        """Parse a program entry from the Simply-Fi tumble dryer appliance JSON."""
+        p = program_dict.get("program", program_dict)
+        raw_params = p.get("command_parameters") or p.get("parameters") or []
+        params: dict[str, str] = {}
+        if isinstance(raw_params, dict):
+            params = {k: str(v) for k, v in raw_params.items()}
+        elif isinstance(raw_params, list):
+            for cp in raw_params:
+                if "command_parameter" in cp:
+                    params[cp["command_parameter"]["name"]] = str(
+                        cp["command_parameter"]["validation"]
+                    )
+                elif "name" in cp:
+                    params[cp["name"]] = str(cp["validation"])
+
+        def _int(key: str, fallback: int) -> int:
+            val = params[key] if key in params else p.get(key, "")
+            try:
+                return int(val)
+            except (ValueError, TypeError):
+                return fallback
+
+        raw_name: str = p.get("name", "")
+        for prefix in ("NFC_TD_PROGRAM_NAME_", "TD_PROGRAM_NAME_", "NFC_TD_"):
+            if raw_name.startswith(prefix):
+                raw_name = raw_name[len(prefix) :]
+                break
+
+        return cls(
+            position=int(p.get("position", 0)),
+            selector_position=_int("selector_position", 0),
+            name=raw_name,
+            default_drying_level=_int("default_drying_level", 0),
+            max_time_level=_int("max_time_level", 0),
+            default_time_level=_int("default_time_level", 0),
+            set_dry_level=_int("set_dry_level", 0) != 0,
+            set_time_level=_int("set_time_level", 0) != 0,
+            set_rapido=_int("set_rapido", 0) != 0,
+            duration=_int("duration", 0),
+            mask1=_int("mask1", 0),
+            mask2=_int("mask2", 0),
+        )
+
+    @property
+    def display_name(self) -> str:
+        return self.localized_name("en")
+
+    def localized_name(self, language: str) -> str:
+        """Return the program name in the given BCP-47 language code."""
+        translations = _PROGRAM_NAMES.get(self.name, {})
+        return (
+            translations.get(language)
+            or translations.get("en")
+            or self.name.replace("_", " ").title()
+        )
+
+    def localized_description(self, language: str) -> str | None:
+        """Return the program description in the given BCP-47 language code, or None."""
+        translations = _PROGRAM_NAMES.get(self.name + "_DESCRIPTION", {})
+        return translations.get(language) or translations.get("en") or None
 
 
 @dataclass

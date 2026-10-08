@@ -278,6 +278,12 @@ def _offline_tumble_dryer() -> TumbleDryerStatus:
         need_clean_filter=False,
         water_tank_full=False,
         door_closed=True,
+        error=None,
+        delay_value=None,
+        checkup_state=None,
+        recipe_id=None,
+        time=None,
+        rapido=None,
     )
 
 
