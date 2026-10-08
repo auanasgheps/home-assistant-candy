@@ -517,7 +517,15 @@ class TumbleDryerProgram:
                 return fallback
 
         raw_name: str = p.get("name", "")
-        for prefix in ("NFC_TD_PROGRAM_NAME_", "TD_PROGRAM_NAME_", "NFC_TD_"):
+        for prefix in (
+            "__HOOVER__NFC_TD_PROGRAM_NAME_",
+            "__HOOVER__DUAL_TD_PROGRAM_DOWNLOAD_",
+            "NFC_TD_PROGRAM_NAME_",
+            "TD_PROGRAM_NAME_",
+            "NFC_TD_",
+            "DUAL_TD_PROGRAM_DOWNLOAD_",
+            "DUAL_WM_PROGRAM_DOWNLOAD_",
+        ):
             if raw_name.startswith(prefix):
                 raw_name = raw_name[len(prefix) :]
                 break

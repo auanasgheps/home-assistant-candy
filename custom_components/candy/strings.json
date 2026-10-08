@@ -66,16 +66,16 @@
       },
       "maintenance_baselines": {
         "title": "Current counter values",
-        "description": "Enter the current counter values from the Simply-Fi app if known. Leave at the default to start a fresh full cycle from now.",
+        "description": "Enter the remaining cycles shown in the Simply-Fi app for each maintenance item. Leave at the default to start a fresh full cycle from now.",
         "data": {
           "maintenance_last_full_checkup": "Full Check-up: remaining cycles",
-          "maintenance_last_limescale": "Limescale Cleaning counter",
-          "maintenance_last_filter": "Filter-Clean counter"
+          "maintenance_last_limescale": "Limescale Cleaning: remaining cycles",
+          "maintenance_last_filter": "Filter-Clean: remaining cycles"
         }
       },
       "checkup": {
         "title": "Automatic self check-up",
-        "description": "The integration can trigger the machine's built-in electronic self-diagnostic at the end of each wash. The result will be available as a sensor in Home Assistant.",
+        "description": "The integration can trigger the machine's built-in electronic self-diagnostic at the end of each cycle. The result will be available as a sensor in Home Assistant.",
         "data": {
           "checkup_enabled": "Enable automatic self check-up"
         }
@@ -149,16 +149,16 @@
       },
       "maintenance_baselines": {
         "title": "Current counter values",
-        "description": "Enter the current counter values from the Simply-Fi app if known. Leave at the default to start a fresh full cycle from now.",
+        "description": "Enter the remaining cycles shown in the Simply-Fi app for each maintenance item. Leave at the default to start a fresh full cycle from now.",
         "data": {
           "maintenance_last_full_checkup": "Full Check-up: remaining cycles",
-          "maintenance_last_limescale": "Limescale Cleaning counter",
-          "maintenance_last_filter": "Filter-Clean counter"
+          "maintenance_last_limescale": "Limescale Cleaning: remaining cycles",
+          "maintenance_last_filter": "Filter-Clean: remaining cycles"
         }
       },
       "checkup": {
         "title": "Automatic self check-up",
-        "description": "The integration can trigger the machine's built-in electronic self-diagnostic at the end of each wash. The result will be available as a sensor in Home Assistant.",
+        "description": "The integration can trigger the machine's built-in electronic self-diagnostic at the end of each cycle. The result will be available as a sensor in Home Assistant.",
         "data": {
           "checkup_enabled": "Enable automatic self check-up"
         }
@@ -168,6 +168,14 @@
         "description": "How often should the self check-up run?",
         "data": {
           "checkup_schedule": "Schedule"
+        }
+      },
+      "maintenance_types": {
+        "title": "Counter selection",
+        "description": "Check-up cycles are always tracked. Choose which additional counters to enable.",
+        "data": {
+          "maintenance_limescale_enabled": "Limescale cleaning",
+          "maintenance_filter_enabled": "Filter cleaning"
         }
       }
     },
@@ -291,10 +299,10 @@
         "name": "Dryer program"
       },
       "tumble_cycle_status": {
-        "name": "Tumble cycle status"
+        "name": "Cycle status"
       },
       "tumble_remaining_time": {
-        "name": "Tumble cycle remaining time"
+        "name": "Cycle remaining time"
       },
       "tumble_dry_level": {
         "name": "Dry level",
@@ -306,7 +314,7 @@
         }
       },
       "tumble_error": {
-        "name": "Dryer error"
+        "name": "Error code"
       },
       "tumble_checkup_state": {
         "name": "Check-up state"
@@ -343,6 +351,24 @@
       },
       "wine_cooler_error_code": {
         "name": "Wine cooler error code"
+      },
+      "wash_purchase_date": {
+        "name": "Purchase date"
+      },
+      "wash_scheduled_start": {
+        "name": "Wash scheduled start"
+      },
+      "wash_scheduled_finish": {
+        "name": "Wash scheduled finish"
+      },
+      "wash_liquid_detergent": {
+        "name": "Liquid detergent dose"
+      },
+      "wash_powder_detergent": {
+        "name": "Powder detergent dose"
+      },
+      "wash_cycle_capacity": {
+        "name": "Max load capacity"
       }
     },
     "light": {
@@ -529,6 +555,17 @@
         "1": "Weekly",
         "2": "Monthly"
       }
+    }
+  },
+  "title": "Candy",
+  "device_automation": {
+    "trigger_type": {
+      "washing_started": "Washing started",
+      "washing_completed": "Washing completed",
+      "error_reported": "Error reported",
+      "maintenance_full_checkup_due": "Full check-up reminder",
+      "maintenance_limescale_due": "Limescale cleaning reminder",
+      "maintenance_filter_due": "Filter cleaning reminder"
     }
   }
 }

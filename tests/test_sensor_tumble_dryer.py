@@ -5,6 +5,8 @@ from homeassistant.helpers import device_registry, entity_registry
 from pytest_homeassistant_custom_component.common import load_fixture
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
+from custom_components.candy.client import TumbleDryerProgram
+
 from .common import init_integration
 
 
@@ -225,3 +227,35 @@ async def test_error_code_sensor_when_error_reported(
     error_state = hass.states.get("sensor.dryer_error")
     assert error_state
     assert error_state.state == "E03"
+
+
+def test_tumble_dryer_program_localization() -> None:
+    """Test localized name and description lookup for dryer programs."""
+    prog_whites = TumbleDryerProgram.from_dict(
+        {
+            "name": "NFC_TD_PROGRAM_NAME_WHITES",
+            "parameters": {"selector_position": 1},
+        }
+    )
+    assert prog_whites.localized_name("en") == "Whites"
+    assert prog_whites.localized_name("it") == "Bianchi"
+    assert prog_whites.localized_description("en") is not None
+    assert prog_whites.localized_description("it") is not None
+
+    prog_mix = TumbleDryerProgram.from_dict(
+        {
+            "name": "NFC_TD_PROGRAM_NAME_MIX_AND_DRY",
+            "parameters": {"selector_position": 2},
+        }
+    )
+    assert prog_mix.localized_name("en") == "Mix&Dry"
+    assert prog_mix.localized_name("it") == "Mix&Dry"
+
+    prog_dl = TumbleDryerProgram.from_dict(
+        {
+            "name": "DUAL_TD_PROGRAM_DOWNLOAD_DRY_EASY_IRON_SYNTHETICS",
+            "parameters": {"selector_position": 10},
+        }
+    )
+    assert prog_dl.localized_name("en") == "Easy Iron Sintetics"
+    assert prog_dl.localized_name("it") == "Stiro Facile - Sintetici"
