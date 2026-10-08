@@ -6,7 +6,10 @@ from homeassistant.const import CONF_DEVICE_ID, CONF_DOMAIN, CONF_PLATFORM, CONF
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.candy.client.model import (
+    DryerCycleState,
+    DryerProgramState,
     MachineState,
+    TumbleDryerStatus,
     WashingMachineStatistics,
     WashingMachineStatus,
     WashProgramState,
@@ -400,3 +403,92 @@ async def test_maintenance_trigger_initial_none_stats(hass):
         stats_coordinator.data = WashingMachineStatistics(total_cycles=10)
         on_update()
         assert mock_job.call_count == 0
+
+
+async def test_get_triggers_dryer(hass):
+    """Dryer returns only error_reported trigger."""
+    entry = MockConfigEntry(domain=DOMAIN, unique_id="td-triggers", data={})
+    entry.add_to_hass(hass)
+    coordinator = MagicMock()
+    coordinator.data = TumbleDryerStatus(
+        machine_state=MachineState.IDLE,
+        program_state=DryerProgramState.STOPPED,
+        cycle_state=DryerCycleState.LEVEL_HANG,
+        program=1,
+        remaining_minutes=150,
+        remote_control=True,
+        dry_level=2,
+        dry_level_selected=1,
+        refresh=False,
+        need_clean_filter=False,
+        water_tank_full=False,
+        door_closed=True,
+        error="0",
+        delay_value=0,
+        checkup_state=None,
+        recipe_id=None,
+        time=0,
+        rapido=0,
+    )
+    hass.data[DOMAIN] = {entry.entry_id: {DATA_KEY_COORDINATOR: coordinator}}
+    with patch("custom_components.candy.device_trigger.dr.async_get") as mock_reg:
+        mock_reg.return_value.async_get.return_value = _mock_device(entry.entry_id)
+        result = await async_get_triggers(hass, device_id="dev-1")
+
+    assert len(result) == 1
+    assert result[0][CONF_TYPE] == "error_reported"
+
+
+async def test_state_trigger_error_reported_dryer(hass):
+    """error_reported fires on dryer transition into ERROR state."""
+
+    def _make_td(st):
+        return TumbleDryerStatus(
+            machine_state=st,
+            program_state=DryerProgramState.STOPPED,
+            cycle_state=DryerCycleState.LEVEL_HANG,
+            program=1,
+            remaining_minutes=0,
+            remote_control=True,
+            dry_level=2,
+            dry_level_selected=1,
+            refresh=False,
+            need_clean_filter=False,
+            water_tank_full=False,
+            door_closed=True,
+            error="E03" if st == MachineState.ERROR else "0",
+            delay_value=0,
+            checkup_state=None,
+            recipe_id=None,
+            time=0,
+            rapido=0,
+        )
+
+    coordinator = MagicMock()
+    coordinator.data = _make_td(MachineState.RUNNING)
+    listener_cb = None
+
+    def _add_listener(cb):
+        nonlocal listener_cb
+        listener_cb = cb
+        return lambda: None
+
+    coordinator.async_add_listener = _add_listener
+    entry = MockConfigEntry(domain=DOMAIN, unique_id="td-state", data={})
+    entry.add_to_hass(hass)
+    hass.data[DOMAIN] = {entry.entry_id: {DATA_KEY_COORDINATOR: coordinator}}
+
+    with patch("custom_components.candy.device_trigger.dr.async_get") as mock_reg:
+        mock_reg.return_value.async_get.return_value = _mock_device(entry.entry_id)
+        await async_attach_trigger(
+            hass,
+            _trigger_config("error_reported"),
+            lambda action_ctx: None,
+            {"trigger_data": {}},
+        )
+
+    assert listener_cb is not None
+    with patch.object(hass, "async_run_hass_job") as mock_job:
+        coordinator.data = _make_td(MachineState.ERROR)
+        listener_cb()
+        assert mock_job.call_count == 1

@@ -231,6 +231,14 @@ class TumbleDryerStatus:
             else None,
         )
 
+    @property
+    def error_code(self) -> int | None:
+        """Integer error code (0 if clear, e.g. 3 for E03)."""
+        if self.error is None or self.error in ("0", "E0", ""):
+            return 0
+        raw = self.error.upper().lstrip("E")
+        return int(raw) if raw.isdigit() else None
+
 
 class DishwasherState(StatusCode):
     """Dishwashers have a single state combining the machine state and program state."""

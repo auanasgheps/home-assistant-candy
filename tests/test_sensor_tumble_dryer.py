@@ -1,11 +1,12 @@
-"""Tests for various sensors."""
+from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_registry
-from pytest_homeassistant_custom_component.common import load_fixture
+from pytest_homeassistant_custom_component.common import MockConfigEntry, load_fixture
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.candy.client import TumbleDryerProgram
+from custom_components.candy.sensor import CandyTumbleErrorCodeSensor
 
 from .common import init_integration
 
@@ -214,6 +215,10 @@ async def test_dry_level_and_diagnostic_sensors(
     assert checkup_state
     assert checkup_state.state == "Idle"
 
+    error_state = hass.states.get("sensor.dryer_error")
+    assert error_state
+    assert error_state.state == "0"
+
 
 async def test_error_code_sensor_when_error_reported(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
@@ -227,6 +232,26 @@ async def test_error_code_sensor_when_error_reported(
     error_state = hass.states.get("sensor.dryer_error")
     assert error_state
     assert error_state.state == "E03"
+    assert error_state.attributes.get("description") == "E03 -  The water tank is full"
+
+
+async def test_error_code_sensor_restored_state(hass: HomeAssistant) -> None:
+    """Test error code sensor falls back to restored state when coordinator has no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    coordinator.last_update_success = False
+
+    entry = MockConfigEntry(domain="candy", data={})
+    sensor = CandyTumbleErrorCodeSensor(coordinator, entry)
+    sensor.hass = hass
+
+    last_data = MagicMock()
+    last_data.native_value = "E07"
+    sensor.async_get_last_sensor_data = AsyncMock(return_value=last_data)
+
+    await sensor.async_added_to_hass()
+    assert sensor.available is True
+    assert sensor.native_value == "E07"
 
 
 def test_tumble_dryer_program_localization() -> None:

@@ -160,14 +160,29 @@ def dryer_device_info(config_entry: ConfigEntry) -> DeviceInfo:
     return info
 
 
+def get_appliance_error_notification_strings(
+    appliance_type: str, error_code: int, language: str
+) -> tuple[str, str] | None:
+    """Return (title, message) for appliance error, or None if unknown code."""
+    prefix = "wash" if appliance_type == "washer" else "dryer"
+    msg_key = f"{prefix}_error_{error_code}_message"
+    if msg_key not in _NOTIFICATION_STRINGS:
+        return None
+    base_title = localized_notification_text(f"{prefix}_error_title", language)
+    title = f"{base_title}: E{error_code:02d}"
+    message = localized_notification_text(msg_key, language)
+    return title, message
+
+
 def get_wash_error_notification_strings(
     error_code: int, language: str
 ) -> tuple[str, str] | None:
     """Return (title, message) for washing machine error, or None if unknown code."""
-    msg_key = f"wash_error_{error_code}_message"
-    if msg_key not in _NOTIFICATION_STRINGS:
-        return None
-    base_title = localized_notification_text("wash_error_title", language)
-    title = f"{base_title}: E{error_code:02d}"
-    message = localized_notification_text(msg_key, language)
-    return title, message
+    return get_appliance_error_notification_strings("washer", error_code, language)
+
+
+def get_dryer_error_notification_strings(
+    error_code: int, language: str
+) -> tuple[str, str] | None:
+    """Return (title, message) for tumble dryer error, or None if unknown code."""
+    return get_appliance_error_notification_strings("dryer", error_code, language)

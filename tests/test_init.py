@@ -16,6 +16,7 @@ from custom_components.candy import (
     DOMAIN,
     _make_off_status,
     _register_checkup_listener,
+    _register_dryer_error_listener,
     _register_stats_refresh_listener,
     _register_wash_error_listener,
     _restore_last_known_statistics,
@@ -36,6 +37,7 @@ from custom_components.candy.const import (
     CONF_KEY_PROGRAM_LANGUAGE,
     CONF_KEY_WATER_HARDNESS,
     DATA_KEY_COORDINATOR,
+    DATA_KEY_DRYER_ERROR_UNSUB,
     DATA_KEY_STATS_COORDINATOR,
     DATA_KEY_WASH_ERROR_UNSUB,
     UNIQUE_ID_DISHWASHER,
@@ -80,6 +82,33 @@ _STATUS_ERROR_3 = """{
     "WiFiStatus": "1", "Err": "3", "MachMd": "1", "Pr": "1", "PrPh": "0",
     "PrCode": "136", "SLevel": "0", "Temp": "40", "SpinSp": "8",
     "DelVal": "0", "RemTime": "0", "FillR": "0"
+  }
+}"""
+
+_STATUS_TD_IDLE = """{
+  "statusTD": {
+    "StatoWiFi": "1", "StatoTD": "1", "CodiceErrore": "0", "Pr": "1", "PrPh": "0",
+    "RemTime": "150", "DryLev": "2", "Time": "0", "Rapido": "0",
+    "Refresh": "0", "CleanFilter": "0", "WaterTankFull": "0", "DryingManagerLevel": "1",
+    "DelVal": "0", "DoorState": "1", "RecipeId": "NULL", "CheckUpState": "0"
+  }
+}"""
+
+_STATUS_TD_ERROR_3 = """{
+  "statusTD": {
+    "StatoWiFi": "1", "StatoTD": "7", "CodiceErrore": "E03", "Pr": "1", "PrPh": "0",
+    "RemTime": "0", "DryLev": "2", "Time": "0", "Rapido": "0",
+    "Refresh": "0", "CleanFilter": "0", "WaterTankFull": "1", "DryingManagerLevel": "1",
+    "DelVal": "0", "DoorState": "1", "RecipeId": "NULL", "CheckUpState": "0"
+  }
+}"""
+
+_STATUS_TD_ERROR_7 = """{
+  "statusTD": {
+    "StatoWiFi": "1", "StatoTD": "7", "CodiceErrore": "E07", "Pr": "1", "PrPh": "0",
+    "RemTime": "0", "DryLev": "2", "Time": "0", "Rapido": "0",
+    "Refresh": "0", "CleanFilter": "1", "WaterTankFull": "0", "DryingManagerLevel": "1",
+    "DelVal": "0", "DoorState": "1", "RecipeId": "NULL", "CheckUpState": "0"
   }
 }"""
 
@@ -671,3 +700,176 @@ async def test_update_statistics_raises_when_no_restored_stats_and_fetch_fails(
     await hass.async_block_till_done()
 
     assert DATA_KEY_STATS_COORDINATOR not in hass.data[DOMAIN][entry.entry_id]
+
+
+async def test_dryer_error_notification_posted_on_startup(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """When tumble dryer starts up with an active error, notification is immediately posted."""
+    with patch("custom_components.candy.pn_async_create") as mock_notify:
+        entry = await init_integration(
+            hass,
+            aioclient_mock,
+            _STATUS_TD_ERROR_3,
+        )
+    mock_notify.assert_called_once()
+    assert (
+        mock_notify.call_args.kwargs["notification_id"]
+        == f"candy_{entry.entry_id}_dryer_error"
+    )
+    assert "E03" in mock_notify.call_args.kwargs["title"]
+    assert "The water tank is full" in mock_notify.call_args.args[1]
+
+
+async def test_dryer_error_notification_lifecycle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Dryer notification created on error, updated on error change, dismissed when cleared."""
+    entry = await init_integration(
+        hass,
+        aioclient_mock,
+        _STATUS_TD_IDLE,
+    )
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+
+    with (
+        patch("custom_components.candy.pn_async_create") as mock_notify,
+        patch("custom_components.candy.pn_async_dismiss") as mock_dismiss,
+    ):
+        # 1. Error occurs (E03)
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-read.json?encrypted=0", text=_STATUS_TD_ERROR_3
+        )
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+        mock_notify.assert_called_once()
+        assert (
+            mock_notify.call_args.kwargs["notification_id"]
+            == f"candy_{entry.entry_id}_dryer_error"
+        )
+        assert "E03" in mock_notify.call_args.kwargs["title"]
+        mock_dismiss.assert_not_called()
+
+        # 2. Same error stays (E03) -> no duplicate call
+        mock_notify.reset_mock()
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        mock_notify.assert_not_called()
+        mock_dismiss.assert_not_called()
+
+        # 3. New error occurs (E07) -> updated notification
+        mock_notify.reset_mock()
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-read.json?encrypted=0", text=_STATUS_TD_ERROR_7
+        )
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+        mock_notify.assert_called_once()
+        assert (
+            mock_notify.call_args.kwargs["notification_id"]
+            == f"candy_{entry.entry_id}_dryer_error"
+        )
+        assert "E07" in mock_notify.call_args.kwargs["title"]
+        mock_dismiss.assert_not_called()
+
+        # 4. Error cleared (0) -> notification dismissed
+        mock_notify.reset_mock()
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-read.json?encrypted=0", text=_STATUS_TD_IDLE
+        )
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+        mock_notify.assert_not_called()
+        mock_dismiss.assert_called_once_with(
+            hass, f"candy_{entry.entry_id}_dryer_error"
+        )
+
+
+async def test_dryer_error_notification_respects_language(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Dryer notification text matches configured language."""
+    with patch("custom_components.candy.pn_async_create") as mock_notify:
+        await init_integration(
+            hass,
+            aioclient_mock,
+            _STATUS_TD_ERROR_3,
+            extra_config_data={CONF_KEY_PROGRAM_LANGUAGE: "it"},
+        )
+    mock_notify.assert_called_once()
+    assert mock_notify.call_args.kwargs["title"] == "Errore asciugatrice: E03"
+    assert "Tanica raccolta acqua piena" in mock_notify.call_args.args[1]
+
+
+async def test_dryer_error_notification_unknown_code(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Unknown dryer error code logs warning and does not notify."""
+    status_err_99 = """{
+      "statusTD": {
+        "StatoWiFi": "1", "StatoTD": "7", "CodiceErrore": "E99", "Pr": "1", "PrPh": "0",
+        "RemTime": "0", "DryLev": "2", "Time": "0", "Rapido": "0",
+        "Refresh": "0", "CleanFilter": "0", "WaterTankFull": "0", "DryingManagerLevel": "1",
+        "DelVal": "0", "DoorState": "1", "RecipeId": "NULL", "CheckUpState": "0"
+      }
+    }"""
+    with (
+        patch("custom_components.candy.pn_async_create") as mock_notify,
+        patch("custom_components.candy._LOGGER.warning") as mock_warn,
+    ):
+        await init_integration(
+            hass,
+            aioclient_mock,
+            status_err_99,
+        )
+    mock_notify.assert_not_called()
+    mock_warn.assert_called_with("Unknown tumble dryer error code: %s", 99)
+
+
+async def test_dryer_error_listener_unloaded(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Dryer error listener is cleaned up when entry is unloaded."""
+    entry = await init_integration(
+        hass,
+        aioclient_mock,
+        _STATUS_TD_IDLE,
+    )
+    assert DATA_KEY_DRYER_ERROR_UNSUB in hass.data[DOMAIN][entry.entry_id]
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.entry_id not in hass.data.get(DOMAIN, {})
+
+
+def test_dryer_error_listener_handles_none_status(hass: HomeAssistant):
+    """Dryer error listener safely handles None coordinator data."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = None
+    listener_cb = None
+
+    def _capture_listener(cb):
+        nonlocal listener_cb
+        listener_cb = cb
+        return MagicMock()
+
+    mock_coordinator.async_add_listener = _capture_listener
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test-entry"
+    mock_entry.data = {}
+
+    unsub = _register_dryer_error_listener(hass, mock_entry, mock_coordinator)
+    assert callable(unsub)
+    assert listener_cb is not None
+
+    with patch("custom_components.candy.pn_async_create") as mock_notify:
+        listener_cb()
+
+    mock_notify.assert_not_called()

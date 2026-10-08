@@ -58,7 +58,15 @@ cards:
       {% elif state in ['idle', 'stopped'] and prog not in ['unknown', 'unavailable', ''] %}
         {{ prog }}
       {% elif state == 'error' %}
-        Fault code: {{ states('sensor.<machine_name>_dryer_error') }}
+        {% set err = states('sensor.<machine_name>_dryer_error') %}
+        {% set desc = state_attr('sensor.<machine_name>_dryer_error', 'description') %}
+        {% if err not in ['0', 'unknown', 'unavailable', ''] and desc %}
+          Fault: {{ desc }}
+        {% elif err not in ['0', 'unknown', 'unavailable', ''] %}
+          Fault code: {{ err }}
+        {% else %}
+          Appliance error detected
+        {% endif %}
       {% else %}
         —
       {% endif %}
