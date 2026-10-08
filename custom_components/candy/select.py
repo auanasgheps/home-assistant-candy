@@ -16,14 +16,16 @@ from homeassistant.helpers.update_coordinator import (
 from .client import (
     CandyClient,
     DownloadableProgram,
+    TumbleDryerProgram,
     WasherDryerDryTarget,
     WashingMachineStatus,
     WashingMachineWashProgram,
     load_downloadable_programs,
+    parse_dryer_programs,
     parse_wash_programs,
     resolve_downloadable_programs,
 )
-from .client.model import MachineState
+from .client.model import MachineState, TumbleDryerStatus
 from .const import (
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
     CONF_KEY_MODE,
@@ -32,6 +34,10 @@ from .const import (
     DATA_KEY_CLIENT,
     DATA_KEY_COORDINATOR,
     DOMAIN,
+    DRY_LEVEL_FROM_VALUE,
+    DRY_LEVEL_HANG,
+    DRY_LEVEL_OPTIONS,
+    DRY_LEVEL_TO_VALUE,
     DRY_TARGET_CUPBOARD_DRY,
     DRY_TARGET_NO_DRY,
     DRY_TARGET_OPTIONS_FULL,
@@ -42,6 +48,9 @@ from .const import (
     PROGRAM_TYPE_WASHING,
     PROGRAM_TYPES,
     SOIL_LABELS,
+    UNIQUE_ID_TUMBLE_DRY_LEVEL_SELECT,
+    UNIQUE_ID_TUMBLE_PROGRAM_SELECT,
+    UNIQUE_ID_TUMBLE_TIME_SELECT,
     UNIQUE_ID_WASH_DRY_SELECT,
     UNIQUE_ID_WASH_NFC_SWITCH,
     UNIQUE_ID_WASH_PROGRAM_DESCRIPTION,
@@ -51,7 +60,12 @@ from .const import (
     UNIQUE_ID_WASH_SPIN_SELECT,
     UNIQUE_ID_WASH_TEMP_SELECT,
 )
-from .helpers import is_washer_dryer, remote_control_enabled, wash_device_info
+from .helpers import (
+    dryer_device_info,
+    is_washer_dryer,
+    remote_control_enabled,
+    wash_device_info,
+)
 
 _TEMP_STEPS = [0, 20, 30, 40, 60, 90]
 _SPIN_STEPS = [0, 400, 600, 800, 1000, 1200, 1400]
@@ -68,6 +82,30 @@ async def async_setup_entry(
     coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config_id][
         DATA_KEY_COORDINATOR
     ]
+    if isinstance(coordinator.data, TumbleDryerStatus):
+        dryer_client: CandyClient = hass.data[DOMAIN][config_id][DATA_KEY_CLIENT]
+        raw_programs = config_entry.data.get(CONF_KEY_PROGRAMS, [])
+        dryer_programs = parse_dryer_programs(raw_programs)
+        if not dryer_programs:
+            return
+
+        level_select = CandyDryerLevelSelect(
+            coordinator, config_entry, dryer_client, dryer_programs
+        )
+        time_select = CandyDryerTimeSelect(
+            coordinator, config_entry, dryer_client, dryer_programs
+        )
+        dryer_program_select = CandyDryerProgramSelect(
+            coordinator,
+            config_entry,
+            dryer_client,
+            dryer_programs,
+            level_select,
+            time_select,
+        )
+        async_add_entities([dryer_program_select, level_select, time_select])
+        return
+
     if not isinstance(coordinator.data, WashingMachineStatus):
         return
 
@@ -868,4 +906,280 @@ class WashSoilSelect(CandyWashSelectBase):
 
     async def async_select_option(self, option: str) -> None:
         self._current_option = option
+        self.async_write_ha_state()
+
+
+class CandyDryerLevelSelect(CoordinatorEntity, SelectEntity):
+    _attr_has_entity_name = True
+    _attr_translation_key = "dryer_level_select"
+    _attr_icon = "mdi:weather-sunny"
+
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        client: CandyClient,
+        programs: list[TumbleDryerProgram],
+    ) -> None:
+        super().__init__(coordinator)
+        self.config_entry = config_entry
+        self.config_id = config_entry.entry_id
+        self._client = client
+        self._programs = programs
+        self._selected_program: TumbleDryerProgram = programs[0]
+        self._current_option: str = DRY_LEVEL_FROM_VALUE.get(
+            self._selected_program.default_drying_level, DRY_LEVEL_HANG
+        )
+
+    def _machine_is_idle(self) -> bool:
+        status = self.coordinator.data
+        if not isinstance(status, TumbleDryerStatus):
+            return False
+        return (
+            status.machine_state
+            in (
+                MachineState.IDLE,
+                MachineState.OFF,
+                MachineState.FINISHED1,
+                MachineState.FINISHED2,
+            )
+            and status.remote_control
+        )
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_DRY_LEVEL_SELECT.format(self.config_id)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return dryer_device_info(self.config_entry)
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._machine_is_idle() and bool(self.options)
+
+    @property
+    def options(self) -> list[str]:
+        if self._selected_program.set_dry_level:
+            return DRY_LEVEL_OPTIONS
+        default_lvl = DRY_LEVEL_FROM_VALUE.get(
+            self._selected_program.default_drying_level
+        )
+        return [default_lvl] if default_lvl else []
+
+    @property
+    def current_option(self) -> str | None:
+        if self._current_option in self.options:
+            return self._current_option
+        opts = self.options
+        return opts[0] if opts else None
+
+    @property
+    def selected_level(self) -> int:
+        opt = self.current_option
+        return DRY_LEVEL_TO_VALUE.get(
+            opt or "", self._selected_program.default_drying_level
+        )
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in self.options:
+            raise ValueError(f"Invalid dry level: {option}")
+        self._current_option = option
+        self.async_write_ha_state()
+
+    def update_for_program(self, program: TumbleDryerProgram) -> None:
+        self._selected_program = program
+        opts = self.options
+        if self._current_option not in opts:
+            default_lvl = DRY_LEVEL_FROM_VALUE.get(program.default_drying_level)
+            if default_lvl and default_lvl in opts:
+                self._current_option = default_lvl
+            elif opts:
+                self._current_option = opts[0]
+        self.async_write_ha_state()
+
+
+class CandyDryerTimeSelect(CoordinatorEntity, SelectEntity):
+    _attr_has_entity_name = True
+    _attr_translation_key = "dryer_time_select"
+    _attr_icon = "mdi:timer-outline"
+
+    _TIME_OPTIONS = ["off", "30", "45", "60", "90", "120"]
+
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        client: CandyClient,
+        programs: list[TumbleDryerProgram],
+    ) -> None:
+        super().__init__(coordinator)
+        self.config_entry = config_entry
+        self.config_id = config_entry.entry_id
+        self._client = client
+        self._programs = programs
+        self._selected_program: TumbleDryerProgram = programs[0]
+        self._current_option: str = "off"
+
+    def _machine_is_idle(self) -> bool:
+        status = self.coordinator.data
+        if not isinstance(status, TumbleDryerStatus):
+            return False
+        return (
+            status.machine_state
+            in (
+                MachineState.IDLE,
+                MachineState.OFF,
+                MachineState.FINISHED1,
+                MachineState.FINISHED2,
+            )
+            and status.remote_control
+        )
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_TIME_SELECT.format(self.config_id)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return dryer_device_info(self.config_entry)
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._machine_is_idle()
+
+    @property
+    def options(self) -> list[str]:
+        if self._selected_program.set_time_level:
+            return self._TIME_OPTIONS
+        return ["off"]
+
+    @property
+    def current_option(self) -> str:
+        if self._current_option in self.options:
+            return self._current_option
+        return "off"
+
+    @property
+    def selected_time_minutes(self) -> int:
+        opt = self.current_option
+        if opt == "off" or not opt.isdigit():
+            return 0
+        return int(opt)
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in self.options:
+            raise ValueError(f"Invalid drying time: {option}")
+        self._current_option = option
+        self.async_write_ha_state()
+
+    def update_for_program(self, program: TumbleDryerProgram) -> None:
+        self._selected_program = program
+        if not program.set_time_level:
+            self._current_option = "off"
+        self.async_write_ha_state()
+
+
+class CandyDryerProgramSelect(CoordinatorEntity, SelectEntity):
+    _attr_has_entity_name = True
+    _attr_translation_key = "dryer_program_select"
+    _attr_icon = "mdi:tumble-dryer"
+
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        client: CandyClient,
+        programs: list[TumbleDryerProgram],
+        level_select: CandyDryerLevelSelect,
+        time_select: CandyDryerTimeSelect,
+    ) -> None:
+        super().__init__(coordinator)
+        self.config_entry = config_entry
+        self.config_id = config_entry.entry_id
+        self._client = client
+        self._programs = programs
+        self._level_select = level_select
+        self._time_select = time_select
+        lang = config_entry.data.get(CONF_KEY_PROGRAM_LANGUAGE, "en")
+        self._current_option: str = programs[0].localized_name(lang)
+
+    def _machine_is_idle(self) -> bool:
+        status = self.coordinator.data
+        if not isinstance(status, TumbleDryerStatus):
+            return False
+        return (
+            status.machine_state
+            in (
+                MachineState.IDLE,
+                MachineState.OFF,
+                MachineState.FINISHED1,
+                MachineState.FINISHED2,
+            )
+            and status.remote_control
+        )
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_PROGRAM_SELECT.format(self.config_id)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return dryer_device_info(self.config_entry)
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._machine_is_idle()
+
+    @property
+    def options(self) -> list[str]:
+        lang = self.config_entry.data.get(
+            CONF_KEY_PROGRAM_LANGUAGE, self.hass.config.language
+        )
+        return [p.localized_name(lang) for p in self._programs]
+
+    @property
+    def current_option(self) -> str:
+        lang = self.config_entry.data.get(
+            CONF_KEY_PROGRAM_LANGUAGE, self.hass.config.language
+        )
+        if not self._machine_is_idle():
+            status = cast(TumbleDryerStatus, self.coordinator.data)
+            match = next(
+                (p for p in self._programs if p.selector_position == status.program),
+                None,
+            )
+            if match is not None:
+                return match.localized_name(lang)
+
+        if self._current_option in self.options:
+            return self._current_option
+        return self.options[0] if self.options else ""
+
+    @property
+    def selected_program(self) -> TumbleDryerProgram:
+        lang = self.config_entry.data.get(
+            CONF_KEY_PROGRAM_LANGUAGE, self.hass.config.language
+        )
+        cur = self.current_option
+        match = next(
+            (p for p in self._programs if p.localized_name(lang) == cur),
+            None,
+        )
+        return match if match is not None else self._programs[0]
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in self.options:
+            raise ValueError(f"Invalid dryer program: {option}")
+        self._current_option = option
+        lang = self.config_entry.data.get(
+            CONF_KEY_PROGRAM_LANGUAGE, self.hass.config.language
+        )
+        match = next(
+            (p for p in self._programs if p.localized_name(lang) == option),
+            None,
+        )
+        if match is not None:
+            self._level_select.update_for_program(match)
+            self._time_select.update_for_program(match)
         self.async_write_ha_state()

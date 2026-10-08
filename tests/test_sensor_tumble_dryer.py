@@ -196,3 +196,32 @@ async def test_sensors_device_info(
     assert cycle_device
     assert time_device
     assert main_device == cycle_device == time_device
+
+
+async def test_dry_level_and_diagnostic_sensors(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test dry level and diagnostic sensors."""
+    await init_integration(hass, aioclient_mock, load_fixture("tumble_dryer/idle.json"))
+
+    dry_level_state = hass.states.get("sensor.dry_level")
+    assert dry_level_state
+    assert dry_level_state.state == "hang_dry"
+
+    checkup_state = hass.states.get("sensor.check_up_state")
+    assert checkup_state
+    assert checkup_state.state == "Idle"
+
+
+async def test_error_code_sensor_when_error_reported(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test error code sensor when an error is present."""
+    fixture = load_fixture("tumble_dryer/idle.json").replace(
+        '"CodiceErrore": "0"', '"CodiceErrore": "E03"'
+    )
+    await init_integration(hass, aioclient_mock, fixture)
+
+    error_state = hass.states.get("sensor.dryer_error")
+    assert error_state
+    assert error_state.state == "E03"

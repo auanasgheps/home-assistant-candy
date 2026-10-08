@@ -12,10 +12,17 @@ import async_timeout
 import backoff
 
 from .decryption import Encryption, decrypt, find_key
+from .dryer_commands import (
+    DryerCommandBuilder as DryerCommandBuilder,
+    DualTechDryerCommandBuilder as DualTechDryerCommandBuilder,
+    get_dryer_command_builder as get_dryer_command_builder,
+    is_dualtech_dryer_interface as is_dualtech_dryer_interface,
+)
 from .model import (
     DishwasherStatus,
     DownloadableProgram as DownloadableProgram,
     OvenStatus,
+    TumbleDryerProgram as TumbleDryerProgram,
     TumbleDryerStatus,
     WasherDryerDryTarget as WasherDryerDryTarget,
     WashingMachineStatistics,
@@ -39,6 +46,12 @@ del _raw_parent_map, _entry
 def parse_wash_programs(raw: list[dict]) -> list[WashingMachineWashProgram]:
     """Parse and filter the raw program list stored in a config entry."""
     programs = [WashingMachineWashProgram.from_dict(p) for p in raw]
+    return [p for p in programs if p.position != 0]
+
+
+def parse_dryer_programs(raw: list[dict]) -> list[TumbleDryerProgram]:
+    """Parse and filter the raw dryer program list stored in a config entry."""
+    programs = [TumbleDryerProgram.from_dict(p) for p in raw]
     return [p for p in programs if p.position != 0]
 
 

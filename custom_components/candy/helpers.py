@@ -8,7 +8,11 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 
 from .client import parse_wash_programs
-from .client.model import WashingMachineStatus, WashingMachineWashProgram
+from .client.model import (
+    TumbleDryerStatus,
+    WashingMachineStatus,
+    WashingMachineWashProgram,
+)
 from .const import (
     CONF_KEY_BRAND,
     CONF_KEY_DEVICE_MODEL,
@@ -17,6 +21,7 @@ from .const import (
     CONF_KEY_MODE,
     CONF_KEY_PROGRAMS,
     CONF_KEY_SERIAL_NUMBER,
+    DEVICE_NAME_TUMBLE_DRYER,
     DEVICE_NAME_WASHER_DRYER,
     DEVICE_NAME_WASHING_MACHINE,
     DOMAIN,
@@ -38,8 +43,11 @@ def localized_notification_text(key: str, language: str) -> str:
 
 
 def remote_control_enabled(data: object) -> bool:
-    """Return True when the washing machine accepts remote commands."""
-    return isinstance(data, WashingMachineStatus) and data.remote_control
+    """Return True when the appliance accepts remote commands."""
+    return (
+        isinstance(data, (WashingMachineStatus, TumbleDryerStatus))
+        and data.remote_control
+    )
 
 
 def is_dualtech(interface_type: str | None) -> bool:
@@ -47,6 +55,14 @@ def is_dualtech(interface_type: str | None) -> bool:
     if not interface_type:
         return False
     return "DUAL" in interface_type.upper()
+
+
+def is_dualtech_dryer(interface_type: str | None) -> bool:
+    """Return True if the interface_type belongs to a DualTech tumble dryer."""
+    if not interface_type:
+        return False
+    upper = interface_type.upper()
+    return upper.startswith(("TD_DIGIT_", "TD_LED_")) or "DUAL" in upper
 
 
 def supports_remote_pause(interface_type: str | None) -> bool:
@@ -102,6 +118,30 @@ def wash_device_info(config_entry: ConfigEntry) -> DeviceInfo:
     info = DeviceInfo(
         identifiers={(DOMAIN, config_entry.entry_id)},
         name=wash_device_name(config_entry),
+        manufacturer=manufacturer,
+        suggested_area=SUGGESTED_AREA_BATHROOM,
+    )
+    if config_entry.data.get(CONF_KEY_MAC_ADDRESS):
+        info["connections"] = {
+            (
+                dr.CONNECTION_NETWORK_MAC,
+                config_entry.data[CONF_KEY_MAC_ADDRESS],
+            )
+        }
+    if config_entry.data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
+        if config_entry.data.get(CONF_KEY_DEVICE_MODEL):
+            info["model"] = config_entry.data[CONF_KEY_DEVICE_MODEL]
+        if config_entry.data.get(CONF_KEY_SERIAL_NUMBER):
+            info["serial_number"] = config_entry.data[CONF_KEY_SERIAL_NUMBER]
+    return info
+
+
+def dryer_device_info(config_entry: ConfigEntry) -> DeviceInfo:
+    brand = config_entry.data.get(CONF_KEY_BRAND, "candy")
+    manufacturer = brand.capitalize() if brand else "Candy"
+    info = DeviceInfo(
+        identifiers={(DOMAIN, config_entry.entry_id)},
+        name=DEVICE_NAME_TUMBLE_DRYER,
         manufacturer=manufacturer,
         suggested_area=SUGGESTED_AREA_BATHROOM,
     )

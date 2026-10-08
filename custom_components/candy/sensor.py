@@ -32,9 +32,11 @@ from homeassistant.util import dt as dt_util
 
 from .client import (
     DownloadableProgram,
+    TumbleDryerProgram,
     WashingMachineStatus,
     WashingMachineWashProgram,
     load_downloadable_programs,
+    parse_dryer_programs,
     parse_wash_programs,
 )
 from .client.model import (
@@ -76,6 +78,8 @@ from .const import (
     DEVICE_NAME_TUMBLE_DRYER,
     DEVICE_NAME_WINE_COOLER,
     DOMAIN,
+    DRY_LEVEL_FROM_VALUE,
+    DRY_LEVEL_OPTIONS,
     DRY_TARGET_DURATIONS,
     MAINTENANCE_FILTER_THRESHOLD,
     MAINTENANCE_FULL_CHECKUP_THRESHOLD,
@@ -92,8 +96,11 @@ from .const import (
     UNIQUE_ID_OVEN,
     UNIQUE_ID_OVEN_PROGRAM,
     UNIQUE_ID_OVEN_TEMP,
+    UNIQUE_ID_TUMBLE_CHECKUP_STATE,
     UNIQUE_ID_TUMBLE_CYCLE_STATUS,
+    UNIQUE_ID_TUMBLE_DRY_LEVEL,
     UNIQUE_ID_TUMBLE_DRYER,
+    UNIQUE_ID_TUMBLE_ERROR,
     UNIQUE_ID_TUMBLE_PROGRAM,
     UNIQUE_ID_TUMBLE_REMAINING_TIME,
     UNIQUE_ID_WASH_CHECKUP_RESULT,
@@ -235,12 +242,17 @@ async def async_setup_entry(
                     )
         async_add_entities(entities)
     elif isinstance(coordinator.data, TumbleDryerStatus):
+        raw_programs = config_entry.data.get(CONF_KEY_PROGRAMS, [])
+        dryer_programs = parse_dryer_programs(raw_programs)
         async_add_entities(
             [
                 CandyTumbleDryerSensor(coordinator, config_entry),
-                CandyTumbleProgramSensor(coordinator, config_entry),
+                CandyTumbleProgramSensor(coordinator, config_entry, dryer_programs),
                 CandyTumbleStatusSensor(coordinator, config_entry),
                 CandyTumbleRemainingTimeSensor(coordinator, config_entry),
+                CandyTumbleDryLevelSensor(coordinator, config_entry),
+                CandyTumbleErrorCodeSensor(coordinator, config_entry),
+                CandyTumbleCheckUpStateSensor(coordinator, config_entry),
             ]
         )
     elif isinstance(coordinator.data, OvenStatus):
@@ -1730,6 +1742,15 @@ class CandyTumbleProgramSensor(CandyBaseSensor):
     _attr_translation_key = "tumble_program"
     _attr_name = "Dryer program"
 
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        programs: list[TumbleDryerProgram],
+    ) -> None:
+        super().__init__(coordinator, config_entry)
+        self._programs = programs
+
     def device_name(self) -> str:
         return DEVICE_NAME_TUMBLE_DRYER
 
@@ -1743,6 +1764,15 @@ class CandyTumbleProgramSensor(CandyBaseSensor):
     @property
     def native_value(self) -> StateType:
         status = cast(TumbleDryerStatus, self.coordinator.data)
+        lang = self.config_entry.data.get(
+            CONF_KEY_PROGRAM_LANGUAGE, self.hass.config.language
+        )
+        match = next(
+            (p for p in self._programs if p.selector_position == status.program),
+            None,
+        )
+        if match is not None:
+            return match.localized_name(lang)
         return status.program
 
     @property
@@ -1808,6 +1838,84 @@ class CandyTumbleRemainingTimeSensor(CandyBaseSensor):
     @property
     def icon(self) -> str:
         return "mdi:progress-clock"
+
+
+class CandyTumbleDryLevelSensor(CandyBaseSensor):
+    _attr_translation_key = "tumble_dry_level"
+    _attr_name = "Dry level"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = DRY_LEVEL_OPTIONS
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_TUMBLE_DRYER
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_DRY_LEVEL.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        status = cast(TumbleDryerStatus, self.coordinator.data)
+        return DRY_LEVEL_FROM_VALUE.get(status.dry_level)
+
+    @property
+    def icon(self) -> str:
+        return "mdi:weather-sunny"
+
+
+class CandyTumbleErrorCodeSensor(CandyBaseSensor):
+    _attr_translation_key = "tumble_error"
+    _attr_name = "Dryer error"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_TUMBLE_DRYER
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_ERROR.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        status = cast(TumbleDryerStatus, self.coordinator.data)
+        return status.error
+
+    @property
+    def icon(self) -> str:
+        return "mdi:alert-circle-outline"
+
+
+class CandyTumbleCheckUpStateSensor(CandyBaseSensor):
+    _attr_translation_key = "tumble_checkup_state"
+    _attr_name = "Check-up state"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_TUMBLE_DRYER
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_CHECKUP_STATE.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        status = cast(TumbleDryerStatus, self.coordinator.data)
+        if status.checkup_state is None:
+            return None
+        return str(status.checkup_state)
+
+    @property
+    def icon(self) -> str:
+        return "mdi:wrench-outline"
 
 
 class CandyOvenSensor(CandyBaseSensor):
