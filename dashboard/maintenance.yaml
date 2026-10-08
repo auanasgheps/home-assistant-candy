@@ -1,8 +1,13 @@
 # --------------------------------------------------------------------------------------------------
-# Home Assistant Dashboard Card: Candy / Hoover Washing Machine Maintenance & Diagnostics
+# Home Assistant Dashboard Card: Washing Machine & Washer-Dryer Maintenance & Diagnostics
 # --------------------------------------------------------------------------------------------------
 # Requirements:
 #   - piitaya/lovelace-mushroom (custom:mushroom-template-card, custom:mushroom-chips-card)
+#
+# Target Appliances:
+#   - Candy / Hoover Standard Washing Machines
+#   - Candy / Hoover Washer-Dryer Combos
+#   (For standalone Tumble Dryers, use `tumble-dryer.yaml` instead; dryers do not use cycle counters)
 #
 # Instructions:
 #   Copy the contents of this file into a Manual Card on your dashboard.
@@ -10,7 +15,8 @@
 #   (e.g. `washing_machine` or `my_washing_machine`).
 #
 # Note:
-#   This card automatically adapts for all appliance interface platforms. On platforms without
+#   This card tracks cycle-based maintenance counters (Full Check-up, Limescale Autoclean, Debris Filter).
+#   It automatically adapts for all appliance interface platforms. On platforms without
 #   statistics endpoints (such as DualTech / 3D_DUAL), cycle-based counters and baseline reset buttons
 #   are automatically hidden while diagnostic Check-up and Limescale Cleaning controls remain accessible.
 # --------------------------------------------------------------------------------------------------
