@@ -14,7 +14,12 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 import voluptuous as vol
 
-from .client.model import MachineState, WashingMachineStatistics, WashingMachineStatus
+from .client.model import (
+    MachineState,
+    TumbleDryerStatus,
+    WashingMachineStatistics,
+    WashingMachineStatus,
+)
 from .const import (
     CONF_KEY_MAINTENANCE_ENABLED,
     CONF_KEY_MAINTENANCE_FILTER_ENABLED,
@@ -82,7 +87,9 @@ async def async_get_triggers(
     coordinator = (
         hass.data.get(DOMAIN, {}).get(config_entry_id, {}).get(DATA_KEY_COORDINATOR)
     )
-    if coordinator is None or not isinstance(coordinator.data, WashingMachineStatus):
+    if coordinator is None or not isinstance(
+        coordinator.data, (WashingMachineStatus, TumbleDryerStatus)
+    ):
         return []
 
     base: dict[str, Any] = {
@@ -90,6 +97,9 @@ async def async_get_triggers(
         CONF_DOMAIN: DOMAIN,
         CONF_DEVICE_ID: device_id,
     }
+
+    if isinstance(coordinator.data, TumbleDryerStatus):
+        return [{**base, CONF_TYPE: "error_reported"}]
 
     triggers = [
         {**base, CONF_TYPE: "washing_started"},
@@ -165,14 +175,14 @@ def _attach_state_trigger(
     trigger_variables: dict[str, Any],
     job: HassJob,
 ) -> CALLBACK_TYPE:
-    initial = cast(WashingMachineStatus | None, coordinator.data)
+    initial = cast(WashingMachineStatus | TumbleDryerStatus | None, coordinator.data)
     prev_state: list[MachineState | None] = [
         initial.machine_state if initial is not None else None
     ]
 
     @callback
     def _on_update() -> None:
-        status = cast(WashingMachineStatus | None, coordinator.data)
+        status = cast(WashingMachineStatus | TumbleDryerStatus | None, coordinator.data)
         if status is None:
             return
         curr = status.machine_state

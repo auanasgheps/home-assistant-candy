@@ -145,7 +145,12 @@ from .const import (
     UNIQUE_ID_WINE_COOLER_TEMP,
     UNIQUE_ID_WINE_COOLER_TEMP_DOWN,
 )
-from .helpers import cycles_remaining, is_washer_dryer, wash_device_name
+from .helpers import (
+    cycles_remaining,
+    get_dryer_error_notification_strings,
+    is_washer_dryer,
+    wash_device_name,
+)
 
 
 async def async_setup_entry(
@@ -1866,10 +1871,21 @@ class CandyTumbleDryLevelSensor(CandyBaseSensor):
         return "mdi:weather-sunny"
 
 
-class CandyTumbleErrorCodeSensor(CandyBaseSensor):
+class CandyTumbleErrorCodeSensor(CandyBaseSensor, RestoreSensor):
     _attr_translation_key = "tumble_error"
     _attr_name = "Dryer error"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _restored_state: str | None = None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_sensor_data()) is not None:
+            if isinstance(last.native_value, str):
+                self._restored_state = last.native_value
+
+    @property
+    def available(self) -> bool:
+        return super().available or self._restored_state is not None
 
     def device_name(self) -> str:
         return DEVICE_NAME_TUMBLE_DRYER
@@ -1883,8 +1899,24 @@ class CandyTumbleErrorCodeSensor(CandyBaseSensor):
 
     @property
     def native_value(self) -> StateType:
-        status = cast(TumbleDryerStatus, self.coordinator.data)
-        return status.error
+        if self.coordinator.data is not None:
+            status = cast(TumbleDryerStatus, self.coordinator.data)
+            return status.error if status.error is not None else "0"
+        return self._restored_state
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        val = self.native_value
+        if val is not None and str(val) not in ("0", "None"):
+            raw = str(val).upper().lstrip("E")
+            if raw.isdigit():
+                lang = self.config_entry.data.get(
+                    CONF_KEY_PROGRAM_LANGUAGE, self.hass.config.language
+                )
+                notif = get_dryer_error_notification_strings(int(raw), lang)
+                if notif is not None:
+                    return {"description": notif[1].split("\n")[0].strip()}
+        return {}
 
     @property
     def icon(self) -> str:

@@ -20,6 +20,8 @@ from custom_components.candy.const import (
 )
 from custom_components.candy.helpers import (
     cycles_remaining,
+    get_appliance_error_notification_strings,
+    get_dryer_error_notification_strings,
     get_wash_error_notification_strings,
     is_dualtech,
     is_washer_dryer,
@@ -142,6 +144,40 @@ def test_get_wash_error_notification_strings():
 
     # Unknown error code returns None
     assert get_wash_error_notification_strings(99, "en") is None
+
+
+def test_get_dryer_error_notification_strings():
+    # English
+    en_result = get_dryer_error_notification_strings(3, "en")
+    assert en_result is not None
+    title, message = en_result
+    assert title == "Tumble dryer error: E03"
+    assert message.startswith("E03 -  The water tank is full\n\n")
+
+    # Italian
+    it_result = get_dryer_error_notification_strings(3, "it")
+    assert it_result is not None
+    title, message = it_result
+    assert title == "Errore asciugatrice: E03"
+    assert message.startswith("E03 -  Tanica raccolta acqua piena\n\n")
+
+    # Fallback to English for unknown language
+    fallback_result = get_dryer_error_notification_strings(3, "unknown_lang")
+    assert fallback_result is not None
+    title, message = fallback_result
+    assert title == "Tumble dryer error: E03"
+    assert message.startswith("E03 -  The water tank is full\n\n")
+
+    # Unknown error code returns None
+    assert get_dryer_error_notification_strings(99, "en") is None
+
+    # Unified function
+    unified_wash = get_appliance_error_notification_strings("washer", 2, "en")
+    assert unified_wash is not None
+    assert unified_wash[0] == "Washing machine error: E02"
+    unified_dryer = get_appliance_error_notification_strings("dryer", 3, "en")
+    assert unified_dryer is not None
+    assert unified_dryer[0] == "Tumble dryer error: E03"
 
 
 def test_is_washer_dryer_from_config():

@@ -65,6 +65,7 @@ from .const import (
     DATA_KEY_CHECKUP_UNSUB,
     DATA_KEY_CLIENT,
     DATA_KEY_COORDINATOR,
+    DATA_KEY_DRYER_ERROR_UNSUB,
     DATA_KEY_FULL_CHECKUP_UNSUB,
     DATA_KEY_LIMESCALE_UNSUB,
     DATA_KEY_MAINT_UNSUB,
@@ -76,6 +77,7 @@ from .const import (
     MAINTENANCE_FULL_CHECKUP_THRESHOLD,
     MAINTENANCE_HARDNESS_THRESHOLDS,
     MODE_FULL_CONTROL,
+    NOTIF_ID_DRYER_ERROR,
     NOTIF_ID_FULL_CHECKUP,
     NOTIF_ID_LIMESCALE,
     NOTIF_ID_MAINT_FILTER,
@@ -92,7 +94,7 @@ from .const import (
 )
 from .helpers import (
     cycles_remaining,
-    get_wash_error_notification_strings,
+    get_appliance_error_notification_strings,
     is_dualtech,
     localized_notification_text,
 )
@@ -512,6 +514,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_LIMESCALE_UNSUB] = (
             unsub_limescale
         )
+    elif isinstance(coordinator.data, TumbleDryerStatus):
+        unsub_dryer_error = _register_dryer_error_listener(
+            hass, config_entry, coordinator
+        )
+        hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_DRYER_ERROR_UNSUB] = (
+            unsub_dryer_error
+        )
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
@@ -858,33 +867,52 @@ def _register_stats_refresh_listener(
     return coordinator.async_add_listener(_on_status_update)
 
 
-def _register_wash_error_listener(
+def _extract_error_code(status: Any) -> int | None:
+    if isinstance(status, WashingMachineStatus):
+        return status.error
+    if isinstance(status, TumbleDryerStatus):
+        return status.error_code
+    return None
+
+
+def _register_appliance_error_listener(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     coordinator: DataUpdateCoordinator[Any],
+    appliance_type: str,
 ) -> Callable[[], None]:
-    """Register a coordinator listener that posts error notifications and dismisses them when cleared."""
+    """Register a coordinator listener that posts appliance error notifications and dismisses them when cleared."""
     entry_id = config_entry.entry_id
-    notif_id = NOTIF_ID_WASH_ERROR.format(entry_id)
+    notif_id = (
+        NOTIF_ID_DRYER_ERROR.format(entry_id)
+        if appliance_type == "dryer"
+        else NOTIF_ID_WASH_ERROR.format(entry_id)
+    )
     lang = config_entry.data.get(CONF_KEY_PROGRAM_LANGUAGE, hass.config.language)
+    unknown_err_msg = (
+        "Unknown tumble dryer error code: %s"
+        if appliance_type == "dryer"
+        else "Unknown washing machine error code: %s"
+    )
 
-    initial = cast(WashingMachineStatus | None, coordinator.data)
-    initial_error = initial.error if initial is not None else None
+    initial_error = _extract_error_code(coordinator.data)
     prev_error: list[int | None] = [initial_error]
 
     if initial_error is not None and initial_error > 0:
-        notif_strings = get_wash_error_notification_strings(initial_error, lang)
+        notif_strings = get_appliance_error_notification_strings(
+            appliance_type, initial_error, lang
+        )
         if notif_strings is not None:
             title, message = notif_strings
             pn_async_create(hass, message, title=title, notification_id=notif_id)
         else:
-            _LOGGER.warning("Unknown washing machine error code: %s", initial_error)
+            _LOGGER.warning(unknown_err_msg, initial_error)
 
     def _on_status_update() -> None:
-        status = cast(WashingMachineStatus | None, coordinator.data)
+        status = coordinator.data
         if status is None:
             return
-        curr_error = status.error
+        curr_error = _extract_error_code(status)
         prior_error = prev_error[0]
         prev_error[0] = curr_error
 
@@ -892,16 +920,34 @@ def _register_wash_error_listener(
             return
 
         if curr_error is not None and curr_error > 0:
-            notif_strings = get_wash_error_notification_strings(curr_error, lang)
+            notif_strings = get_appliance_error_notification_strings(
+                appliance_type, curr_error, lang
+            )
             if notif_strings is not None:
                 title, message = notif_strings
                 pn_async_create(hass, message, title=title, notification_id=notif_id)
             else:
-                _LOGGER.warning("Unknown washing machine error code: %s", curr_error)
+                _LOGGER.warning(unknown_err_msg, curr_error)
         elif prior_error is not None and prior_error > 0:
             pn_async_dismiss(hass, notif_id)
 
     return coordinator.async_add_listener(_on_status_update)
+
+
+def _register_wash_error_listener(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    coordinator: DataUpdateCoordinator[Any],
+) -> Callable[[], None]:
+    return _register_appliance_error_listener(hass, config_entry, coordinator, "washer")
+
+
+def _register_dryer_error_listener(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    coordinator: DataUpdateCoordinator[Any],
+) -> Callable[[], None]:
+    return _register_appliance_error_listener(hass, config_entry, coordinator, "dryer")
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -915,6 +961,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             DATA_KEY_FULL_CHECKUP_UNSUB,
             DATA_KEY_STATS_REFRESH_UNSUB,
             DATA_KEY_WASH_ERROR_UNSUB,
+            DATA_KEY_DRYER_ERROR_UNSUB,
             DATA_KEY_LIMESCALE_UNSUB,
         ):
             unsub = entry_data.get(key)
