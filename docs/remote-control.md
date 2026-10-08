@@ -116,15 +116,18 @@ Choose your target drying level or timed duration:
 
 ---
 
-## Maintenance Counters & Diagnostics
+## Maintenance Counters & Diagnostics (Washing Machines & Combos)
 
-The integration tracks cycle counts and alerts you when periodic maintenance is needed, mirroring the official app's reminders:
+For washing machines and washer-dryer combos, the integration tracks wash cycle counts and alerts you when periodic maintenance is needed, mirroring the official app's reminders:
 
 | Routine | Threshold | Recommended Action | Reset Behavior |
 |---|---|---|---|
 | **Full Check-up** | Every 100 cycles | Run diagnostic via `button.<device>_full_checkup` | **Automatic:** Resets when test completes (manual reset button fallback available) |
 | **Limescale Cleaning** | Every 85–110 cycles (based on water hardness) | Run autoclean via `button.<device>_limescale_cleaning` | **Automatic:** Resets when autoclean completes (manual reset button fallback available) |
 | **Filter Cleaning** | Every 100 cycles | Physically inspect and clean the debris filter | **Manual:** Press `button.<device>_reset_filter_counter` after cleaning |
+
+> [!NOTE]
+> **Standalone Tumble Dryers:** Dryers do not use cycle-based water/limescale counters. Instead, their hardware directly reports live status for the condensate water tank (`binary_sensor.<device>_water_tank_full`) and lint filter (`binary_sensor.<device>_clean_filter`), with hardware warning reset controls (`button.<device>_reset_warnings`) integrated directly into the dedicated tumble dryer card.
 
 ### How Maintenance Lifecycle Works
 - **Due Alerts:** When a counter reaches 0 remaining cycles, Home Assistant posts a persistent notification in your language. The counter stays at 0 (and keeps you reminded) until reset.
@@ -148,9 +151,13 @@ When the appliance reports a problem (such as an error code):
 
 Pre-configured Lovelace dashboard cards are available in the [`dashboard/`](../dashboard/) directory (requires the [Mushroom](https://github.com/piitaya/lovelace-mushroom) card):
 
-- **[Standard Washing Machine Card](../dashboard/washing-machine.yaml):** Full control panel with program selection, spin/temp adjustments, start/pause/stop buttons, detergent dosing chips, and finish time estimates.
-- **[Washer-Dryer Card](../dashboard/washer-dryer.yaml):** All washing controls plus program type switching (wash/dry/both), dry setting selectors, live dry target chips, and animated drying state icons.
-- **[Maintenance & Diagnostics Card](../dashboard/maintenance.yaml):** Live counter progress bars, one-click diagnostic test buttons, and counter reset controls.
+### Operational Cards (Select the card matching your appliance)
+- **[Standard Washing Machine Card](../dashboard/washing-machine.yaml):** Operational control panel for standard washing machines (program selection, spin/temp adjustments, start/pause/stop buttons, detergent dosing chips, and finish time estimates). *Pair with `maintenance.yaml` for maintenance counters.*
+- **[Washer-Dryer Card](../dashboard/washer-dryer.yaml):** Operational control panel for washer-dryer combos (all washing controls plus program type switching between wash/dry/both, dry setting selectors, live dry target chips, and animated drying state icons). *Pair with `maintenance.yaml` for maintenance counters.*
+- **[Tumble Dryer Card](../dashboard/tumble-dryer.yaml):** Complete all-in-one control panel for standalone tumble dryers (program selection, dryness level and timed drying selectors, live lint filter and condensate water tank warning alerts, anti-crease tumbling cancellation, electronic check-up, and hardware warning resets). *A separate maintenance card is not needed for dryers.*
+
+### Maintenance & Diagnostics Card (Washing Machines & Washer-Dryers)
+- **[Maintenance & Diagnostics Card](../dashboard/maintenance.yaml):** Dedicated maintenance card for **Washing Machines and Washer-Dryer combos**. Displays live counter progress bars (Limescale Cleaning, Full Check-up, Debris Filter), one-click autoclean triggers, and baseline reset buttons. *(Not used for standalone tumble dryers, which have their hardware alerts and diagnostics built directly into `tumble-dryer.yaml`).*
 
 ---
 
