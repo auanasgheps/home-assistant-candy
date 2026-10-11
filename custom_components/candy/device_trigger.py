@@ -41,6 +41,10 @@ TRIGGER_TYPES = frozenset(
     {
         "washing_started",
         "washing_completed",
+        "drying_started",
+        "drying_completed",
+        "clean_filter_needed",
+        "water_tank_full",
         "error_reported",
         "maintenance_full_checkup_due",
         "maintenance_limescale_due",
@@ -99,7 +103,13 @@ async def async_get_triggers(
     }
 
     if isinstance(coordinator.data, TumbleDryerStatus):
-        return [{**base, CONF_TYPE: "error_reported"}]
+        return [
+            {**base, CONF_TYPE: "drying_started"},
+            {**base, CONF_TYPE: "drying_completed"},
+            {**base, CONF_TYPE: "clean_filter_needed"},
+            {**base, CONF_TYPE: "water_tank_full"},
+            {**base, CONF_TYPE: "error_reported"},
+        ]
 
     triggers = [
         {**base, CONF_TYPE: "washing_started"},
@@ -150,20 +160,29 @@ async def async_attach_trigger(
     }
     job = HassJob(action, f"candy device trigger {trigger_type}")
 
-    if trigger_type in {"washing_started", "washing_completed", "error_reported"}:
+    @callback
+    def _fire() -> None:
+        hass.async_run_hass_job(job, {"trigger": trigger_variables})
+
+    if trigger_type in {
+        "washing_started",
+        "washing_completed",
+        "drying_started",
+        "drying_completed",
+        "error_reported",
+    }:
         return _attach_state_trigger(
             hass, coordinator, trigger_type, trigger_variables, job
         )
+
+    if trigger_type in {"clean_filter_needed", "water_tank_full"}:
+        return _attach_dryer_warning_trigger(coordinator, trigger_type, _fire)
 
     stats_coordinator: DataUpdateCoordinator[Any] | None = domain_data.get(
         DATA_KEY_STATS_COORDINATOR
     )
     if stats_coordinator is None:
         return lambda: None
-
-    @callback
-    def _fire() -> None:
-        hass.async_run_hass_job(job, {"trigger": trigger_variables})
 
     return _attach_maintenance_trigger(stats_coordinator, entry, trigger_type, _fire)
 
@@ -189,18 +208,51 @@ def _attach_state_trigger(
         prev = prev_state[0]
         prev_state[0] = curr
 
-        if trigger_type == "washing_started":
+        if trigger_type in {"washing_started", "drying_started"}:
             should_fire = curr == MachineState.RUNNING and prev not in {
                 MachineState.RUNNING,
                 MachineState.PAUSED,
             }
-        elif trigger_type == "washing_completed":
+        elif trigger_type in {"washing_completed", "drying_completed"}:
             should_fire = curr in _FINISHED_STATES and prev not in _FINISHED_STATES
         else:  # error_reported
             should_fire = curr == MachineState.ERROR and prev != MachineState.ERROR
 
         if should_fire:
             hass.async_run_hass_job(job, {"trigger": trigger_variables})
+
+    return coordinator.async_add_listener(_on_update)
+
+
+def _attach_dryer_warning_trigger(
+    coordinator: DataUpdateCoordinator[Any],
+    trigger_type: str,
+    fire: Callable[[], None],
+) -> CALLBACK_TYPE:
+    initial = cast(TumbleDryerStatus | None, coordinator.data)
+    initial_val = False
+    if initial is not None:
+        if trigger_type == "clean_filter_needed":
+            initial_val = initial.need_clean_filter
+        else:
+            initial_val = initial.water_tank_full
+
+    prev_val: list[bool] = [initial_val]
+
+    @callback
+    def _on_update() -> None:
+        status = cast(TumbleDryerStatus | None, coordinator.data)
+        if status is None:
+            return
+        if trigger_type == "clean_filter_needed":
+            curr = status.need_clean_filter
+        else:
+            curr = status.water_tank_full
+        prev = prev_val[0]
+        prev_val[0] = curr
+
+        if curr and not prev:
+            fire()
 
     return coordinator.async_add_listener(_on_update)
 

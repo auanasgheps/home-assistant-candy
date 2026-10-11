@@ -850,5 +850,53 @@
     "pt": "Erro da máquina de lavar",
     "ru": "Ошибка стиральной машины",
     "tr": "Çamaşır makinesi hatası"
+  },
+  "dryer_clean_filter_title": {
+    "de": "Flusensieb reinigen",
+    "en": "Clean Lint Filter",
+    "es": "Limpiar filtro de pelusas",
+    "fr": "Nettoyer le filtre à peluches",
+    "it": "Pulisci Filtro",
+    "nl": "Pluizenfilter reinigen",
+    "pl": "Wyczyść filtr kłaczków",
+    "pt": "Limpar filtro de cotão",
+    "ru": "Очистите фильтр",
+    "tr": "Tiftik Filtresini Temizleyin"
+  },
+  "dryer_clean_filter_message": {
+    "de": "Bitte reinigen Sie das Flusensieb, um die Trocknungseffizienz aufrechtzuerhalten und Überhitzung zu vermeiden.",
+    "en": "Please clean the fluff filter to maintain drying efficiency and prevent overheating.",
+    "es": "Por favor, limpie el filtro de pelusas para mantener la eficiencia de secado y evitar sobrecalentamientos.",
+    "fr": "Veuillez nettoyer le filtre à peluches pour maintenir l'efficacité du séchage et éviter les surchauffes.",
+    "it": "Pulisci il filtro lanugine per mantenere l'efficienza di asciugatura ed evitare surriscaldamenti.",
+    "nl": "Reinig het pluizenfilter om het droogrendement te behouden en oververhitting te voorkomen.",
+    "pl": "Proszę wyczyścić filtr kłaczków, aby zachować wydajność suszenia i zapobiec przegrzaniu.",
+    "pt": "Por favor, limpe o filtro de cotão para manter a eficiência de secagem e evitar sobreaquecimento.",
+    "ru": "Пожалуйста, очистите ворсовый фильтр для поддержания эффективности сушки и предотвращения перегрева.",
+    "tr": "Kurutma verimliliğini korumak ve aşırı ısınmayı önlemek için lütfen tiftik filtresini temizleyin."
+  },
+  "dryer_water_tank_full_title": {
+    "de": "Kondenswasserbehälter voll",
+    "en": "Water Tank Full",
+    "es": "Depósito de agua lleno",
+    "fr": "Bac à eau plein",
+    "it": "Contenitore Acqua Pieno",
+    "nl": "Waterreservoir vol",
+    "pl": "Zbiornik na wodę pełny",
+    "pt": "Depósito de água cheio",
+    "ru": "Контейнер для воды полон",
+    "tr": "Su Tankı Dolu"
+  },
+  "dryer_water_tank_full_message": {
+    "de": "Der Kondenswasserbehälter ist voll. Bitte leeren Sie den Behälter, um das Trocknen fortzusetzen.",
+    "en": "The condensate water tank is full. Please empty the tank to continue drying.",
+    "es": "El depósito de condensación está lleno. Por favor, vacíe el depósito para continuar el secado.",
+    "fr": "Le bac de récupération d'eau de condensation est plein. Veuillez vider le bac pour continuer le séchage.",
+    "it": "Il contenitore di raccolta condensa è pieno. Svuota il serbatoio per continuare l'asciugatura.",
+    "nl": "Het condenswaterreservoir is vol. Leeg het reservoir om het drogen voort te zetten.",
+    "pl": "Zbiornik na skropliny jest pełny. Proszę opróżnić zbiornik, aby kontynuować suszenie.",
+    "pt": "O depósito de água de condensação está cheio. Por favor, esvazie o depósito para continuar a secagem.",
+    "ru": "Резервуар для конденсата полон. Пожалуйста, опорожните резервуар для продолжения сушки.",
+    "tr": "Yoğuşma suyu haznesi dolu. Kurutmaya devam etmek için lütfen hazneyi boşaltın."
   }
 }

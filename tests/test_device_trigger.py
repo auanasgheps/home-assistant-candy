@@ -157,7 +157,56 @@ async def test_get_triggers_all_six_with_maintenance(hass):
         result = await async_get_triggers(hass, device_id="dev-1")
 
     assert len(result) == 6
-    assert {t[CONF_TYPE] for t in result} == TRIGGER_TYPES
+    assert {t[CONF_TYPE] for t in result} == {
+        "washing_started",
+        "washing_completed",
+        "error_reported",
+        "maintenance_full_checkup_due",
+        "maintenance_limescale_due",
+        "maintenance_filter_due",
+    }
+
+
+async def test_get_triggers_tumble_dryer(hass):
+    """Tumble dryer returns its 5 triggers."""
+    entry = MockConfigEntry(domain=DOMAIN, unique_id="gt-td", data={})
+    entry.add_to_hass(hass)
+    coordinator = MagicMock()
+    coordinator.data = TumbleDryerStatus(
+        machine_state=MachineState.IDLE,
+        program_state=DryerProgramState.STOPPED,
+        cycle_state=DryerCycleState.LEVEL_NONE,
+        program=0,
+        remaining_minutes=0,
+        remote_control=False,
+        dry_level=0,
+        dry_level_selected=0,
+        refresh=False,
+        need_clean_filter=False,
+        water_tank_full=False,
+        door_closed=True,
+        error=None,
+        delay_value=None,
+        checkup_state=None,
+        recipe_id=None,
+        time=None,
+        rapido=None,
+    )
+    hass.data[DOMAIN] = {entry.entry_id: {DATA_KEY_COORDINATOR: coordinator}}
+
+    with patch("custom_components.candy.device_trigger.dr.async_get") as mock_reg:
+        mock_reg.return_value.async_get.return_value = _mock_device(entry.entry_id)
+        result = await async_get_triggers(hass, device_id="dev-1")
+
+    assert len(result) == 5
+    types = {t[CONF_TYPE] for t in result}
+    assert types == {
+        "drying_started",
+        "drying_completed",
+        "clean_filter_needed",
+        "water_tank_full",
+        "error_reported",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -492,3 +541,162 @@ async def test_state_trigger_error_reported_dryer(hass):
         coordinator.data = _make_td(MachineState.ERROR)
         listener_cb()
         assert mock_job.call_count == 1
+
+
+async def test_state_trigger_drying_started(hass):
+    """drying_started fires on IDLE→RUNNING but not RUNNING→RUNNING or PAUSED→RUNNING."""
+    coordinator, on_update = await _attach_state_cb(
+        hass, "drying_started", MachineState.IDLE
+    )
+
+    with patch.object(hass, "async_run_hass_job") as mock_job:
+        coordinator.data = _make_wm_status(MachineState.RUNNING)
+        on_update()
+        assert mock_job.call_count == 1
+
+        on_update()
+        assert mock_job.call_count == 1
+
+        coordinator.data = _make_wm_status(MachineState.PAUSED)
+        on_update()
+        coordinator.data = _make_wm_status(MachineState.RUNNING)
+        on_update()
+        assert mock_job.call_count == 1
+
+
+async def test_state_trigger_drying_completed(hass):
+    """drying_completed fires when entering FINISHED1 from non-finished state."""
+    coordinator, on_update = await _attach_state_cb(
+        hass, "drying_completed", MachineState.RUNNING
+    )
+
+    with patch.object(hass, "async_run_hass_job") as mock_job:
+        coordinator.data = _make_wm_status(MachineState.FINISHED1)
+        on_update()
+        assert mock_job.call_count == 1
+
+        on_update()
+        assert mock_job.call_count == 1
+
+
+async def test_dryer_warning_trigger_clean_filter_needed(hass):
+    """clean_filter_needed fires when need_clean_filter transitions from False to True."""
+    def _make_td(clean_filter: bool) -> TumbleDryerStatus:
+        return TumbleDryerStatus(
+            machine_state=MachineState.IDLE,
+            program_state=DryerProgramState.STOPPED,
+            cycle_state=DryerCycleState.LEVEL_NONE,
+            program=1,
+            remaining_minutes=0,
+            remote_control=True,
+            dry_level=2,
+            dry_level_selected=1,
+            refresh=False,
+            need_clean_filter=clean_filter,
+            water_tank_full=False,
+            door_closed=True,
+            error="0",
+            delay_value=0,
+            checkup_state=None,
+            recipe_id=None,
+            time=0,
+            rapido=0,
+        )
+
+    coordinator = MagicMock()
+    coordinator.data = _make_td(False)
+    listener_cb = None
+
+    def _add_listener(cb):
+        nonlocal listener_cb
+        listener_cb = cb
+        return lambda: None
+
+    coordinator.async_add_listener = _add_listener
+    entry = MockConfigEntry(domain=DOMAIN, unique_id="td-filter-trig", data={})
+    entry.add_to_hass(hass)
+    hass.data[DOMAIN] = {entry.entry_id: {DATA_KEY_COORDINATOR: coordinator}}
+
+    with patch("custom_components.candy.device_trigger.dr.async_get") as mock_reg:
+        mock_reg.return_value.async_get.return_value = _mock_device(entry.entry_id)
+        await async_attach_trigger(
+            hass,
+            _trigger_config("clean_filter_needed"),
+            lambda action_ctx: None,
+            {"trigger_data": {}},
+        )
+
+    assert listener_cb is not None
+    with patch.object(hass, "async_run_hass_job") as mock_job:
+        coordinator.data = _make_td(True)
+        listener_cb()
+        assert mock_job.call_count == 1
+
+        # Still True: does not fire again
+        listener_cb()
+        assert mock_job.call_count == 1
+
+        # Clears to False: does not fire
+        coordinator.data = _make_td(False)
+        listener_cb()
+        assert mock_job.call_count == 1
+
+        # Becomes True again: fires
+        coordinator.data = _make_td(True)
+        listener_cb()
+        assert mock_job.call_count == 2
+
+
+async def test_dryer_warning_trigger_water_tank_full(hass):
+    """water_tank_full fires when water_tank_full transitions from False to True."""
+    def _make_td(tank_full: bool) -> TumbleDryerStatus:
+        return TumbleDryerStatus(
+            machine_state=MachineState.IDLE,
+            program_state=DryerProgramState.STOPPED,
+            cycle_state=DryerCycleState.LEVEL_NONE,
+            program=1,
+            remaining_minutes=0,
+            remote_control=True,
+            dry_level=2,
+            dry_level_selected=1,
+            refresh=False,
+            need_clean_filter=False,
+            water_tank_full=tank_full,
+            door_closed=True,
+            error="0",
+            delay_value=0,
+            checkup_state=None,
+            recipe_id=None,
+            time=0,
+            rapido=0,
+        )
+
+    coordinator = MagicMock()
+    coordinator.data = _make_td(False)
+    listener_cb = None
+
+    def _add_listener(cb):
+        nonlocal listener_cb
+        listener_cb = cb
+        return lambda: None
+
+    coordinator.async_add_listener = _add_listener
+    entry = MockConfigEntry(domain=DOMAIN, unique_id="td-tank-trig", data={})
+    entry.add_to_hass(hass)
+    hass.data[DOMAIN] = {entry.entry_id: {DATA_KEY_COORDINATOR: coordinator}}
+
+    with patch("custom_components.candy.device_trigger.dr.async_get") as mock_reg:
+        mock_reg.return_value.async_get.return_value = _mock_device(entry.entry_id)
+        await async_attach_trigger(
+            hass,
+            _trigger_config("water_tank_full"),
+            lambda action_ctx: None,
+            {"trigger_data": {}},
+        )
+
+    assert listener_cb is not None
+    with patch.object(hass, "async_run_hass_job") as mock_job:
+        coordinator.data = _make_td(True)
+        listener_cb()
+        assert mock_job.call_count == 1
+

@@ -25,7 +25,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .client import CandyClient, parse_wash_programs
+from .client import CandyClient, get_dryer_command_builder, parse_wash_programs
 from .client.model import (
     CheckUpState,
     DishwasherState,
@@ -65,7 +65,9 @@ from .const import (
     DATA_KEY_CHECKUP_UNSUB,
     DATA_KEY_CLIENT,
     DATA_KEY_COORDINATOR,
+    DATA_KEY_DRYER_CHECKUP_UNSUB,
     DATA_KEY_DRYER_ERROR_UNSUB,
+    DATA_KEY_DRYER_WARNING_UNSUB,
     DATA_KEY_FULL_CHECKUP_UNSUB,
     DATA_KEY_LIMESCALE_UNSUB,
     DATA_KEY_MAINT_UNSUB,
@@ -78,6 +80,8 @@ from .const import (
     MAINTENANCE_HARDNESS_THRESHOLDS,
     MODE_FULL_CONTROL,
     NOTIF_ID_DRYER_ERROR,
+    NOTIF_ID_DRYER_FILTER,
+    NOTIF_ID_DRYER_WATER_TANK,
     NOTIF_ID_FULL_CHECKUP,
     NOTIF_ID_LIMESCALE,
     NOTIF_ID_MAINT_FILTER,
@@ -521,6 +525,18 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_DRYER_ERROR_UNSUB] = (
             unsub_dryer_error
         )
+        unsub_dryer_warning = _register_dryer_warning_listener(
+            hass, config_entry, coordinator
+        )
+        hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_DRYER_WARNING_UNSUB] = (
+            unsub_dryer_warning
+        )
+        unsub_dryer_checkup = _register_dryer_checkup_listener(
+            hass, config_entry, coordinator, client
+        )
+        hass.data[DOMAIN][config_entry.entry_id][DATA_KEY_DRYER_CHECKUP_UNSUB] = (
+            unsub_dryer_checkup
+        )
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
@@ -950,6 +966,153 @@ def _register_dryer_error_listener(
     return _register_appliance_error_listener(hass, config_entry, coordinator, "dryer")
 
 
+def _register_dryer_warning_listener(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    coordinator: DataUpdateCoordinator[Any],
+) -> Callable[[], None]:
+    """Register a coordinator listener that manages persistent notifications for dryer hardware warnings."""
+    entry_id = config_entry.entry_id
+    filter_notif_id = NOTIF_ID_DRYER_FILTER.format(entry_id)
+    water_tank_notif_id = NOTIF_ID_DRYER_WATER_TANK.format(entry_id)
+    lang = config_entry.data.get(CONF_KEY_PROGRAM_LANGUAGE, hass.config.language)
+
+    initial_status = cast(TumbleDryerStatus | None, coordinator.data)
+    initial_filter = (
+        initial_status.need_clean_filter if initial_status is not None else False
+    )
+    initial_tank = (
+        initial_status.water_tank_full if initial_status is not None else False
+    )
+
+    prev_filter: list[bool] = [initial_filter]
+    prev_tank: list[bool] = [initial_tank]
+
+    if initial_filter:
+        title = localized_notification_text("dryer_clean_filter_title", lang)
+        message = localized_notification_text("dryer_clean_filter_message", lang)
+        pn_async_create(
+            hass,
+            message,
+            title=title,
+            notification_id=filter_notif_id,
+        )
+
+    if initial_tank:
+        title = localized_notification_text("dryer_water_tank_full_title", lang)
+        message = localized_notification_text("dryer_water_tank_full_message", lang)
+        pn_async_create(
+            hass,
+            message,
+            title=title,
+            notification_id=water_tank_notif_id,
+        )
+
+    def _on_status_update() -> None:
+        status = cast(TumbleDryerStatus | None, coordinator.data)
+        if status is None:
+            return
+
+        curr_filter = status.need_clean_filter
+        prior_filter = prev_filter[0]
+        prev_filter[0] = curr_filter
+
+        if curr_filter and not prior_filter:
+            title = localized_notification_text("dryer_clean_filter_title", lang)
+            message = localized_notification_text("dryer_clean_filter_message", lang)
+            pn_async_create(
+                hass,
+                message,
+                title=title,
+                notification_id=filter_notif_id,
+            )
+        elif not curr_filter and prior_filter:
+            pn_async_dismiss(hass, filter_notif_id)
+
+        curr_tank = status.water_tank_full
+        prior_tank = prev_tank[0]
+        prev_tank[0] = curr_tank
+
+        if curr_tank and not prior_tank:
+            title = localized_notification_text("dryer_water_tank_full_title", lang)
+            message = localized_notification_text("dryer_water_tank_full_message", lang)
+            pn_async_create(
+                hass,
+                message,
+                title=title,
+                notification_id=water_tank_notif_id,
+            )
+        elif not curr_tank and prior_tank:
+            pn_async_dismiss(hass, water_tank_notif_id)
+
+    return coordinator.async_add_listener(_on_status_update)
+
+
+def _register_dryer_checkup_listener(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    coordinator: DataUpdateCoordinator[Any],
+    client: CandyClient,
+) -> Callable[[], None]:
+    """Register a coordinator listener that handles tumble dryer Check-up completion."""
+    initial = cast(TumbleDryerStatus | None, coordinator.data)
+    prev_state: list[CheckUpState | None] = [
+        initial.checkup_state if initial is not None else None
+    ]
+
+    def _on_status_update() -> None:
+        status = cast(TumbleDryerStatus | None, coordinator.data)
+        if status is None:
+            return
+        curr_state = status.checkup_state
+        prior_state = prev_state[0]
+        prev_state[0] = curr_state
+
+        has_no_error = (status.error_code in (None, 0)) and (
+            status.machine_state != MachineState.ERROR
+        )
+
+        if (
+            curr_state == CheckUpState.COMPLETED
+            and prior_state == CheckUpState.RUNNING
+            and has_no_error
+        ):
+            entry_id = config_entry.entry_id
+            lang = config_entry.data.get(
+                CONF_KEY_PROGRAM_LANGUAGE, hass.config.language
+            )
+            title = localized_notification_text("full_checkup_result_title", lang)
+            message = localized_notification_text("full_checkup_result_message", lang)
+            pn_async_create(
+                hass,
+                message,
+                title=title,
+                notification_id=NOTIF_ID_FULL_CHECKUP.format(entry_id),
+            )
+
+            if (
+                config_entry.data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL
+                and status.remote_control
+            ):
+                interface_type = config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+                builder = get_dryer_command_builder(interface_type)
+                reset_cmd = builder.build_checkup_reset()
+
+                async def _send_reset() -> None:
+                    try:
+                        await client.send_command(urlencode(reset_cmd, quote_via=quote))
+                        await asyncio.sleep(5)
+                        await coordinator.async_request_refresh()
+                    except Exception as err:
+                        _LOGGER.warning(
+                            "Failed to reset tumble dryer check-up state: %s", err
+                        )
+
+                hass.async_create_task(_send_reset())
+
+    return coordinator.async_add_listener(_on_status_update)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -962,6 +1125,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             DATA_KEY_STATS_REFRESH_UNSUB,
             DATA_KEY_WASH_ERROR_UNSUB,
             DATA_KEY_DRYER_ERROR_UNSUB,
+            DATA_KEY_DRYER_WARNING_UNSUB,
+            DATA_KEY_DRYER_CHECKUP_UNSUB,
             DATA_KEY_LIMESCALE_UNSUB,
         ):
             unsub = entry_data.get(key)
