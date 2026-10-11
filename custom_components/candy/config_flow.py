@@ -72,7 +72,12 @@ from .const import (
     UNIQUE_ID_WASH_MAINT_FULL_CHECKUP,
     UNIQUE_ID_WASH_MAINT_LIMESCALE,
 )
-from .helpers import cycles_remaining, is_dualtech, is_washer_dryer
+from .helpers import (
+    cycles_remaining,
+    is_dualtech,
+    is_washer_dryer,
+    supports_scheduled_checkup,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -263,7 +268,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             options = ["update_cloud_data", "switch_to_read_only"]
             if is_washing_machine:
                 options.append("maintenance_settings")
-            options.append("checkup_settings")
+            interface_type = self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+            is_dryer = self.config_entry.data.get(CONF_KEY_IS_TUMBLE_DRYER, False)
+            if supports_scheduled_checkup(interface_type, is_dryer):
+                options.append("checkup_settings")
             return self.async_show_form(
                 step_id="init",
                 data_schema=vol.Schema(
@@ -300,8 +308,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         self._pending_data[CONF_KEY_MAINTENANCE_ENABLED] = user_input[
             CONF_KEY_MAINTENANCE_ENABLED
         ]
+        interface_type = self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        is_dryer = self.config_entry.data.get(CONF_KEY_IS_TUMBLE_DRYER, False)
+        can_checkup = self.config_entry.data.get(
+            CONF_KEY_MODE
+        ) == MODE_FULL_CONTROL and supports_scheduled_checkup(interface_type, is_dryer)
         if not user_input[CONF_KEY_MAINTENANCE_ENABLED]:
-            if self.config_entry.data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
+            if can_checkup:
                 return await self.async_step_checkup()
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=self._pending_data
@@ -311,7 +324,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             )
             return self.async_create_entry(data={})
         if is_dualtech(self._pending_data.get(CONF_KEY_INTERFACE_TYPE, "")):
-            if self.config_entry.data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
+            if can_checkup:
                 return await self.async_step_checkup()
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=self._pending_data
@@ -493,7 +506,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     MAINTENANCE_FILTER_THRESHOLD,
                 )
             )
-        if self.config_entry.data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
+        interface_type = self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        is_dryer = self.config_entry.data.get(CONF_KEY_IS_TUMBLE_DRYER, False)
+        if self.config_entry.data.get(
+            CONF_KEY_MODE
+        ) == MODE_FULL_CONTROL and supports_scheduled_checkup(interface_type, is_dryer):
             return await self.async_step_checkup()
         self.hass.config_entries.async_update_entry(
             self.config_entry, data=self._pending_data
@@ -960,7 +977,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
             CONF_KEY_PROGRAM_LANGUAGE
         ]
         if self._is_tumble_dryer:
-            if self._config_data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
+            interface_type = self._config_data.get(CONF_KEY_INTERFACE_TYPE, "")
+            if self._config_data.get(
+                CONF_KEY_MODE
+            ) == MODE_FULL_CONTROL and supports_scheduled_checkup(interface_type, True):
                 return await self.async_step_checkup()
             return self.async_create_entry(
                 title=CONF_INTEGRATION_TITLE, data=self._config_data
@@ -978,14 +998,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
         self._config_data[CONF_KEY_MAINTENANCE_ENABLED] = user_input[
             CONF_KEY_MAINTENANCE_ENABLED
         ]
+        interface_type = self._config_data.get(CONF_KEY_INTERFACE_TYPE, "")
+        can_checkup = self._config_data.get(
+            CONF_KEY_MODE
+        ) == MODE_FULL_CONTROL and supports_scheduled_checkup(
+            interface_type, self._is_tumble_dryer
+        )
         if not user_input[CONF_KEY_MAINTENANCE_ENABLED]:
-            if self._config_data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
+            if can_checkup:
                 return await self.async_step_checkup()
             return self.async_create_entry(
                 title=CONF_INTEGRATION_TITLE, data=self._config_data
             )
-        if is_dualtech(self._config_data.get(CONF_KEY_INTERFACE_TYPE, "")):
-            if self._config_data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
+        if is_dualtech(interface_type):
+            if can_checkup:
                 return await self.async_step_checkup()
             return self.async_create_entry(
                 title=CONF_INTEGRATION_TITLE, data=self._config_data
@@ -1076,7 +1102,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
                     MAINTENANCE_FILTER_THRESHOLD,
                 )
             )
-        if self._config_data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
+        if self._config_data.get(
+            CONF_KEY_MODE
+        ) == MODE_FULL_CONTROL and supports_scheduled_checkup(
+            self._config_data.get(CONF_KEY_INTERFACE_TYPE, ""),
+            self._is_tumble_dryer,
+        ):
             return await self.async_step_checkup()
         return self.async_create_entry(
             title=CONF_INTEGRATION_TITLE, data=self._config_data

@@ -37,9 +37,13 @@ from custom_components.candy.const import (
     CONF_KEY_PROGRAM_LANGUAGE,
     CONF_KEY_WATER_HARDNESS,
     DATA_KEY_COORDINATOR,
+    DATA_KEY_DRYER_CHECKUP_UNSUB,
     DATA_KEY_DRYER_ERROR_UNSUB,
+    DATA_KEY_DRYER_WARNING_UNSUB,
     DATA_KEY_STATS_COORDINATOR,
     DATA_KEY_WASH_ERROR_UNSUB,
+    NOTIF_ID_DRYER_FILTER,
+    NOTIF_ID_DRYER_WATER_TANK,
     UNIQUE_ID_DISHWASHER,
     UNIQUE_ID_OVEN,
     UNIQUE_ID_TUMBLE_DRYER,
@@ -873,3 +877,148 @@ def test_dryer_error_listener_handles_none_status(hass: HomeAssistant):
         listener_cb()
 
     mock_notify.assert_not_called()
+
+
+_STATUS_TD_CLEAN_FILTER = """{
+  "statusTD": {
+    "StatoWiFi": "1", "StatoTD": "1", "CodiceErrore": "0", "Pr": "1", "PrPh": "0",
+    "RemTime": "150", "DryLev": "2", "Time": "0", "Rapido": "0",
+    "Refresh": "0", "CleanFilter": "1", "WaterTankFull": "0", "DryingManagerLevel": "1",
+    "DelVal": "0", "DoorState": "1", "RecipeId": "NULL", "CheckUpState": "0"
+  }
+}"""
+
+_STATUS_TD_WATER_TANK_FULL = """{
+  "statusTD": {
+    "StatoWiFi": "1", "StatoTD": "1", "CodiceErrore": "0", "Pr": "1", "PrPh": "0",
+    "RemTime": "150", "DryLev": "2", "Time": "0", "Rapido": "0",
+    "Refresh": "0", "CleanFilter": "0", "WaterTankFull": "1", "DryingManagerLevel": "1",
+    "DelVal": "0", "DoorState": "1", "RecipeId": "NULL", "CheckUpState": "0"
+  }
+}"""
+
+_STATUS_TD_BOTH_WARNINGS = """{
+  "statusTD": {
+    "StatoWiFi": "1", "StatoTD": "1", "CodiceErrore": "0", "Pr": "1", "PrPh": "0",
+    "RemTime": "150", "DryLev": "2", "Time": "0", "Rapido": "0",
+    "Refresh": "0", "CleanFilter": "1", "WaterTankFull": "1", "DryingManagerLevel": "1",
+    "DelVal": "0", "DoorState": "1", "RecipeId": "NULL", "CheckUpState": "0"
+  }
+}"""
+
+
+async def test_dryer_warning_notifications_clean_filter_lifecycle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Clean filter notification is created when CleanFilter=1 and dismissed when 0."""
+    entry = await init_integration(hass, aioclient_mock, _STATUS_TD_IDLE)
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+
+    with (
+        patch("custom_components.candy.pn_async_create") as mock_notify,
+        patch("custom_components.candy.pn_async_dismiss") as mock_dismiss,
+    ):
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-read.json?encrypted=0",
+            text=_STATUS_TD_CLEAN_FILTER,
+        )
+        await coordinator.async_request_refresh()
+        await hass.async_block_till_done()
+
+        mock_notify.assert_called_once()
+        _, kwargs = mock_notify.call_args
+        assert kwargs["notification_id"] == NOTIF_ID_DRYER_FILTER.format(entry.entry_id)
+        mock_dismiss.assert_not_called()
+
+        mock_notify.reset_mock()
+        mock_dismiss.reset_mock()
+
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-read.json?encrypted=0",
+            text=_STATUS_TD_IDLE,
+        )
+        await coordinator.async_request_refresh()
+        await hass.async_block_till_done()
+
+        mock_notify.assert_not_called()
+        mock_dismiss.assert_called_once_with(
+            hass, NOTIF_ID_DRYER_FILTER.format(entry.entry_id)
+        )
+
+
+async def test_dryer_warning_notifications_water_tank_lifecycle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Water tank full notification is created when WaterTankFull=1 and dismissed when 0."""
+    entry = await init_integration(hass, aioclient_mock, _STATUS_TD_IDLE)
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+
+    with (
+        patch("custom_components.candy.pn_async_create") as mock_notify,
+        patch("custom_components.candy.pn_async_dismiss") as mock_dismiss,
+    ):
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-read.json?encrypted=0",
+            text=_STATUS_TD_WATER_TANK_FULL,
+        )
+        await coordinator.async_request_refresh()
+        await hass.async_block_till_done()
+
+        mock_notify.assert_called_once()
+        _, kwargs = mock_notify.call_args
+        assert kwargs["notification_id"] == NOTIF_ID_DRYER_WATER_TANK.format(
+            entry.entry_id
+        )
+        mock_dismiss.assert_not_called()
+
+        mock_notify.reset_mock()
+        mock_dismiss.reset_mock()
+
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(
+            f"http://{TEST_IP}/http-read.json?encrypted=0",
+            text=_STATUS_TD_IDLE,
+        )
+        await coordinator.async_request_refresh()
+        await hass.async_block_till_done()
+
+        mock_notify.assert_not_called()
+        mock_dismiss.assert_called_once_with(
+            hass, NOTIF_ID_DRYER_WATER_TANK.format(entry.entry_id)
+        )
+
+
+async def test_dryer_warning_on_startup(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Starting HA with warning flags active creates notifications immediately."""
+    with patch("custom_components.candy.pn_async_create") as mock_notify:
+        entry = await init_integration(hass, aioclient_mock, _STATUS_TD_BOTH_WARNINGS)
+
+    assert mock_notify.call_count == 2
+    notif_ids = {call.kwargs["notification_id"] for call in mock_notify.call_args_list}
+    assert NOTIF_ID_DRYER_FILTER.format(entry.entry_id) in notif_ids
+    assert NOTIF_ID_DRYER_WATER_TANK.format(entry.entry_id) in notif_ids
+
+
+async def test_dryer_listeners_unloaded(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Dryer warning and checkup listeners are cleaned up when entry is unloaded."""
+    entry = await init_integration(
+        hass,
+        aioclient_mock,
+        _STATUS_TD_IDLE,
+    )
+    assert DATA_KEY_DRYER_ERROR_UNSUB in hass.data[DOMAIN][entry.entry_id]
+    assert DATA_KEY_DRYER_WARNING_UNSUB in hass.data[DOMAIN][entry.entry_id]
+    assert DATA_KEY_DRYER_CHECKUP_UNSUB in hass.data[DOMAIN][entry.entry_id]
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.entry_id not in hass.data.get(DOMAIN, {})
+

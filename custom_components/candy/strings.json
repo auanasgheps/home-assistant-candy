@@ -562,6 +562,10 @@
     "trigger_type": {
       "washing_started": "Washing started",
       "washing_completed": "Washing completed",
+      "drying_started": "Drying started",
+      "drying_completed": "Drying completed",
+      "clean_filter_needed": "Filter cleaning reminder",
+      "water_tank_full": "Water tank full reminder",
       "error_reported": "Error reported",
       "maintenance_full_checkup_due": "Full check-up reminder",
       "maintenance_limescale_due": "Limescale cleaning reminder",

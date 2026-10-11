@@ -74,6 +74,14 @@ def supports_remote_pause(interface_type: str | None) -> bool:
     )
 
 
+def supports_scheduled_checkup(
+    interface_type: str | None,
+    is_tumble_dryer: bool,
+) -> bool:
+    """Return True if the appliance supports running automatic background check-up during cycles."""
+    return not is_tumble_dryer
+
+
 def cycles_remaining(total: int, last_reset: int, threshold: int) -> int:
     """Return cycles until next maintenance alert, or 0 when due (including overdue).
 

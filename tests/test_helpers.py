@@ -26,6 +26,7 @@ from custom_components.candy.helpers import (
     is_dualtech,
     is_washer_dryer,
     supports_remote_pause,
+    supports_scheduled_checkup,
     wash_device_info,
     wash_device_name,
 )
@@ -276,3 +277,22 @@ def test_is_dualtech(interface_type: str | None, expected: bool) -> None:
 )
 def test_supports_remote_pause(interface_type: str | None, expected: bool) -> None:
     assert supports_remote_pause(interface_type) is expected
+
+
+@pytest.mark.parametrize(
+    ("interface_type", "is_tumble_dryer", "expected"),
+    [
+        ("TD_DIGIT_HP_DOOR", True, False),
+        ("TD_LED_SOME", True, False),
+        ("3D_DUAL", True, False),
+        ("RAPIDO", True, False),
+        ("RAPIDO_4DIG_STM_NEL", False, True),
+        ("BIANCA_TOUCH", False, True),
+        ("3D_DUAL", False, True),
+        (None, False, True),
+    ],
+)
+def test_supports_scheduled_checkup(
+    interface_type: str | None, is_tumble_dryer: bool, expected: bool
+) -> None:
+    assert supports_scheduled_checkup(interface_type, is_tumble_dryer) is expected

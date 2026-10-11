@@ -29,6 +29,8 @@ from custom_components.candy.const import (
     CONF_KEY_CHECKUP_SCHEDULE,
     CONF_KEY_DEVICE_MODEL,
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
+    CONF_KEY_INTERFACE_TYPE,
+    CONF_KEY_IS_TUMBLE_DRYER,
     CONF_KEY_IS_WASHER_DRYER,
     CONF_KEY_IS_WASHING_MACHINE,
     CONF_KEY_MAINTENANCE_ENABLED,
@@ -691,6 +693,64 @@ async def test_tumble_dryer_read_only_skips_maintenance(
     assert CONF_KEY_MAINTENANCE_ENABLED not in result["data"]
 
 
+async def test_tumble_dryer_full_control_skips_checkup_schedule(
+    hass, no_discovery, detect_no_encryption
+):
+    """Tumble dryer in Full Control mode skips checkup scheduling and creates entry directly after language."""
+    dryer_appliance = CloudApplianceData(
+        mac_address="AA:BB:CC:DD:EE:FF",
+        encryption_key="testenckey",
+        appliance_model="GVSH9A2DCE-80",
+        serial_number="1234567890123456",
+        purchase_date="2022-01-01",
+        interface_type="TD_DIGIT_HP_DOOR",
+        programs=[],
+        downloadable_programs=[],
+        brand="candy",
+        appliance_type="dryer",
+    )
+    with (
+        patch(
+            "custom_components.candy.config_flow.CandyClient.status",
+            new_callable=AsyncMock,
+            return_value=_IDLE_TUMBLE_DRYER,
+        ),
+        patch(
+            "custom_components.candy.config_flow.fetch_appliance_data",
+            new_callable=AsyncMock,
+            return_value=dryer_appliance,
+        ),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_IP_ADDRESS: "192.168.0.66"}
+        )
+        assert result["type"] == data_entry_flow.FlowResultType.FORM
+        assert result["step_id"] == "mode"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_KEY_MODE: MODE_FULL_CONTROL}
+        )
+        assert result["step_id"] == "cloud"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"email": "user@example.com", "password": "pass"},
+        )
+        assert result["step_id"] == "language"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_KEY_PROGRAM_LANGUAGE: "en"}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert CONF_KEY_CHECKUP_ENABLED not in result["data"]
+    assert CONF_KEY_CHECKUP_SCHEDULE not in result["data"]
+    assert result["data"].get(CONF_KEY_IS_TUMBLE_DRYER) is True
+
+
 async def test_read_only_with_maintenance_disabled(
     hass, no_discovery, detect_no_encryption
 ):  # pylint: disable=unused-argument
@@ -1269,6 +1329,29 @@ async def test_options_flow_non_washing_machine(hass):
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+
+
+async def test_options_flow_tumble_dryer_omits_checkup_settings(hass):
+    """Options flow for full-control tumble dryer omits checkup_settings option."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="fc-dryer-options",
+        data={
+            **_FC_BASE_DATA,
+            CONF_KEY_IS_WASHING_MACHINE: False,
+            CONF_KEY_IS_TUMBLE_DRYER: True,
+            CONF_KEY_INTERFACE_TYPE: "TD_DIGIT_HP_DOOR",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "init"
+    schema = result["data_schema"].schema
+    next_step_field = schema["next_step"]
+    assert "checkup_settings" not in next_step_field.config["options"]
+    assert "maintenance_settings" not in next_step_field.config["options"]
 
 
 async def test_options_flow_maintenance_limescale_disabled(hass):
