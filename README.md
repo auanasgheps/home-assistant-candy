@@ -16,11 +16,11 @@ Fully compliant with strictly-typed Home Assistant (>= 2024.x) development stand
 - **Supported appliances**:
   - 🧺 Washing Machine — with optional **Full Remote Control** (see below)
   - 🔄 Washer Dryer combo — with optional **Full Remote Control** (see below)
-  - 🌫️ Tumble Dryer
+  - 🌫️ Tumble Dryer - with optional **Full Remote Control** (see below)
   - 🔪 Dishwasher
   - 🍳 Oven
   - 🍷 Wine Cooler / Cellar
-- **Full Remote Control:** Complete interactive control panel for **washing machines** and **washer-dryer combos** (see the [compatibility matrix](#compatibility-note) for supported and tested models). Select localized programs, adjust wash & dry parameters (temp, spin speed, soil level, drying mode), start/pause/stop cycles, and track remote status.
+- **Full Remote Control:** Complete interactive control panel for **washing machines**, **washer-dryer combos** and **tumble dryers** (see the [compatibility matrix](#compatibility-note) for supported and tested models). Select localized programs, adjust wash & dry parameters (temp, spin speed, soil level, drying mode), start/pause/stop cycles, and track remote status.
 - **Zero-Config Decryption:** Say goodbye to manually extracting encryption keys. This integration boasts a natively built-in *sliding-window/known-plaintext* algorithm that unlocks your device seamlessly in fractions of a second during setup.
 - **Strict HA Compatibility:** Follows the rigorous MyPy styling standards enforced by Home Assistant 2025.
 - Uses the local device API for real-time responsiveness. 
@@ -32,7 +32,7 @@ Fully compliant with strictly-typed Home Assistant (>= 2024.x) development stand
 
 ## 🎛️ Full Control Features
 
-Full Control mode turns the integration into an interactive remote panel for **washing machines** and **washer-dryer combos**, matching and enhancing the official Simply-Fi mobile app experience directly within Home Assistant.
+Full Control mode turns the integration into an interactive remote panel for **washing machines**, **washer-dryer combos** and **tumble dryers**, matching and enhancing the official Simply-Fi mobile app experience directly within Home Assistant.
 
 <p float="left">
   <img src="docs/images/dashboard_washing_machine.png" width="300" />
@@ -41,13 +41,13 @@ Full Control mode turns the integration into an interactive remote panel for **w
 
 ### What it provides
 
-- **Complete Cycle Control:** Select official localized programs, adjust temperature, spin speed, soil level, drying presets, and trigger Start, Pause, Resume, or Stop.
+- **Complete Cycle Control:** Select official localized programs, adjust temperature, spin speed, soil level, or drying targets (dryness level, timed drying), and trigger Start, Pause, Resume, Stop, or Cancel Anti-Crease.
 - **Smart Safety Gating:** Automatically tracks the machine's physical dial position and disables controls when manual or local operation takes precedence.
-- **Proactive Maintenance & Diagnostics:** Cycle-based reminders for Full Check-up, Limescale cleaning, and Filter care with automatic reset upon cycle completion.
+- **Proactive Maintenance & Diagnostics:** Cycle-based reminders for washing machines (Full Check-up, Limescale cleaning, Filter care), live hardware alerts for tumble dryers (lint filter and water tank full), and electronic self check-up.
 - **Vendor Troubleshooting:** Automatic Home Assistant notifications with authentic step-by-step guidance when the appliance encounters a fault.
-- **Ready-to-Use Dashboards:** Pre-built Lovelace cards for standard washers, washer-dryer combos, and maintenance (see [`dashboard/`](dashboard/)).
+- **Ready-to-Use Dashboards:** Pre-built Lovelace cards for standard washing machines, washer-dryer combos, standalone tumble dryers, and maintenance (see [`dashboard/`](dashboard/)).
 
-📖 **For detailed instructions, washer-dryer workflows, and safety rules, see the [Remote Control Guide](docs/remote-control.md).**
+📖 **For detailed instructions, appliance workflows, and safety rules, see the [Remote Control Guide](docs/remote-control.md).**
 
 ### Quick Setup
 
@@ -64,12 +64,13 @@ Full Control mode turns the integration into an interactive remote panel for **w
 
 ### Compatibility Note
 
-Full functionality has been tested on physical hardware for the **Candy RapidÓ** series (washing machines), the **Hoover AXI** series (washer-dryer combos), and **DualTech** (`3D_DUAL`) appliances. Support for other interface families is implemented according to vendor app specifications and protocol reverse engineering.
+Full functionality has been tested on physical hardware for the **Candy RapidÓ** series (washing machines), the **Hoover AXI** series (washer-dryer combos), and **DualTech** appliances (washing machines and tumble dryers). Support for other interface families is implemented according to vendor app specifications and protocol reverse engineering.
 
 | Appliance | Interface / Family | Tested | Notes |
 |---|---|---|---|
 | Washing Machine | Candy RapidÓ (`RAPIDO`, `RAPIDO_4DIG_STM_NEL`) | Yes | Reference hardware (`RO41274DWMSE/1-S`).|
 | Washer Dryer | Hoover AXI (`red_devil_axi*`, `hwash700`) | Yes | Reference hardware (`AWDPD4138LHR/1`). |
+| Tumble Dryer | DualTech (`TD_DIGIT_*`, `TD_LED_*`, `3D_DUAL`) | Yes | Reference hardware (`GVS H9A2TCE-80`). Supports start/pause/resume/stop, dryness levels, timed drying, filter/tank warnings, and self check-up. |
 | Washing Machine / Washer Dryer | DualTech (`3D_DUAL`, `4D_DUAL`, `DUALTECH`) | Yes | Tested on `3D_DUAL` hardware. Remote pause and stats counters are unsupported by hardware. |
 | Washer Dryer | Candy RapidÓ (`ROW` series) | No | Shares RapidÓ protocol with generic washer-dryer engine. Untested on physical hardware. |
 | Washing Machine / Washer Dryer | Candy Bianca (`BIANCA`, `BWD` series) | No | Implemented from cloud catalog and protocol specifications. Remote pause/resume is unsupported by Bianca hardware. |
