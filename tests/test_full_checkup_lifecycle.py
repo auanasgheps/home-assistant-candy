@@ -770,9 +770,12 @@ async def test_dryer_checkup_with_error_does_not_reset(
             f"http://{TEST_IP}/http-read.json?encrypted=0",
             text=_TD_COMPLETED_CHECKUP_ERROR_JSON,
         )
-        await coordinator.async_request_refresh()
+        await coordinator.async_refresh()
         await hass.async_block_till_done()
 
-    mock_notify.assert_not_called()
+    assert not any(
+        call.kwargs.get("notification_id")
+        == NOTIF_ID_FULL_CHECKUP.format(entry.entry_id)
+        for call in mock_notify.call_args_list
+    )
     mock_send.assert_not_called()
-

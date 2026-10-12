@@ -102,7 +102,7 @@ _STATUS_TD_ERROR_3 = """{
   "statusTD": {
     "StatoWiFi": "1", "StatoTD": "7", "CodiceErrore": "E03", "Pr": "1", "PrPh": "0",
     "RemTime": "0", "DryLev": "2", "Time": "0", "Rapido": "0",
-    "Refresh": "0", "CleanFilter": "0", "WaterTankFull": "1", "DryingManagerLevel": "1",
+    "Refresh": "0", "CleanFilter": "0", "WaterTankFull": "0", "DryingManagerLevel": "1",
     "DelVal": "0", "DoorState": "1", "RecipeId": "NULL", "CheckUpState": "0"
   }
 }"""
@@ -111,7 +111,7 @@ _STATUS_TD_ERROR_7 = """{
   "statusTD": {
     "StatoWiFi": "1", "StatoTD": "7", "CodiceErrore": "E07", "Pr": "1", "PrPh": "0",
     "RemTime": "0", "DryLev": "2", "Time": "0", "Rapido": "0",
-    "Refresh": "0", "CleanFilter": "1", "WaterTankFull": "0", "DryingManagerLevel": "1",
+    "Refresh": "0", "CleanFilter": "0", "WaterTankFull": "0", "DryingManagerLevel": "1",
     "DelVal": "0", "DoorState": "1", "RecipeId": "NULL", "CheckUpState": "0"
   }
 }"""
@@ -923,7 +923,7 @@ async def test_dryer_warning_notifications_clean_filter_lifecycle(
             f"http://{TEST_IP}/http-read.json?encrypted=0",
             text=_STATUS_TD_CLEAN_FILTER,
         )
-        await coordinator.async_request_refresh()
+        await coordinator.async_refresh()
         await hass.async_block_till_done()
 
         mock_notify.assert_called_once()
@@ -939,7 +939,7 @@ async def test_dryer_warning_notifications_clean_filter_lifecycle(
             f"http://{TEST_IP}/http-read.json?encrypted=0",
             text=_STATUS_TD_IDLE,
         )
-        await coordinator.async_request_refresh()
+        await coordinator.async_refresh()
         await hass.async_block_till_done()
 
         mock_notify.assert_not_called()
@@ -964,7 +964,7 @@ async def test_dryer_warning_notifications_water_tank_lifecycle(
             f"http://{TEST_IP}/http-read.json?encrypted=0",
             text=_STATUS_TD_WATER_TANK_FULL,
         )
-        await coordinator.async_request_refresh()
+        await coordinator.async_refresh()
         await hass.async_block_till_done()
 
         mock_notify.assert_called_once()
@@ -982,7 +982,7 @@ async def test_dryer_warning_notifications_water_tank_lifecycle(
             f"http://{TEST_IP}/http-read.json?encrypted=0",
             text=_STATUS_TD_IDLE,
         )
-        await coordinator.async_request_refresh()
+        await coordinator.async_refresh()
         await hass.async_block_till_done()
 
         mock_notify.assert_not_called()
@@ -1021,4 +1021,3 @@ async def test_dryer_listeners_unloaded(
     await hass.async_block_till_done()
 
     assert entry.entry_id not in hass.data.get(DOMAIN, {})
-

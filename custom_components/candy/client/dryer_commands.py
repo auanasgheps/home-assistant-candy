@@ -30,7 +30,13 @@ class DryerCommandBuilder(ABC):
     def build_delay_start(
         self, selector_position: int, dry_level: int, delay_minutes: int
     ) -> dict[str, str | int]:
-        """Build parameters to schedule a delayed start."""
+        """Build parameters to schedule a delayed start for a standard cycle."""
+
+    @abstractmethod
+    def build_timed_delay_start(
+        self, selector_position: int, time_minutes: int, delay_minutes: int
+    ) -> dict[str, str | int]:
+        """Build parameters to schedule a delayed start for a timed cycle."""
 
     @abstractmethod
     def build_stop(self, current_program: int) -> dict[str, str | int]:
@@ -113,6 +119,19 @@ class DualTechDryerCommandBuilder(DryerCommandBuilder):
             "DelVl": delay_minutes,
         }
 
+    def build_timed_delay_start(
+        self, selector_position: int, time_minutes: int, delay_minutes: int
+    ) -> dict[str, str | int]:
+        return {
+            "Write": 1,
+            "Pa": 0,
+            "Sel": 0,
+            "PrNm": selector_position,
+            "Time": time_minutes,
+            "DelMd": 1,
+            "DelVl": delay_minutes,
+        }
+
     def build_stop(self, current_program: int) -> dict[str, str | int]:
         return {
             "Write": 1,
@@ -158,8 +177,10 @@ class DualTechDryerCommandBuilder(DryerCommandBuilder):
         }
 
 
-def is_dualtech_dryer_interface(interface_type: str) -> bool:
+def is_dualtech_dryer_interface(interface_type: str | None) -> bool:
     """Return True if interface_type corresponds to a DualTech tumble dryer."""
+    if not interface_type:
+        return False
     upper = interface_type.upper()
     return upper.startswith(("TD_DIGIT_", "TD_LED_")) or "DUAL" in upper
 

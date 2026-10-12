@@ -1702,8 +1702,8 @@ class CandyWashCycleCapacitySensor(_CandyWashProgramAttributeSensor):
 
 
 class CandyTumbleDryerSensor(CandyBaseSensor):
-    _attr_translation_key = "tumble_dryer"
-    _attr_name = "Tumble dryer"
+    _attr_has_entity_name = True
+    _attr_name = None
 
     def device_name(self) -> str:
         return DEVICE_NAME_TUMBLE_DRYER
@@ -1744,8 +1744,8 @@ class CandyTumbleDryerSensor(CandyBaseSensor):
 
 
 class CandyTumbleProgramSensor(CandyBaseSensor):
+    _attr_has_entity_name = True
     _attr_translation_key = "tumble_program"
-    _attr_name = "Dryer program"
 
     def __init__(
         self,
@@ -1786,8 +1786,8 @@ class CandyTumbleProgramSensor(CandyBaseSensor):
 
 
 class CandyTumbleStatusSensor(CandyBaseSensor):
+    _attr_has_entity_name = True
     _attr_translation_key = "tumble_cycle_status"
-    _attr_name = "Dryer cycle status"
 
     def device_name(self) -> str:
         return DEVICE_NAME_TUMBLE_DRYER
@@ -1812,8 +1812,8 @@ class CandyTumbleStatusSensor(CandyBaseSensor):
 
 
 class CandyTumbleRemainingTimeSensor(CandyBaseSensor):
+    _attr_has_entity_name = True
     _attr_translation_key = "tumble_remaining_time"
-    _attr_name = "Dryer cycle remaining time"
 
     def device_name(self) -> str:
         return DEVICE_NAME_TUMBLE_DRYER
@@ -1846,8 +1846,8 @@ class CandyTumbleRemainingTimeSensor(CandyBaseSensor):
 
 
 class CandyTumbleDryLevelSensor(CandyBaseSensor):
+    _attr_has_entity_name = True
     _attr_translation_key = "tumble_dry_level"
-    _attr_name = "Dry level"
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = DRY_LEVEL_OPTIONS
 
@@ -1872,8 +1872,8 @@ class CandyTumbleDryLevelSensor(CandyBaseSensor):
 
 
 class CandyTumbleErrorCodeSensor(CandyBaseSensor, RestoreSensor):
+    _attr_has_entity_name = True
     _attr_translation_key = "tumble_error"
-    _attr_name = "Dryer error"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _restored_state: str | None = None
 
@@ -1924,8 +1924,8 @@ class CandyTumbleErrorCodeSensor(CandyBaseSensor, RestoreSensor):
 
 
 class CandyTumbleCheckUpStateSensor(CandyBaseSensor):
+    _attr_has_entity_name = True
     _attr_translation_key = "tumble_checkup_state"
-    _attr_name = "Check-up state"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def device_name(self) -> str:

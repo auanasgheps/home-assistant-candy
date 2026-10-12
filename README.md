@@ -34,6 +34,7 @@ Fully compliant with strictly-typed Home Assistant (>= 2024.x) development stand
 
 Full Control mode turns the integration into an interactive remote panel for **washing machines**, **washer-dryer combos** and **tumble dryers**, matching and enhancing the official Simply-Fi mobile app experience directly within Home Assistant.
 
+*Washing Machine Example*
 <p float="left">
   <img src="docs/images/dashboard_washing_machine.png" width="300" />
   <img src="docs/images/dashboard_maintenance.png" width="300" /> 
@@ -42,18 +43,13 @@ Full Control mode turns the integration into an interactive remote panel for **w
 ### What it provides
 
 - **Complete Cycle Control:** Select official localized programs, adjust temperature, spin speed, soil level, or drying targets (dryness level, timed drying), and trigger Start, Pause, Resume, Stop, or Cancel Anti-Crease.
-- **Smart Safety Gating:** Automatically tracks the machine's physical dial position and disables controls when manual or local operation takes precedence.
 - **Proactive Maintenance & Diagnostics:** Cycle-based reminders for washing machines (Full Check-up, Limescale cleaning, Filter care), live hardware alerts for tumble dryers (lint filter and water tank full), and electronic self check-up.
 - **Vendor Troubleshooting:** Automatic Home Assistant notifications with authentic step-by-step guidance when the appliance encounters a fault.
-- **Ready-to-Use Dashboards:** Pre-built Lovelace cards for standard washing machines, washer-dryer combos, standalone tumble dryers, and maintenance (see [`dashboard/`](dashboard/)).
+- **Ready-to-Use Dashboards:** Pre-built Lovelace cards ready to control your appliance (see [`dashboard/`](dashboard/)).
+- **Smart Safety Gating:** Automatically disables controls when manual or local operation takes precedence.
 
 📖 **For detailed instructions, appliance workflows, and safety rules, see the [Remote Control Guide](docs/remote-control.md).**
 
-### Quick Setup
-
-1. **Choose Full Control:** When adding the appliance, select **Full Control** mode.
-2. **One-Time Cloud Sign-In:** Enter your Simply-Fi credentials once to download your device's program catalog and encryption key. Credentials are discarded immediately and never stored.
-3. **Customize:** Choose your preferred display language for program names and descriptions (17 languages available), and optionally configure maintenance thresholds.
 
 ### Key Improvements Over the Official App
 
@@ -64,7 +60,7 @@ Full Control mode turns the integration into an interactive remote panel for **w
 
 ### Compatibility Note
 
-Full functionality has been tested on physical hardware for the **Candy RapidÓ** series (washing machines), the **Hoover AXI** series (washer-dryer combos), and **DualTech** appliances (washing machines and tumble dryers). Support for other interface families is implemented according to vendor app specifications and protocol reverse engineering.
+Full functionality has been tested on several physical appliances. See the table below.
 
 | Appliance | Interface / Family | Tested | Notes |
 |---|---|---|---|
@@ -76,7 +72,7 @@ Full functionality has been tested on physical hardware for the **Candy RapidÓ*
 | Washing Machine / Washer Dryer | Candy Bianca (`BIANCA`, `BWD` series) | No | Implemented from cloud catalog and protocol specifications. Remote pause/resume is unsupported by Bianca hardware. |
 | Washing Machine | Candy Smart Pro / Hoover H-WASH 300 / X-Care (`SMARTPRO`, `HWASH300`, `XCARE`) | No | Implemented from protocol specifications. |
 
-Other appliance series may behave differently. If you encounter issues or unexpected behaviour, please share your findings in the [Discussions](https://github.com/bigmoby/home-assistant-candy/discussions/categories/device-support-improvements) section or open an Issue — feedback is very welcome.
+Other appliance series may not behave correctly. If you encounter issues or unexpected behaviour, please share your findings in the [Discussions](https://github.com/bigmoby/home-assistant-candy/discussions/categories/device-support-improvements) section or open an Issue — feedback is very welcome.
 
 ---
 
@@ -88,6 +84,9 @@ Other appliance series may behave differently. If you encounter issues or unexpe
 3. Restart Home Assistant.
 4. Go to **Settings > Devices & Services**, click **Add integration** and search for `Candy`.
 5. Enter the **IP Address** of your appliance.
+6. If available, you can choose to enable Full Control of your appliance.
+    - **One-Time Cloud Sign-In:** Enter your Simply-Fi credentials once to download your device's program catalog and encryption key. Credentials are discarded immediately and never stored.
+    - **Customize:** Choose your preferred display language for program names and descriptions (10 languages available), and optionally configure maintenance thresholds.
 6. The integration will automatically authenticate, decrypt if necessary, and assign the appliance to your dashboard!
 
 ### Method 2: Manual

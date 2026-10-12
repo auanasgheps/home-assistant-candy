@@ -8,6 +8,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 
 from .client import parse_wash_programs
+from .client.dryer_commands import is_dualtech_dryer_interface
 from .client.model import (
     TumbleDryerStatus,
     WashingMachineStatus,
@@ -59,10 +60,7 @@ def is_dualtech(interface_type: str | None) -> bool:
 
 def is_dualtech_dryer(interface_type: str | None) -> bool:
     """Return True if the interface_type belongs to a DualTech tumble dryer."""
-    if not interface_type:
-        return False
-    upper = interface_type.upper()
-    return upper.startswith(("TD_DIGIT_", "TD_LED_")) or "DUAL" in upper
+    return is_dualtech_dryer_interface(interface_type)
 
 
 def supports_remote_pause(interface_type: str | None) -> bool:

@@ -922,9 +922,13 @@ class CandyDryerButtonBase(CoordinatorEntity, ButtonEntity):
 
     @property
     def available(self) -> bool:
-        return self.hass.data[DOMAIN][self.config_id].get(
-            DATA_KEY_WRITE_PENDING, 0
-        ) == 0 and remote_control_enabled(self.coordinator.data)
+        return (
+            super().available
+            and self.coordinator.data is not None
+            and self.hass.data[DOMAIN][self.config_id].get(DATA_KEY_WRITE_PENDING, 0)
+            == 0
+            and remote_control_enabled(self.coordinator.data)
+        )
 
     async def _send_command_and_refresh(self, query_string: str) -> None:
         data = self.hass.data[DOMAIN][self.config_id]
@@ -973,7 +977,6 @@ class CandyDryerStartButton(CandyDryerButtonBase):
             status.machine_state
             in (
                 MachineState.IDLE,
-                MachineState.OFF,
                 MachineState.FINISHED1,
                 MachineState.FINISHED2,
             )
@@ -1033,21 +1036,50 @@ class CandyDryerStartButton(CandyDryerButtonBase):
         dry_level = DRY_LEVEL_TO_VALUE.get(
             dry_level_option or "", program.default_drying_level
         )
-
         builder = get_dryer_command_builder(
             self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
         )
 
-        if delay_minutes > 0:
-            params = builder.build_delay_start(
-                program.selector_position, dry_level, delay_minutes
+        selected_time: int | None = None
+        if (
+            program.set_time_level
+            and time_option is not None
+            and time_option.isdigit()
+            and int(time_option) > 0
+        ):
+            selected_time = int(time_option)
+        elif not program.set_dry_level and program.set_time_level:
+            selected_time = (
+                program.default_time_level if program.default_time_level > 0 else 30
             )
-        elif time_option is not None and time_option.isdigit() and int(time_option) > 0:
-            params = builder.build_timed_start(
-                program.selector_position, int(time_option)
-            )
+
+        if selected_time is not None:
+            if delay_minutes > 0:
+                params = builder.build_timed_delay_start(
+                    program.selector_position, selected_time, delay_minutes
+                )
+            else:
+                params = builder.build_timed_start(
+                    program.selector_position, selected_time
+                )
         else:
-            params = builder.build_standard_start(program.selector_position, dry_level)
+            effective_dry_level = (
+                dry_level
+                if dry_level > 0
+                else (
+                    program.default_drying_level
+                    if program.default_drying_level > 0
+                    else 1
+                )
+            )
+            if delay_minutes > 0:
+                params = builder.build_delay_start(
+                    program.selector_position, effective_dry_level, delay_minutes
+                )
+            else:
+                params = builder.build_standard_start(
+                    program.selector_position, effective_dry_level
+                )
 
         await self._send_command_and_refresh(urlencode(params, quote_via=quote))
 

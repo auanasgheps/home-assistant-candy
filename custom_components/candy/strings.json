@@ -299,10 +299,10 @@
         "name": "Dryer program"
       },
       "tumble_cycle_status": {
-        "name": "Cycle status"
+        "name": "Dryer cycle status"
       },
       "tumble_remaining_time": {
-        "name": "Cycle remaining time"
+        "name": "Dryer cycle remaining time"
       },
       "tumble_dry_level": {
         "name": "Dry level",
@@ -314,7 +314,7 @@
         }
       },
       "tumble_error": {
-        "name": "Error code"
+        "name": "Dryer error"
       },
       "tumble_checkup_state": {
         "name": "Check-up state"

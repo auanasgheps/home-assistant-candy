@@ -64,6 +64,22 @@ def test_dualtech_delay_start() -> None:
     }
 
 
+def test_dualtech_timed_delay_start() -> None:
+    builder = DualTechDryerCommandBuilder()
+    params = builder.build_timed_delay_start(
+        selector_position=3, time_minutes=45, delay_minutes=60
+    )
+    assert params == {
+        "Write": 1,
+        "Pa": 0,
+        "Sel": 0,
+        "PrNm": 3,
+        "Time": 45,
+        "DelMd": 1,
+        "DelVl": 60,
+    }
+
+
 def test_dualtech_stop() -> None:
     builder = DualTechDryerCommandBuilder()
     params = builder.build_stop(current_program=4)
@@ -137,6 +153,7 @@ def test_is_dualtech_dryer_interface() -> None:
     assert is_dualtech_dryer_interface("BIANCA") is False
     assert is_dualtech_dryer_interface("RAPIDO") is False
     assert is_dualtech_dryer_interface("") is False
+    assert is_dualtech_dryer_interface(None) is False
 
 
 def test_get_dryer_command_builder() -> None:
