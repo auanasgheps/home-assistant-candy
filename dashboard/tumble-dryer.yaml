@@ -40,8 +40,10 @@ cards:
       {% set prog = states('sensor.<machine_name>_dryer_program') %}
       {% set del = states('number.<machine_name>_delay') | int(0) %}
       {% if state == 'running' %}
-        {% if phase in ['stopped', 'idle', 'unknown', 'unavailable', ''] %}
+        {% if phase in ['stopped', 'idle', 'unknown', 'unavailable', 'running', ''] %}
           Drying...
+        {% elif 'pre' in phase %}
+          Pre-heating
         {% elif 'cool' in phase %}
           Cooling down
         {% else %}

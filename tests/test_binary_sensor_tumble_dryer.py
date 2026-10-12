@@ -13,22 +13,22 @@ async def test_tumble_dryer_binary_sensors_idle(
     """Test tumble dryer binary sensors in idle normal state."""
     await init_integration(hass, aioclient_mock, load_fixture("tumble_dryer/idle.json"))
 
-    remote_state = hass.states.get("binary_sensor.remote_control")
+    remote_state = hass.states.get("binary_sensor.tumble_dryer_remote_control")
     assert remote_state
     assert remote_state.state == "on"
 
-    door_state = hass.states.get("binary_sensor.door")
+    door_state = hass.states.get("binary_sensor.tumble_dryer_door")
     assert door_state
     # DoorState: 1 (closed) -> binary sensor door is off (not open)
     assert door_state.state == "off"
     assert door_state.attributes.get("device_class") == "door"
 
-    filter_state = hass.states.get("binary_sensor.clean_filter")
+    filter_state = hass.states.get("binary_sensor.tumble_dryer_clean_filter")
     assert filter_state
     assert filter_state.state == "off"
     assert filter_state.attributes.get("device_class") == "problem"
 
-    tank_state = hass.states.get("binary_sensor.water_tank_full")
+    tank_state = hass.states.get("binary_sensor.tumble_dryer_water_tank_full")
     assert tank_state
     assert tank_state.state == "off"
     assert tank_state.attributes.get("device_class") == "problem"
@@ -47,19 +47,19 @@ async def test_tumble_dryer_binary_sensors_problem_state(
     )
     await init_integration(hass, aioclient_mock, fixture)
 
-    remote_state = hass.states.get("binary_sensor.remote_control")
+    remote_state = hass.states.get("binary_sensor.tumble_dryer_remote_control")
     assert remote_state
     assert remote_state.state == "off"
 
-    door_state = hass.states.get("binary_sensor.door")
+    door_state = hass.states.get("binary_sensor.tumble_dryer_door")
     assert door_state
     # DoorState: 0 (open) -> binary sensor door is on
     assert door_state.state == "on"
 
-    filter_state = hass.states.get("binary_sensor.clean_filter")
+    filter_state = hass.states.get("binary_sensor.tumble_dryer_clean_filter")
     assert filter_state
     assert filter_state.state == "on"
 
-    tank_state = hass.states.get("binary_sensor.water_tank_full")
+    tank_state = hass.states.get("binary_sensor.tumble_dryer_water_tank_full")
     assert tank_state
     assert tank_state.state == "on"

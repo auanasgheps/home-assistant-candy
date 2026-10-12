@@ -927,8 +927,12 @@ class CandyDryerLevelSelect(CoordinatorEntity, SelectEntity):
         self._client = client
         self._programs = programs
         self._selected_program: TumbleDryerProgram = programs[0]
-        self._current_option: str = DRY_LEVEL_FROM_VALUE.get(
-            self._selected_program.default_drying_level, DRY_LEVEL_HANG
+        self._current_option: str | None = (
+            DRY_LEVEL_FROM_VALUE.get(
+                self._selected_program.default_drying_level, DRY_LEVEL_HANG
+            )
+            if self._selected_program.set_dry_level
+            else None
         )
 
     def _machine_is_idle(self) -> bool:
@@ -939,7 +943,6 @@ class CandyDryerLevelSelect(CoordinatorEntity, SelectEntity):
             status.machine_state
             in (
                 MachineState.IDLE,
-                MachineState.OFF,
                 MachineState.FINISHED1,
                 MachineState.FINISHED2,
             )
@@ -962,10 +965,7 @@ class CandyDryerLevelSelect(CoordinatorEntity, SelectEntity):
     def options(self) -> list[str]:
         if self._selected_program.set_dry_level:
             return DRY_LEVEL_OPTIONS
-        default_lvl = DRY_LEVEL_FROM_VALUE.get(
-            self._selected_program.default_drying_level
-        )
-        return [default_lvl] if default_lvl else []
+        return []
 
     @property
     def current_option(self) -> str | None:
@@ -990,11 +990,13 @@ class CandyDryerLevelSelect(CoordinatorEntity, SelectEntity):
     def update_for_program(self, program: TumbleDryerProgram) -> None:
         self._selected_program = program
         opts = self.options
-        if self._current_option not in opts:
+        if not opts:
+            self._current_option = None
+        else:
             default_lvl = DRY_LEVEL_FROM_VALUE.get(program.default_drying_level)
             if default_lvl and default_lvl in opts:
                 self._current_option = default_lvl
-            elif opts:
+            else:
                 self._current_option = opts[0]
         self.async_write_ha_state()
 
@@ -1019,7 +1021,17 @@ class CandyDryerTimeSelect(CoordinatorEntity, SelectEntity):
         self._client = client
         self._programs = programs
         self._selected_program: TumbleDryerProgram = programs[0]
-        self._current_option: str = "off"
+        if not self._selected_program.set_time_level:
+            self._current_option: str | None = None
+        elif not self._selected_program.set_dry_level:
+            default_t = str(self._selected_program.default_time_level)
+            self._current_option = (
+                default_t
+                if default_t in self._TIME_OPTIONS and default_t != "off"
+                else "30"
+            )
+        else:
+            self._current_option = "off"
 
     def _machine_is_idle(self) -> bool:
         status = self.coordinator.data
@@ -1029,7 +1041,6 @@ class CandyDryerTimeSelect(CoordinatorEntity, SelectEntity):
             status.machine_state
             in (
                 MachineState.IDLE,
-                MachineState.OFF,
                 MachineState.FINISHED1,
                 MachineState.FINISHED2,
             )
@@ -1046,24 +1057,31 @@ class CandyDryerTimeSelect(CoordinatorEntity, SelectEntity):
 
     @property
     def available(self) -> bool:
-        return super().available and self._machine_is_idle()
+        return (
+            super().available
+            and self._machine_is_idle()
+            and self._selected_program.set_time_level
+        )
 
     @property
     def options(self) -> list[str]:
-        if self._selected_program.set_time_level:
-            return self._TIME_OPTIONS
-        return ["off"]
+        if not self._selected_program.set_time_level:
+            return []
+        if not self._selected_program.set_dry_level:
+            return [opt for opt in self._TIME_OPTIONS if opt != "off"]
+        return self._TIME_OPTIONS
 
     @property
-    def current_option(self) -> str:
+    def current_option(self) -> str | None:
         if self._current_option in self.options:
             return self._current_option
-        return "off"
+        opts = self.options
+        return opts[0] if opts else None
 
     @property
     def selected_time_minutes(self) -> int:
         opt = self.current_option
-        if opt == "off" or not opt.isdigit():
+        if opt is None or opt == "off" or not opt.isdigit():
             return 0
         return int(opt)
 
@@ -1075,7 +1093,18 @@ class CandyDryerTimeSelect(CoordinatorEntity, SelectEntity):
 
     def update_for_program(self, program: TumbleDryerProgram) -> None:
         self._selected_program = program
+        opts = self.options
         if not program.set_time_level:
+            self._current_option = None
+        elif not program.set_dry_level:
+            default_t = str(program.default_time_level)
+            if default_t in opts:
+                self._current_option = default_t
+            elif opts:
+                self._current_option = opts[0]
+            else:
+                self._current_option = None
+        else:
             self._current_option = "off"
         self.async_write_ha_state()
 
@@ -1112,7 +1141,6 @@ class CandyDryerProgramSelect(CoordinatorEntity, SelectEntity):
             status.machine_state
             in (
                 MachineState.IDLE,
-                MachineState.OFF,
                 MachineState.FINISHED1,
                 MachineState.FINISHED2,
             )

@@ -7,6 +7,7 @@ import pytest
 from custom_components.candy.client.model import (
     DownloadableProgram,
     MachineState,
+    TumbleDryerStatus,
     WasherDryerDryTarget,
     WashingMachineStatus,
     WashingMachineWashProgram,
@@ -618,3 +619,61 @@ def test_wash_program_from_dict_combo_cycle_with_wash_type():
     assert prog.is_wash is True
     assert prog.is_dry is False
     assert prog.is_wash_and_dry is True
+
+
+@pytest.mark.parametrize(
+    ("raw_code", "expected_state"),
+    [
+        (0, MachineState.IDLE),
+        (1, MachineState.IDLE),
+        (2, MachineState.RUNNING),
+        (3, MachineState.PAUSED),
+        (4, MachineState.DELAYED_START_SELECTION),
+        (5, MachineState.DELAYED_START_PROGRAMMED),
+        (6, MachineState.RUNNING),
+        (7, MachineState.ERROR),
+        (8, MachineState.FINISHED1),
+    ],
+)
+def test_tumble_dryer_status_stato_td_mapping(
+    raw_code: int, expected_state: MachineState
+) -> None:
+    data = {
+        "StatoWiFi": "1",
+        "StatoTD": str(raw_code),
+        "CodiceErrore": "0",
+        "Pr": "1",
+        "PrPh": "0",
+        "RemTime": "120",
+        "DryLev": "2",
+        "Time": "0",
+        "Rapido": "0",
+        "Refresh": "0",
+        "CleanFilter": "0",
+        "WaterTankFull": "0",
+        "DryingManagerLevel": "2",
+        "DoorState": "1",
+    }
+    status = TumbleDryerStatus.from_json(data)
+    assert status.machine_state == expected_state
+
+
+def test_tumble_dryer_status_invalid_stato_td_raises() -> None:
+    data = {
+        "StatoWiFi": "1",
+        "StatoTD": "99",
+        "CodiceErrore": "0",
+        "Pr": "1",
+        "PrPh": "0",
+        "RemTime": "120",
+        "DryLev": "2",
+        "Time": "0",
+        "Rapido": "0",
+        "Refresh": "0",
+        "CleanFilter": "0",
+        "WaterTankFull": "0",
+        "DryingManagerLevel": "2",
+        "DoorState": "1",
+    }
+    with pytest.raises(ValueError, match="Unrecognized StatoTD code: 99"):
+        TumbleDryerStatus.from_json(data)

@@ -76,8 +76,8 @@ class CandyWashRemoteControlBinarySensor(CoordinatorEntity, BinarySensorEntity):
 
 
 class CandyTumbleRemoteControlBinarySensor(CoordinatorEntity, BinarySensorEntity):
+    _attr_has_entity_name = True
     _attr_translation_key = "remote_control"
-    _attr_name = "Remote control"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:remote"
 
@@ -102,8 +102,8 @@ class CandyTumbleRemoteControlBinarySensor(CoordinatorEntity, BinarySensorEntity
 
 
 class CandyTumbleDoorBinarySensor(CoordinatorEntity, BinarySensorEntity):
+    _attr_has_entity_name = True
     _attr_translation_key = "door"
-    _attr_name = "Door"
     _attr_device_class = BinarySensorDeviceClass.DOOR
 
     def __init__(self, coordinator: DataUpdateCoordinator, config_entry: ConfigEntry):
@@ -127,8 +127,8 @@ class CandyTumbleDoorBinarySensor(CoordinatorEntity, BinarySensorEntity):
 
 
 class CandyTumbleCleanFilterBinarySensor(CoordinatorEntity, BinarySensorEntity):
+    _attr_has_entity_name = True
     _attr_translation_key = "clean_filter"
-    _attr_name = "Clean filter"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
     def __init__(self, coordinator: DataUpdateCoordinator, config_entry: ConfigEntry):
@@ -152,8 +152,8 @@ class CandyTumbleCleanFilterBinarySensor(CoordinatorEntity, BinarySensorEntity):
 
 
 class CandyTumbleWaterTankBinarySensor(CoordinatorEntity, BinarySensorEntity):
+    _attr_has_entity_name = True
     _attr_translation_key = "water_tank_full"
-    _attr_name = "Water tank full"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
     def __init__(self, coordinator: DataUpdateCoordinator, config_entry: ConfigEntry):

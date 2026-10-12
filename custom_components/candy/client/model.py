@@ -171,6 +171,19 @@ class DryerCycleState(StatusCode):
     LEVEL_BONE = (4, "Bone Dry")
 
 
+_STATO_TD_MAP: dict[int, MachineState] = {
+    0: MachineState.IDLE,
+    1: MachineState.IDLE,
+    2: MachineState.RUNNING,
+    3: MachineState.PAUSED,
+    4: MachineState.DELAYED_START_SELECTION,
+    5: MachineState.DELAYED_START_PROGRAMMED,
+    6: MachineState.RUNNING,
+    7: MachineState.ERROR,
+    8: MachineState.FINISHED1,
+}
+
+
 @dataclass
 class TumbleDryerStatus:
     machine_state: MachineState
@@ -200,8 +213,12 @@ class TumbleDryerStatus:
             if err is not None and str(err).strip() not in ("0", "E0", "")
             else None
         )
+        raw_stato = int(json["StatoTD"])
+        machine_state = _STATO_TD_MAP.get(raw_stato)
+        if machine_state is None:
+            raise ValueError(f"Unrecognized StatoTD code: {raw_stato}")
         return cls(
-            machine_state=MachineState.from_code(int(json["StatoTD"])),
+            machine_state=machine_state,
             program_state=DryerProgramState.from_code(int(json["PrPh"])),
             cycle_state=DryerCycleState.from_code(int(json["DryLev"])),
             program=int(json["Pr"]),

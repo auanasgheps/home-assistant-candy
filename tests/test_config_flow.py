@@ -751,6 +751,63 @@ async def test_tumble_dryer_full_control_skips_checkup_schedule(
     assert result["data"].get(CONF_KEY_IS_TUMBLE_DRYER) is True
 
 
+async def test_tumble_dryer_unsupported_interface_reverts_to_read_only(
+    hass, no_discovery, detect_no_encryption
+):
+    """Tumble dryer with unsupported (non-DualTech) interface reverts Full Control to Read-Only mode."""
+    dryer_appliance = CloudApplianceData(
+        mac_address="AA:BB:CC:DD:EE:FF",
+        encryption_key="testenckey",
+        appliance_model="GVSH9A2DCE-80",
+        serial_number="1234567890123456",
+        purchase_date="2022-01-01",
+        interface_type="TD_SMARTPRO_WIFIBLE",
+        programs=[],
+        downloadable_programs=[],
+        brand="candy",
+        appliance_type="dryer",
+    )
+    with (
+        patch(
+            "custom_components.candy.config_flow.CandyClient.status",
+            new_callable=AsyncMock,
+            return_value=_IDLE_TUMBLE_DRYER,
+        ),
+        patch(
+            "custom_components.candy.config_flow.fetch_appliance_data",
+            new_callable=AsyncMock,
+            return_value=dryer_appliance,
+        ),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_IP_ADDRESS: "192.168.0.66"}
+        )
+        assert result["type"] == data_entry_flow.FlowResultType.FORM
+        assert result["step_id"] == "mode"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_KEY_MODE: MODE_FULL_CONTROL}
+        )
+        assert result["step_id"] == "cloud"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"email": "user@example.com", "password": "pass"},
+        )
+        assert result["step_id"] == "language"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={CONF_KEY_PROGRAM_LANGUAGE: "en"}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert result["data"].get(CONF_KEY_MODE) == MODE_READ_ONLY
+    assert result["data"].get(CONF_KEY_IS_TUMBLE_DRYER) is True
+
+
 async def test_read_only_with_maintenance_disabled(
     hass, no_discovery, detect_no_encryption
 ):  # pylint: disable=unused-argument

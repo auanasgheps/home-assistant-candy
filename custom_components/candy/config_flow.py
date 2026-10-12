@@ -75,6 +75,7 @@ from .const import (
 from .helpers import (
     cycles_remaining,
     is_dualtech,
+    is_dualtech_dryer,
     is_washer_dryer,
     supports_scheduled_checkup,
 )
@@ -948,7 +949,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
             self._config_data[CONF_KEY_APPLIANCE_TYPE] = appliance.appliance_type
             if appliance.appliance_type == "washer_dryer":
                 self._config_data[CONF_KEY_IS_WASHER_DRYER] = True
-        if not self._is_tumble_dryer:
+        if self._is_tumble_dryer:
+            if not is_dualtech_dryer(appliance.interface_type):
+                _LOGGER.warning(
+                    "Tumble dryer interface '%s' is not supported in Full Control mode; setting mode to Read-Only",
+                    appliance.interface_type,
+                )
+                self._config_data[CONF_KEY_MODE] = MODE_READ_ONLY
+        else:
             try:
                 if any(p.is_dry for p in parse_wash_programs(appliance.programs)):
                     self._config_data[CONF_KEY_IS_WASHER_DRYER] = True

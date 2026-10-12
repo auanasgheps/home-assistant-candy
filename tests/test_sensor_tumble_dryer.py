@@ -40,12 +40,12 @@ async def test_program_sensor_idle(
 ):
     await init_integration(hass, aioclient_mock, load_fixture("tumble_dryer/idle.json"))
 
-    state = hass.states.get("sensor.dryer_program")
+    state = hass.states.get("sensor.tumble_dryer_dryer_program")
 
     assert state
     assert state.state == "1"
     assert state.attributes == {
-        "friendly_name": "Dryer program",
+        "friendly_name": "Tumble dryer Dryer program",
         "icon": "mdi:tumble-dryer",
     }
 
@@ -81,12 +81,12 @@ async def test_cycle_sensor_idle(
 ):
     await init_integration(hass, aioclient_mock, load_fixture("tumble_dryer/idle.json"))
 
-    state = hass.states.get("sensor.dryer_cycle_status")
+    state = hass.states.get("sensor.tumble_dryer_dryer_cycle_status")
 
     assert state
     assert state.state == "Hang Dry"
     assert state.attributes == {
-        "friendly_name": "Dryer cycle status",
+        "friendly_name": "Tumble dryer Dryer cycle status",
         "icon": "mdi:tumble-dryer",
     }
 
@@ -98,12 +98,12 @@ async def test_cycle_sensor_running(
         hass, aioclient_mock, load_fixture("tumble_dryer/running.json")
     )
 
-    state = hass.states.get("sensor.dryer_cycle_status")
+    state = hass.states.get("sensor.tumble_dryer_dryer_cycle_status")
 
     assert state
     assert state.state == "Running"
     assert state.attributes == {
-        "friendly_name": "Dryer cycle status",
+        "friendly_name": "Tumble dryer Dryer cycle status",
         "icon": "mdi:tumble-dryer",
     }
 
@@ -117,12 +117,12 @@ async def test_cycle_sensor_pre_heating(
     )
     await init_integration(hass, aioclient_mock, pre_heating_fixture)
 
-    state = hass.states.get("sensor.dryer_cycle_status")
+    state = hass.states.get("sensor.tumble_dryer_dryer_cycle_status")
 
     assert state
     assert state.state == "Pre-heating"
     assert state.attributes == {
-        "friendly_name": "Dryer cycle status",
+        "friendly_name": "Tumble dryer Dryer cycle status",
         "icon": "mdi:tumble-dryer",
     }
 
@@ -132,13 +132,13 @@ async def test_remaining_time_sensor_idle(
 ):
     await init_integration(hass, aioclient_mock, load_fixture("tumble_dryer/idle.json"))
 
-    state = hass.states.get("sensor.dryer_cycle_remaining_time")
+    state = hass.states.get("sensor.tumble_dryer_dryer_cycle_remaining_time")
 
     assert state
     assert state.state == "0"
     assert state.attributes == {
         "device_class": "duration",
-        "friendly_name": "Dryer cycle remaining time",
+        "friendly_name": "Tumble dryer Dryer cycle remaining time",
         "icon": "mdi:progress-clock",
         "unit_of_measurement": "min",
     }
@@ -151,13 +151,13 @@ async def test_remaining_time_sensor_running(
         hass, aioclient_mock, load_fixture("tumble_dryer/running.json")
     )
 
-    state = hass.states.get("sensor.dryer_cycle_remaining_time")
+    state = hass.states.get("sensor.tumble_dryer_dryer_cycle_remaining_time")
 
     assert state
     assert state.state == "150"
     assert state.attributes == {
         "device_class": "duration",
-        "friendly_name": "Dryer cycle remaining time",
+        "friendly_name": "Tumble dryer Dryer cycle remaining time",
         "icon": "mdi:progress-clock",
         "unit_of_measurement": "min",
     }
@@ -188,8 +188,8 @@ async def test_sensors_device_info(
     device_reg = device_registry.async_get(hass)
 
     main_sensor = entity_reg.async_get("sensor.tumble_dryer")
-    cycle_sensor = entity_reg.async_get("sensor.dryer_cycle_status")
-    time_sensor = entity_reg.async_get("sensor.dryer_cycle_remaining_time")
+    cycle_sensor = entity_reg.async_get("sensor.tumble_dryer_dryer_cycle_status")
+    time_sensor = entity_reg.async_get("sensor.tumble_dryer_dryer_cycle_remaining_time")
 
     main_device = device_reg.async_get(main_sensor.device_id)
     cycle_device = device_reg.async_get(cycle_sensor.device_id)
@@ -207,15 +207,15 @@ async def test_dry_level_and_diagnostic_sensors(
     """Test dry level and diagnostic sensors."""
     await init_integration(hass, aioclient_mock, load_fixture("tumble_dryer/idle.json"))
 
-    dry_level_state = hass.states.get("sensor.dry_level")
+    dry_level_state = hass.states.get("sensor.tumble_dryer_dry_level")
     assert dry_level_state
     assert dry_level_state.state == "hang_dry"
 
-    checkup_state = hass.states.get("sensor.check_up_state")
+    checkup_state = hass.states.get("sensor.tumble_dryer_check_up_state")
     assert checkup_state
     assert checkup_state.state == "Idle"
 
-    error_state = hass.states.get("sensor.dryer_error")
+    error_state = hass.states.get("sensor.tumble_dryer_dryer_error")
     assert error_state
     assert error_state.state == "0"
 
@@ -229,7 +229,7 @@ async def test_error_code_sensor_when_error_reported(
     )
     await init_integration(hass, aioclient_mock, fixture)
 
-    error_state = hass.states.get("sensor.dryer_error")
+    error_state = hass.states.get("sensor.tumble_dryer_dryer_error")
     assert error_state
     assert error_state.state == "E03"
     assert error_state.attributes.get("description") == "E03 -  The water tank is full"

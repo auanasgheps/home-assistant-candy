@@ -12,6 +12,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.candy import CONF_KEY_USE_ENCRYPTION, DOMAIN
+from custom_components.candy.client.model import MachineState, TumbleDryerStatus
 from custom_components.candy.const import (
     CONF_KEY_INTERFACE_TYPE,
     CONF_KEY_IS_TUMBLE_DRYER,
@@ -64,7 +65,22 @@ _PROGRAM_SYNTHETICS = {
     },
 }
 
-_DRYER_PROGRAMS = [_PROGRAM_COTTON, _PROGRAM_SYNTHETICS]
+_PROGRAM_RAPID_45 = {
+    "position": 3,
+    "name": "RAPID_45_MIN",
+    "default_drying_level": 0,
+    "max_time_level": 120,
+    "default_time_level": 45,
+    "set_dry_level": 0,
+    "set_time_level": 1,
+    "set_rapido": 0,
+    "duration": 45,
+    "parameters": {
+        "selector_position": 3,
+    },
+}
+
+_DRYER_PROGRAMS = [_PROGRAM_COTTON, _PROGRAM_SYNTHETICS, _PROGRAM_RAPID_45]
 
 _IDLE_JSON = """{
   "statusTD": {
@@ -135,7 +151,7 @@ _PAUSED_JSON = """{
 _FINISHED_JSON = """{
   "statusTD": {
     "StatoWiFi": "1",
-    "StatoTD": "7",
+    "StatoTD": "8",
     "CodiceErrore": "0",
     "Pr": "1",
     "PrPh": "3",
@@ -333,6 +349,110 @@ async def test_dryer_start_button_delayed(
     assert params["DelVl"] == "120"
 
 
+async def test_dryer_start_button_delayed_timed_program(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test pressing start button with delay on a timed-only program preserves Time parameter."""
+    entry = await _init_dryer_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+
+    program_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_TUMBLE_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    delay_eid = registry.async_get_entity_id(
+        "number", DOMAIN, UNIQUE_ID_TUMBLE_DELAY_NUMBER.format(entry.entry_id)
+    )
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_TUMBLE_START_BUTTON.format(entry.entry_id)
+    )
+    assert program_eid is not None
+    assert delay_eid is not None
+    assert start_eid is not None
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": program_eid, "option": "Rapid 45 min."},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": delay_eid, "value": 60},
+        blocking=True,
+    )
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs = mock_send.call_args[0][0]
+    params = {k: v[0] for k, v in parse_qs(qs).items()}
+    assert params["Write"] == "1"
+    assert params["PrNm"] == "3"
+    assert params["Time"] == "45"
+    assert params["DelMd"] == "1"
+    assert params["DelVl"] == "60"
+    assert "DryLev" not in params
+
+
+async def test_dryer_start_button_delayed_with_timed_option(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test timed drying option combined with delay sends both Time and DelMd parameters."""
+    entry = await _init_dryer_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+
+    time_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_TUMBLE_TIME_SELECT.format(entry.entry_id)
+    )
+    delay_eid = registry.async_get_entity_id(
+        "number", DOMAIN, UNIQUE_ID_TUMBLE_DELAY_NUMBER.format(entry.entry_id)
+    )
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_TUMBLE_START_BUTTON.format(entry.entry_id)
+    )
+    assert time_eid is not None
+    assert delay_eid is not None
+    assert start_eid is not None
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": time_eid, "option": "60"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": delay_eid, "value": 180},
+        blocking=True,
+    )
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs = mock_send.call_args[0][0]
+    params = {k: v[0] for k, v in parse_qs(qs).items()}
+    assert params["Write"] == "1"
+    assert params["PrNm"] == "1"
+    assert params["Time"] == "60"
+    assert params["DelMd"] == "1"
+    assert params["DelVl"] == "180"
+    assert "DryLev" not in params
+
+
 async def test_dryer_stop_button(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
@@ -496,3 +616,245 @@ async def test_dryer_reset_warnings_button(
     params = {k: v[0] for k, v in parse_qs(qs).items()}
     assert params["Write"] == "1"
     assert params["ResetWarnings"] == "1"
+
+
+async def test_dryer_program_without_time_level_disables_time_select(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test selecting a program without set_time_level marks time select unavailable."""
+    entry = await _init_dryer_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+
+    program_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_TUMBLE_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    time_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_TUMBLE_TIME_SELECT.format(entry.entry_id)
+    )
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_TUMBLE_START_BUTTON.format(entry.entry_id)
+    )
+    assert program_eid is not None
+    assert time_eid is not None
+    assert start_eid is not None
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": program_eid, "option": "Synthetics"},
+        blocking=True,
+    )
+
+    t_state = hass.states.get(time_eid)
+    assert t_state is not None
+    assert t_state.state == "unavailable"
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs = mock_send.call_args[0][0]
+    params = {k: v[0] for k, v in parse_qs(qs).items()}
+    assert params["Write"] == "1"
+    assert params["StSt"] == "1"
+    assert params["PrNm"] == "2"
+    assert params["DryLev"] == "2"
+    assert "Time" not in params
+
+
+async def test_dryer_timed_only_program_gating_and_start(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test timed-only program disables level select and sends timed start command."""
+    entry = await _init_dryer_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+
+    program_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_TUMBLE_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    level_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_TUMBLE_DRY_LEVEL_SELECT.format(entry.entry_id)
+    )
+    time_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_TUMBLE_TIME_SELECT.format(entry.entry_id)
+    )
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_TUMBLE_START_BUTTON.format(entry.entry_id)
+    )
+    assert program_eid is not None
+    assert level_eid is not None
+    assert time_eid is not None
+    assert start_eid is not None
+
+    # Switch to Rapid 45 min. (set_dry_level=0, set_time_level=1, default_time_level=45)
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": program_eid, "option": "Rapid 45 min."},
+        blocking=True,
+    )
+
+    # Dry level select should be unavailable (no dry levels)
+    l_state = hass.states.get(level_eid)
+    assert l_state is not None
+    assert l_state.state == "unavailable"
+
+    # Time select should be active, defaulting to 45, without "off" option
+    t_state = hass.states.get(time_eid)
+    assert t_state is not None
+    assert t_state.state == "45"
+    assert "off" not in t_state.attributes["options"]
+    assert "45" in t_state.attributes["options"]
+
+    # Press start without touching time -> sends timed start with 45 min, no DryLev
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs = mock_send.call_args[0][0]
+    params = {k: v[0] for k, v in parse_qs(qs).items()}
+    assert params["Write"] == "1"
+    assert params["StSt"] == "1"
+    assert params["PrNm"] == "3"
+    assert params["Time"] == "45"
+    assert "DryLev" not in params
+
+    # Change time to 90 min and press start
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": time_eid, "option": "90"},
+        blocking=True,
+    )
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send_90:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send_90.assert_called_once()
+    qs_90 = mock_send_90.call_args[0][0]
+    params_90 = {k: v[0] for k, v in parse_qs(qs_90).items()}
+    assert params_90["PrNm"] == "3"
+    assert params_90["Time"] == "90"
+    assert "DryLev" not in params_90
+
+    # Switch back to Cotton -> level select becomes available, time select resets to "off"
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": program_eid, "option": "Cotton"},
+        blocking=True,
+    )
+
+    l_state_cotton = hass.states.get(level_eid)
+    assert l_state_cotton is not None
+    assert l_state_cotton.state != "unavailable"
+
+    t_state_cotton = hass.states.get(time_eid)
+    assert t_state_cotton is not None
+    assert t_state_cotton.state == "off"
+    assert "off" in t_state_cotton.attributes["options"]
+
+    # Press start -> dispatches standard start with DryLev=3
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send_cotton:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send_cotton.assert_called_once()
+    qs_cotton = mock_send_cotton.call_args[0][0]
+    params_cotton = {k: v[0] for k, v in parse_qs(qs_cotton).items()}
+    assert params_cotton["PrNm"] == "1"
+    assert params_cotton["DryLev"] == "3"
+    assert "Time" not in params_cotton
+
+
+async def test_dryer_write_entities_unavailable_when_machine_off(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test start button, delay number, and selects are unavailable when machine is off."""
+    entry = await _init_dryer_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_TUMBLE_START_BUTTON.format(entry.entry_id)
+    )
+    delay_eid = registry.async_get_entity_id(
+        "number", DOMAIN, UNIQUE_ID_TUMBLE_DELAY_NUMBER.format(entry.entry_id)
+    )
+    program_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_TUMBLE_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    assert start_eid is not None
+    assert delay_eid is not None
+    assert program_eid is not None
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    off_status = TumbleDryerStatus(
+        machine_state=MachineState.OFF,
+        program_state=coordinator.data.program_state,
+        cycle_state=coordinator.data.cycle_state,
+        program=coordinator.data.program,
+        remaining_minutes=0,
+        remote_control=True,
+        dry_level=coordinator.data.dry_level,
+        dry_level_selected=coordinator.data.dry_level_selected,
+        refresh=False,
+        need_clean_filter=False,
+        water_tank_full=False,
+        door_closed=True,
+        error=None,
+        delay_value=None,
+        checkup_state=None,
+        recipe_id=None,
+        time=None,
+        rapido=None,
+    )
+    coordinator.async_set_updated_data(off_status)
+    await hass.async_block_till_done()
+
+    assert hass.states.get(start_eid).state == "unavailable"
+    assert hass.states.get(delay_eid).state == "unavailable"
+    assert hass.states.get(program_eid).state == "unavailable"
+
+
+async def test_dryer_buttons_unavailable_on_coordinator_update_failure(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test buttons become unavailable when coordinator update fails."""
+    entry = await _init_dryer_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_TUMBLE_START_BUTTON.format(entry.entry_id)
+    )
+    stop_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_TUMBLE_STOP_BUTTON.format(entry.entry_id)
+    )
+    assert start_eid is not None
+    assert stop_eid is not None
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator.last_update_success = False
+    coordinator.async_update_listeners()
+    await hass.async_block_till_done()
+
+    assert hass.states.get(start_eid).state == "unavailable"
+    assert hass.states.get(stop_eid).state == "unavailable"

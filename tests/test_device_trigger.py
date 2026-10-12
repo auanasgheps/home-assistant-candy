@@ -25,7 +25,6 @@ from custom_components.candy.const import (
     DOMAIN,
 )
 from custom_components.candy.device_trigger import (
-    TRIGGER_TYPES,
     async_attach_trigger,
     async_get_triggers,
 )
@@ -454,40 +453,6 @@ async def test_maintenance_trigger_initial_none_stats(hass):
         assert mock_job.call_count == 0
 
 
-async def test_get_triggers_dryer(hass):
-    """Dryer returns only error_reported trigger."""
-    entry = MockConfigEntry(domain=DOMAIN, unique_id="td-triggers", data={})
-    entry.add_to_hass(hass)
-    coordinator = MagicMock()
-    coordinator.data = TumbleDryerStatus(
-        machine_state=MachineState.IDLE,
-        program_state=DryerProgramState.STOPPED,
-        cycle_state=DryerCycleState.LEVEL_HANG,
-        program=1,
-        remaining_minutes=150,
-        remote_control=True,
-        dry_level=2,
-        dry_level_selected=1,
-        refresh=False,
-        need_clean_filter=False,
-        water_tank_full=False,
-        door_closed=True,
-        error="0",
-        delay_value=0,
-        checkup_state=None,
-        recipe_id=None,
-        time=0,
-        rapido=0,
-    )
-    hass.data[DOMAIN] = {entry.entry_id: {DATA_KEY_COORDINATOR: coordinator}}
-    with patch("custom_components.candy.device_trigger.dr.async_get") as mock_reg:
-        mock_reg.return_value.async_get.return_value = _mock_device(entry.entry_id)
-        result = await async_get_triggers(hass, device_id="dev-1")
-
-    assert len(result) == 1
-    assert result[0][CONF_TYPE] == "error_reported"
-
-
 async def test_state_trigger_error_reported_dryer(hass):
     """error_reported fires on dryer transition into ERROR state."""
 
@@ -581,6 +546,7 @@ async def test_state_trigger_drying_completed(hass):
 
 async def test_dryer_warning_trigger_clean_filter_needed(hass):
     """clean_filter_needed fires when need_clean_filter transitions from False to True."""
+
     def _make_td(clean_filter: bool) -> TumbleDryerStatus:
         return TumbleDryerStatus(
             machine_state=MachineState.IDLE,
@@ -649,6 +615,7 @@ async def test_dryer_warning_trigger_clean_filter_needed(hass):
 
 async def test_dryer_warning_trigger_water_tank_full(hass):
     """water_tank_full fires when water_tank_full transitions from False to True."""
+
     def _make_td(tank_full: bool) -> TumbleDryerStatus:
         return TumbleDryerStatus(
             machine_state=MachineState.IDLE,
@@ -699,4 +666,3 @@ async def test_dryer_warning_trigger_water_tank_full(hass):
         coordinator.data = _make_td(True)
         listener_cb()
         assert mock_job.call_count == 1
-

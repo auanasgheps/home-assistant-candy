@@ -136,7 +136,6 @@ class CandyDryerDelayNumber(CoordinatorEntity, NumberEntity):
         status = cast(TumbleDryerStatus, self.coordinator.data)
         return status.machine_state in {
             MachineState.IDLE,
-            MachineState.OFF,
             MachineState.FINISHED1,
             MachineState.FINISHED2,
         }
