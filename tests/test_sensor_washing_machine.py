@@ -1199,3 +1199,45 @@ async def test_program_sensor_disambiguation_multi_programs_same_selector(
     state = hass.states.get("sensor.wash_program")
     assert state is not None
     assert state.state == "High Heat Dry"
+
+
+async def test_wash_program_sensor_one_fi_extra(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test wash program sensor displays One-Fi Extra when appliance is set to position 15."""
+    one_fi_program = [
+        {
+            "program": {
+                "position": 15,
+                "name": "DUAL_WM_WD_PROGRAM_NAME_ONE_FI_EXTRA",
+                "command_parameters": [
+                    {
+                        "command_parameter": {
+                            "name": "selector_position",
+                            "validation": "15",
+                        }
+                    },
+                ],
+            }
+        }
+    ]
+
+    idle_pos_15 = (
+        load_fixture("washing_machine/idle.json")
+        .replace('"Pr": "1"', '"Pr": "15"')
+        .replace('"PrCode": "136"', '"PrCode": "0"')
+    )
+    await init_integration(
+        hass,
+        aioclient_mock,
+        idle_pos_15,
+        statistics_response='{"statusCounters": {"Program1": "10"}}',
+        extra_config_data={
+            CONF_KEY_PROGRAMS: one_fi_program,
+            CONF_KEY_IS_WASHER_DRYER: True,
+        },
+    )
+
+    state = hass.states.get("sensor.wash_program")
+    assert state is not None
+    assert state.state == "One-Fi Extra"

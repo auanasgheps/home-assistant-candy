@@ -112,8 +112,8 @@ DRY_TARGET_30_MIN = "30_minutes"
 DRY_TARGET_OPTIONS_FULL: list[str] = [
     DRY_TARGET_NO_DRY,
     DRY_TARGET_EXTRA_DRY,
-    DRY_TARGET_IRON_DRY,
     DRY_TARGET_CUPBOARD_DRY,
+    DRY_TARGET_IRON_DRY,
     DRY_TARGET_120_MIN,
     DRY_TARGET_90_MIN,
     DRY_TARGET_60_MIN,
@@ -122,19 +122,21 @@ DRY_TARGET_OPTIONS_FULL: list[str] = [
 
 DRY_TARGET_OPTIONS_ONLY_DRY: list[str] = [
     DRY_TARGET_EXTRA_DRY,
-    DRY_TARGET_IRON_DRY,
     DRY_TARGET_CUPBOARD_DRY,
+    DRY_TARGET_IRON_DRY,
     DRY_TARGET_120_MIN,
     DRY_TARGET_90_MIN,
     DRY_TARGET_60_MIN,
     DRY_TARGET_30_MIN,
 ]
 
+# Confirmed via Simply-Fi APK CandyWasherDryerDualTech.dryWithValue (classes4.dex):
+# 0 = none, 1 = extra, 2 = pronto armadio (cupboard), 3 = pronto stiro (iron)
 DRY_TARGET_TO_VALUE: dict[str, int] = {
     DRY_TARGET_NO_DRY: 0,
     DRY_TARGET_EXTRA_DRY: 1,
-    DRY_TARGET_IRON_DRY: 2,
-    DRY_TARGET_CUPBOARD_DRY: 3,
+    DRY_TARGET_CUPBOARD_DRY: 2,
+    DRY_TARGET_IRON_DRY: 3,
     DRY_TARGET_120_MIN: 5,
     DRY_TARGET_90_MIN: 6,
     DRY_TARGET_60_MIN: 7,

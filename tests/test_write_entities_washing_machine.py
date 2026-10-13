@@ -2427,6 +2427,8 @@ async def test_dualtech_start_command_delayed_start(
 async def test_dualtech_start_command_washer_dryer_option(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
+    """When no dry target is active, Option falls back to program catalog dry value."""
+    # Program with catalog dry=0 (e.g. Silk / Cotton without dry) sends Option=0
     entry = await _init_full_control_dualtech(
         hass,
         aioclient_mock,
@@ -2450,7 +2452,36 @@ async def test_dualtech_start_command_washer_dryer_option(
 
     mock_send.assert_called_once()
     qs: str = mock_send.call_args[0][0]
-    assert "Option=255" in qs
+    assert "Option=0" in qs
+
+    # Program with catalog dry=255 sends Option=255
+    prog_dry_255 = copy.deepcopy(_COTTON)
+    prog_dry_255["program"]["command_parameters"].append(
+        {"command_parameter": {"name": "dry", "validation": "255"}}
+    )
+    entry2 = await _init_full_control_dualtech(
+        hass,
+        aioclient_mock,
+        "3D_DUAL",
+        "hoover",
+        True,
+        [prog_dry_255],
+        _IDLE_JSON,
+    )
+    start_eid2 = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry2.entry_id)
+    )
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send2:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid2}, blocking=True
+        )
+
+    mock_send2.assert_called_once()
+    qs2: str = mock_send2.call_args[0][0]
+    assert "Option=255" in qs2
 
 
 async def test_dualtech_start_command_pink_rule(
@@ -3847,7 +3878,7 @@ async def test_start_button_sends_command_wd_wash_and_dry(
     assert "StSt=1" in query_string
     assert "PrNm=1" in query_string
     assert "PrCode=65" in query_string
-    assert "Dry=2" in query_string
+    assert "Dry=3" in query_string
 
 
 async def test_start_button_sends_command_wd_drying(
@@ -4229,7 +4260,7 @@ async def test_estimated_duration_delayed_start_falls_back_to_telemetry_dry_targ
     delayed_json = (
         _IDLE_JSON.replace('"MachMd": "1"', '"MachMd": "5"')
         .replace('"DelVal": "0"', '"DelVal": "60"')
-        .replace('"statusLavatrice": {', '"statusLavatrice": {"DryT": "3", ')
+        .replace('"statusLavatrice": {', '"statusLavatrice": {"DryT": "2", ')
     )
 
     entry = await _init_full_control_wd(

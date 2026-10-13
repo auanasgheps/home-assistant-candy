@@ -399,8 +399,8 @@ def test_washer_dryer_dry_target_codes():
     expected_codes = {
         0: (WasherDryerDryTarget.NO_DRY, "no_dry"),
         1: (WasherDryerDryTarget.EXTRA_DRY, "extra_dry"),
-        2: (WasherDryerDryTarget.IRON_DRY, "iron_dry"),
-        3: (WasherDryerDryTarget.CUPBOARD_DRY, "cupboard_dry"),
+        2: (WasherDryerDryTarget.CUPBOARD_DRY, "cupboard_dry"),
+        3: (WasherDryerDryTarget.IRON_DRY, "iron_dry"),
         4: (WasherDryerDryTarget.COOLDOWN, "cooldown"),
         5: (WasherDryerDryTarget.TIME_120, "120_minutes"),
         6: (WasherDryerDryTarget.TIME_90, "90_minutes"),
