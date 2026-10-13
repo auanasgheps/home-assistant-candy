@@ -330,12 +330,9 @@ def _build_dualtech_start_params(
     params["Stm"] = 1 if steam else 0
 
     if is_washer_dryer:
-        if dry > 0:
-            dry_val = dry
-        elif program.dry != 0:
-            dry_val = program.dry
-        else:
-            dry_val = 255
+        # Confirmed via Simply-Fi APK CandyWasherDryerDualTech.start (classes4.dex):
+        # Uses user-selected dry target when active, otherwise passes program catalog dry value.
+        dry_val = dry if dry > 0 else program.dry
         params["Option"] = dry_val
 
     params["RecipeId"] = recipe_id
