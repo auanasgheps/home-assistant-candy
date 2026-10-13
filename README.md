@@ -72,7 +72,7 @@ Full functionality has been tested on several physical appliances. See the table
 | Washing Machine / Washer Dryer | Candy Bianca (`BIANCA`, `BWD` series) | No | Implemented from cloud catalog and protocol specifications. Remote pause/resume is unsupported by Bianca hardware. |
 | Washing Machine | Candy Smart Pro / Hoover H-WASH 300 / X-Care (`SMARTPRO`, `HWASH300`, `XCARE`) | No | Implemented from protocol specifications. |
 
-Other appliance series may not behave correctly. If you encounter issues or unexpected behaviour, please share your findings in the [Discussions](https://github.com/bigmoby/home-assistant-candy/discussions/categories/device-support-improvements) section or open an Issue — feedback is very welcome.
+Other appliance series may not behave correctly. If you encounter issues or unexpected behaviour, please open an [Issue](https://github.com/bigmoby/home-assistant-candy/issues) — feedback is very welcome.
 
 ---
 
@@ -95,17 +95,30 @@ Other appliance series may not behave correctly. If you encounter issues or unex
 
 ---
 
-## 🚀 Built-in Debugging Tool
+## 🚀 Built-in Debugging Tool (`simplyfi.py` v2.0.0)
 
-Are you a developer, or do you want to inspect what raw JSON your specific appliance is throwing over your network? We've got you covered:
+Want to troubleshoot network reachability, verify your 16-character encryption key, test remote control readiness, or inspect raw and decoded telemetry from your appliance? We've got you covered:
 
-Inside the `tools/` folder of this repository, you'll find the standalone `simplyfi.py` script. You can run it effortlessly from any terminal independent from Home Assistant!
+Inside the `tools/` folder, you'll find the standalone `simplyfi.py` diagnostic suite. It runs from any terminal independently from Home Assistant:
 
 ```bash
-python3 tools/simplyfi.py <YOUR_APPLIANCE_IP_ADDRESS>
+# 1. Recover your 16-character XOR key automatically
+python3 tools/simplyfi.py <YOUR_APPLIANCE_IP> getkey
+
+# 2. Inspect real-time decoded telemetry in a human-readable table
+python3 tools/simplyfi.py <YOUR_APPLIANCE_IP> inspect
+
+# 3. Audit remote control prerequisites and physical dial knob position
+python3 tools/simplyfi.py <YOUR_APPLIANCE_IP> remote
+
+# 4. Fetch cycle statistics via the 2-step handshake (prepare + fetch)
+python3 tools/simplyfi.py <YOUR_APPLIANCE_IP> stats
+
+# 5. Generate a complete, sanitized diagnostic report for GitHub issues
+python3 tools/simplyfi.py <YOUR_APPLIANCE_IP> diagnose --sanitize
 ```
 
-This is incredibly useful for validating your appliance network reachability or diagnosing new payloads.
+Supports all 9 appliance families: Washing Machines, Washer-Dryers, Tumble Dryers, Dishwashers, Ovens, Wine Coolers, Refrigerators/Freezers, Kitchen Hoods, Induction/Gas Cooktops, and Robot Vacuums. For full details and command grammar, see [`tools/agents.md`](tools/agents.md).
 
 ---
 
@@ -135,10 +148,13 @@ Use that IP when configuring the integration in Home Assistant.
 
 ## 🙋 My device isn't supported. Can you help?
 
-Absolutely! If you have an appliance that is not supported yet (or you notice odd readings), head over to the [Discussions section](https://github.com/bigmoby/home-assistant-candy/discussions/categories/device-support-improvements). Open a new thread or comment to an existing one with the following information:
+Absolutely! If you have an appliance that is not supported yet (e.g. Refrigerator, Hood, Cooktop, or a new Dishwasher/Oven variant), or you notice odd readings, please open a new [Issue](https://github.com/bigmoby/home-assistant-candy/issues) with the following information:
 
-1. The raw status API response of your device (Please use the provided `tools/simplyfi.py` inside this repo to query your IP and get the full JSON).
-2. A brief, intuitive explanation of what you think each field correlates to based on the machine's state (e.g., _The `SpinSp` field reads "8", meaning Spin speed 800 RPM in my model_).
+1. Run the diagnostic tool with sanitization enabled:
+   ```bash
+   python3 tools/simplyfi.py <YOUR_APPLIANCE_IP> diagnose --sanitize
+   ```
+2. Paste the generated Markdown output directly into your issue. It automatically includes sanitized device configuration, decoded telemetry registers, raw JSON payloads, and cycle counters while redacting sensitive Wi-Fi credentials and MAC addresses.
 
 ---
 
