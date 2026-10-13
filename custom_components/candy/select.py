@@ -28,6 +28,7 @@ from .client import (
 from .client.model import MachineState, TumbleDryerStatus
 from .const import (
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
+    CONF_KEY_INTERFACE_TYPE,
     CONF_KEY_MODE,
     CONF_KEY_PROGRAM_LANGUAGE,
     CONF_KEY_PROGRAMS,
@@ -42,6 +43,7 @@ from .const import (
     DRY_TARGET_NO_DRY,
     DRY_TARGET_OPTIONS_FULL,
     DRY_TARGET_OPTIONS_ONLY_DRY,
+    FLANGIA_PROGRAMS_TO_HIDE,
     MODE_FULL_CONTROL,
     PROGRAM_TYPE_DRYING,
     PROGRAM_TYPE_WASH_AND_DRY,
@@ -62,6 +64,7 @@ from .const import (
 )
 from .helpers import (
     dryer_device_info,
+    is_dualtech,
     is_washer_dryer,
     remote_control_enabled,
     wash_device_info,
@@ -485,6 +488,13 @@ class WashProgramSelect(CandyWashSelectBase):
     def available(self) -> bool:
         return super().available and self._machine_is_idle()
 
+    def _is_flangia_hidden(self, program: WashingMachineWashProgram) -> bool:
+        interface_type = self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        return (
+            is_dualtech(interface_type)
+            and program.name.upper() in FLANGIA_PROGRAMS_TO_HIDE
+        )
+
     @property
     def options(self) -> list[str]:
         lang = self.config_entry.data.get(
@@ -497,19 +507,27 @@ class WashProgramSelect(CandyWashSelectBase):
         )
 
         if current_type == PROGRAM_TYPE_DRYING:
-            return [self._program_name(p) for p in self._programs if p.is_dry]
+            return [
+                self._program_name(p)
+                for p in self._programs
+                if p.is_dry and not self._is_flangia_hidden(p)
+            ]
 
         if current_type == PROGRAM_TYPE_WASH_AND_DRY:
             return [
                 self._program_name(p)
                 for p in self._programs
-                if p.is_wash_and_dry and "autoclean" not in p.name.lower()
+                if p.is_wash_and_dry
+                and "autoclean" not in p.name.lower()
+                and not self._is_flangia_hidden(p)
             ]
 
         standard = [
             self._program_name(p)
             for p in self._programs
-            if p.is_wash and "autoclean" not in p.name.lower()
+            if p.is_wash
+            and "autoclean" not in p.name.lower()
+            and not self._is_flangia_hidden(p)
         ]
         if not self._nfc_enabled():
             return standard

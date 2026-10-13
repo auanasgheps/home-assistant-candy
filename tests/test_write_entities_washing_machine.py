@@ -2427,7 +2427,7 @@ async def test_dualtech_start_command_delayed_start(
 async def test_dualtech_start_command_washer_dryer_option(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
-    """When no dry target is active, Option falls back to program catalog dry value."""
+    """When in wash-only mode, Option sends 0 even if catalog specifies dry=255. When dry target is selected, Option sends the target."""
     # Program with catalog dry=0 (e.g. Silk / Cotton without dry) sends Option=0
     entry = await _init_full_control_dualtech(
         hass,
@@ -2454,7 +2454,7 @@ async def test_dualtech_start_command_washer_dryer_option(
     qs: str = mock_send.call_args[0][0]
     assert "Option=0" in qs
 
-    # Program with catalog dry=255 sends Option=255
+    # Wash program with catalog dry=255 in wash-only mode sends Option=0 (not 255)
     prog_dry_255 = copy.deepcopy(_COTTON)
     prog_dry_255["program"]["command_parameters"].append(
         {"command_parameter": {"name": "dry", "validation": "255"}}
@@ -2481,7 +2481,34 @@ async def test_dualtech_start_command_washer_dryer_option(
 
     mock_send2.assert_called_once()
     qs2: str = mock_send2.call_args[0][0]
-    assert "Option=255" in qs2
+    assert "Option=0" in qs2
+
+    # Wash program with dry target selected sends that target (e.g. cupboard_dry -> Option=2)
+    dry_eid2 = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_DRY_SELECT.format(entry2.entry_id)
+    )
+    type_eid2 = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT.format(entry2.entry_id)
+    )
+    assert type_eid2 is not None
+    assert dry_eid2 is not None
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": type_eid2, "option": PROGRAM_TYPE_WASH_AND_DRY},
+        blocking=True,
+    )
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send3:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid2}, blocking=True
+        )
+
+    mock_send3.assert_called_once()
+    qs3: str = mock_send3.call_args[0][0]
+    assert "Option=2" in qs3
 
 
 async def test_dualtech_start_command_pink_rule(
@@ -3517,6 +3544,76 @@ async def test_program_select_includes_rapid_wash_and_dry(
     assert prog_state is not None
     assert "Wash and Dry 59 Min." in prog_state.attributes["options"]
     assert "Whites" in prog_state.attributes["options"]
+
+
+async def test_program_select_excludes_flangia_programs_on_dualtech(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """WashProgramSelect excludes flangia bezel parking programs on DualTech interface."""
+    flangia_programs = [
+        _COTTON,
+        {
+            "program": {
+                "position": 15,
+                "name": "DUAL_WM_WD_PROGRAM_NAME_ONE_FI_EXTRA",
+                "command_parameters": [
+                    {
+                        "command_parameter": {
+                            "name": "selector_position",
+                            "validation": "15",
+                        }
+                    },
+                ],
+            }
+        },
+        {
+            "program": {
+                "position": 16,
+                "name": "DUAL_WM_WD_PROGRAM_NAME_TUMBLING",
+                "command_parameters": [
+                    {
+                        "command_parameter": {
+                            "name": "selector_position",
+                            "validation": "16",
+                        }
+                    },
+                ],
+            }
+        },
+        {
+            "program": {
+                "position": 17,
+                "name": "DUAL_WM_WD_PROGRAM_NAME_SMART_FI_PLUS",
+                "command_parameters": [
+                    {
+                        "command_parameter": {
+                            "name": "selector_position",
+                            "validation": "17",
+                        }
+                    },
+                ],
+            }
+        },
+    ]
+    entry = await _init_full_control_dualtech(
+        hass,
+        aioclient_mock,
+        "3D_DUAL",
+        "candy",
+        False,
+        flangia_programs,
+        _IDLE_JSON,
+    )
+    registry = er.async_get(hass)
+    prog_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    assert prog_id is not None
+    state = hass.states.get(prog_id)
+    assert state is not None
+    assert "Whites" in state.attributes["options"]
+    for excluded in ("One-Fi Extra", "Tumbling", "Smart-Fi Plus"):
+        assert excluded not in state.attributes["options"]
 
 
 async def test_program_type_select_reflects_idle_dry_cycle(
