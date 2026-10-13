@@ -81,7 +81,7 @@ class WashProgramState(StatusCode):
 
 
 # Confirmed via Simply-Fi APK CandyWasherDryerDualTech.dryWithValue (classes4.dex):
-# 0 = none, 1 = extra, 2 = pronto armadio (cupboard), 3 = pronto stiro (iron), 4 = cool-down
+# 0 = none, 1 = extra, 2 = pronto armadio (cupboard), 3 = pronto stiro (iron), 4 = cool-down, 9 = wool dry
 class WasherDryerDryTarget(StatusCode):
     NO_DRY = (0, "no_dry")
     EXTRA_DRY = (1, "extra_dry")
@@ -92,6 +92,7 @@ class WasherDryerDryTarget(StatusCode):
     TIME_90 = (6, "90_minutes")
     TIME_60 = (7, "60_minutes")
     TIME_30 = (8, "30_minutes")
+    WOOL_DRY = (9, "wool_dry")
 
 
 @dataclass

@@ -103,7 +103,8 @@
           "120_minutes": "120 minuti",
           "90_minutes": "90 minuti",
           "60_minutes": "60 minuti",
-          "30_minutes": "30 minuti"
+          "30_minutes": "30 minuti",
+          "wool_dry": "Asciugatura lana"
         }
       },
       "tumble_dryer": {

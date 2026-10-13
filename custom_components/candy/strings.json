@@ -286,7 +286,8 @@
           "120_minutes": "120 minutes",
           "90_minutes": "90 minutes",
           "60_minutes": "60 minutes",
-          "30_minutes": "30 minutes"
+          "30_minutes": "30 minutes",
+          "wool_dry": "Wool dry"
         }
       },
       "wash_estimated_duration": {

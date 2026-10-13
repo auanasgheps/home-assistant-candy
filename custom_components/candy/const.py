@@ -108,6 +108,7 @@ DRY_TARGET_120_MIN = "120_minutes"
 DRY_TARGET_90_MIN = "90_minutes"
 DRY_TARGET_60_MIN = "60_minutes"
 DRY_TARGET_30_MIN = "30_minutes"
+DRY_TARGET_WOOL_DRY = "wool_dry"
 
 DRY_TARGET_OPTIONS_FULL: list[str] = [
     DRY_TARGET_NO_DRY,
@@ -131,7 +132,7 @@ DRY_TARGET_OPTIONS_ONLY_DRY: list[str] = [
 ]
 
 # Confirmed via Simply-Fi APK CandyWasherDryerDualTech.dryWithValue (classes4.dex):
-# 0 = none, 1 = extra, 2 = pronto armadio (cupboard), 3 = pronto stiro (iron)
+# 0 = none, 1 = extra, 2 = pronto armadio (cupboard), 3 = pronto stiro (iron), 4 = cooldown, 9 = wool dry
 DRY_TARGET_TO_VALUE: dict[str, int] = {
     DRY_TARGET_NO_DRY: 0,
     DRY_TARGET_EXTRA_DRY: 1,
@@ -141,7 +142,14 @@ DRY_TARGET_TO_VALUE: dict[str, int] = {
     DRY_TARGET_90_MIN: 6,
     DRY_TARGET_60_MIN: 7,
     DRY_TARGET_30_MIN: 8,
+    DRY_TARGET_WOOL_DRY: 9,
 }
+
+# Programs on DualTech dial bezel representing maintenance/parking slots, hidden from UI selection
+# Confirmed via Simply-Fi APK CandyWasherDualTech.FLANGIA_PROGRAMS_TO_HIDE (classes4.dex)
+FLANGIA_PROGRAMS_TO_HIDE: frozenset[str] = frozenset(
+    {"MAINTENANCE", "SMART_FI_PLUS", "ONE_FI_EXTRA", "TUMBLING"}
+)
 
 DRY_TARGET_DURATIONS: dict[str, int] = {
     DRY_TARGET_NO_DRY: 0,
