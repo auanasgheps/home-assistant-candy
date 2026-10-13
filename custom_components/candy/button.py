@@ -95,6 +95,7 @@ from .const import (
     WASH_OPTIONS,
 )
 from .helpers import (
+    command_settling_delay,
     dryer_device_info,
     is_dualtech,
     is_washer_dryer,
@@ -384,11 +385,13 @@ class CandyWashButtonBase(CoordinatorEntity, ButtonEntity):
         data = self.hass.data[DOMAIN][self.config_id]
         data[DATA_KEY_WRITE_PENDING] = data.get(DATA_KEY_WRITE_PENDING, 0) + 1
         self.coordinator.async_update_listeners()
+        interface_type = self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        settling_delay = command_settling_delay(interface_type)
         try:
             await self._client.send_command(query_string)
-            await asyncio.sleep(5)
+            await asyncio.sleep(settling_delay)
         except Exception:
-            await asyncio.sleep(5)
+            await asyncio.sleep(settling_delay)
             raise
         finally:
             data[DATA_KEY_WRITE_PENDING] -= 1
@@ -934,11 +937,13 @@ class CandyDryerButtonBase(CoordinatorEntity, ButtonEntity):
         data = self.hass.data[DOMAIN][self.config_id]
         data[DATA_KEY_WRITE_PENDING] = data.get(DATA_KEY_WRITE_PENDING, 0) + 1
         self.coordinator.async_update_listeners()
+        interface_type = self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        settling_delay = command_settling_delay(interface_type)
         try:
             await self._client.send_command(query_string)
-            await asyncio.sleep(5)
+            await asyncio.sleep(settling_delay)
         except Exception:
-            await asyncio.sleep(5)
+            await asyncio.sleep(settling_delay)
             raise
         finally:
             data[DATA_KEY_WRITE_PENDING] -= 1

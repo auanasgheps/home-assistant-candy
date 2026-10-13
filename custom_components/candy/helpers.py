@@ -63,6 +63,15 @@ def is_dualtech_dryer(interface_type: str | None) -> bool:
     return is_dualtech_dryer_interface(interface_type)
 
 
+def command_settling_delay(interface_type: str | None) -> int:
+    """Return the post-command settling delay in seconds for the interface type."""
+    if not interface_type:
+        return 5
+    if is_dualtech(interface_type) or is_dualtech_dryer(interface_type):
+        return 15
+    return 5
+
+
 def supports_remote_pause(interface_type: str | None) -> bool:
     """Return True if the appliance interface supports remote pause/resume."""
     if not interface_type:

@@ -476,8 +476,9 @@ async def test_main_sensor_off_after_finished(
         "custom_components.candy.client.CandyClient.status",
         side_effect=TimeoutError,
     ):
-        await coordinator.async_refresh()
-        await hass.async_block_till_done()
+        for _ in range(3):
+            await coordinator.async_refresh()
+            await hass.async_block_till_done()
 
     state = hass.states.get("sensor.washing_machine")
     assert state
@@ -589,8 +590,9 @@ async def test_statistics_not_fetched_when_machine_is_off(
         "custom_components.candy.client.CandyClient.status",
         side_effect=TimeoutError,
     ):
-        await coordinator.async_refresh()
-        await hass.async_block_till_done()
+        for _ in range(3):
+            await coordinator.async_refresh()
+            await hass.async_block_till_done()
 
     # Now trigger a stats poll; network must NOT be called
     with patch(
