@@ -19,6 +19,7 @@ from custom_components.candy.const import (
     MODE_FULL_CONTROL,
 )
 from custom_components.candy.helpers import (
+    command_settling_delay,
     cycles_remaining,
     get_appliance_error_notification_strings,
     get_dryer_error_notification_strings,
@@ -296,3 +297,22 @@ def test_supports_scheduled_checkup(
     interface_type: str | None, is_tumble_dryer: bool, expected: bool
 ) -> None:
     assert supports_scheduled_checkup(interface_type, is_tumble_dryer) is expected
+
+
+@pytest.mark.parametrize(
+    ("interface_type", "expected"),
+    [
+        (None, 5),
+        ("", 5),
+        ("3D_DUAL", 15),
+        ("3D_DUAL_BI", 15),
+        ("dual_simple", 15),
+        ("TD_DIGIT_HP_DOOR", 15),
+        ("TD_LED_SOME", 15),
+        ("RAPIDO_4DIG_STM_NEL", 5),
+        ("BIANCA_TOUCH", 5),
+        ("SMART_PRO", 5),
+    ],
+)
+def test_command_settling_delay(interface_type: str | None, expected: int) -> None:
+    assert command_settling_delay(interface_type) == expected

@@ -118,6 +118,7 @@ _OFF_INFERRED_STATES = {
 # 60 s while the machine is reachable and running any cycle.
 SCAN_INTERVAL_ACTIVE = timedelta(seconds=60)
 SCAN_INTERVAL_RESTING = timedelta(seconds=20)
+MAX_CONSECUTIVE_TIMEOUTS = 3
 
 
 def _make_off_status(
@@ -366,8 +367,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             type(last_known_status).__name__,
         )
 
+    consecutive_timeouts = 0
+
     async def update_status():
-        nonlocal last_known_status
+        nonlocal last_known_status, consecutive_timeouts
         prev_state = getattr(last_known_status, "machine_state", None)
         can_infer_off = (
             prev_state in _OFF_INFERRED_STATES or prev_state == MachineState.OFF
@@ -385,14 +388,37 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                 status = await fetch
                 _LOGGER.debug("Fetched status: %s", status)
                 last_known_status = status
+                consecutive_timeouts = 0
                 coordinator.update_interval = SCAN_INTERVAL_ACTIVE
                 return status
         except (TimeoutError, aiohttp.ClientError) as err:
+            consecutive_timeouts += 1
+            if prev_state == MachineState.OFF:
+                coordinator.update_interval = SCAN_INTERVAL_RESTING
+                return _make_off_status(last_known_status)
+
             if can_infer_off:
+                if (
+                    consecutive_timeouts < MAX_CONSECUTIVE_TIMEOUTS
+                    and last_known_status is not None
+                ):
+                    _LOGGER.debug(
+                        "Device at %s is unreachable (attempt %d/%d, last state: %s). "
+                        "Retrying in %s.",
+                        ip_address,
+                        consecutive_timeouts,
+                        MAX_CONSECUTIVE_TIMEOUTS,
+                        prev_state,
+                        SCAN_INTERVAL_RESTING,
+                    )
+                    coordinator.update_interval = SCAN_INTERVAL_RESTING
+                    return last_known_status
+
                 _LOGGER.debug(
-                    "Device at %s is unreachable (last state: %s). "
+                    "Device at %s is unreachable after %d attempts (last state: %s). "
                     "Assuming it was powered off.",
                     ip_address,
+                    consecutive_timeouts,
                     prev_state,
                 )
                 coordinator.update_interval = SCAN_INTERVAL_RESTING

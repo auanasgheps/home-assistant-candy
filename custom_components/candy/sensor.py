@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from collections.abc import Mapping
 import contextlib
-import datetime
+import datetime as dt
 from typing import Any, cast
 
 from homeassistant.components.sensor import (
@@ -944,7 +944,7 @@ class CandyWashLastCheckUpSensor(CandyBaseSensor):
         return UNIQUE_ID_WASH_LAST_CHECKUP.format(self.config_id)
 
     @property
-    def native_value(self) -> datetime.datetime | None:
+    def native_value(self) -> dt.datetime | None:
         ts = self.config_entry.data.get(CONF_KEY_CHECKUP_LAST_DATE)
         if ts is None:
             return None
@@ -981,11 +981,11 @@ class CandyWashPurchaseDateSensor(CandyBaseSensor):
         return SensorDeviceClass.DATE
 
     @property
-    def native_value(self) -> datetime.date | None:
+    def native_value(self) -> dt.date | None:
         raw = self.config_entry.data.get(CONF_KEY_PURCHASE_DATE)
         if not raw:
             return None
-        return datetime.date.fromisoformat(raw)
+        return dt.date.fromisoformat(raw)
 
     @property
     def icon(self) -> str:
@@ -1433,11 +1433,11 @@ class CandyWashScheduledStartSensor(CandyBaseSensor):
         return _read_delay_minutes(self.hass, self.config_id) > 0
 
     @property
-    def native_value(self) -> datetime.datetime | None:
+    def native_value(self) -> dt.datetime | None:
         delay = _read_delay_minutes(self.hass, self.config_id)
         if delay <= 0:
             return None
-        return dt_util.now() + datetime.timedelta(minutes=delay)
+        return dt_util.now() + dt.timedelta(minutes=delay)
 
     @property
     def device_class(self) -> SensorDeviceClass:
@@ -1521,13 +1521,13 @@ class CandyWashScheduledFinishSensor(CandyBaseSensor):
         return False
 
     @property
-    def native_value(self) -> datetime.datetime | None:
+    def native_value(self) -> dt.datetime | None:
         status = cast(WashingMachineStatus, self.coordinator.data)
         if status.machine_state in (MachineState.RUNNING, MachineState.PAUSED):
             remaining = status.remaining_minutes or 0
             if remaining <= 0:
                 return None
-            return dt_util.now() + datetime.timedelta(minutes=remaining)
+            return dt_util.now() + dt.timedelta(minutes=remaining)
         if status.machine_state in (
             MachineState.IDLE,
             MachineState.DELAYED_START_SELECTION,
@@ -1537,7 +1537,7 @@ class CandyWashScheduledFinishSensor(CandyBaseSensor):
             if estimated is None:
                 return None
             delay = _read_delay_minutes(self.hass, self.config_id)
-            return dt_util.now() + datetime.timedelta(minutes=delay + estimated)
+            return dt_util.now() + dt.timedelta(minutes=delay + estimated)
         return None
 
     @property

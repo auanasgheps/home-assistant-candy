@@ -14,6 +14,8 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 from custom_components.candy import (
     CONF_KEY_USE_ENCRYPTION,
     DOMAIN,
+    SCAN_INTERVAL_ACTIVE,
+    SCAN_INTERVAL_RESTING,
     _make_off_status,
     _register_checkup_listener,
     _register_dryer_error_listener,
@@ -328,6 +330,68 @@ async def test_update_fails_when_running_and_timeout(
         await hass.async_block_till_done()
 
     assert not coordinator.last_update_success
+
+
+async def test_update_consecutive_timeouts_resting_to_off(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """When can_infer_off is True, 1st and 2nd timeouts keep last state; 3rd infers OFF."""
+    entry = await init_integration(
+        hass, aioclient_mock, _STATUS_IDLE, statistics_response=_STATS_OK
+    )
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+    assert coordinator.data.machine_state == MachineState.IDLE
+    assert coordinator.update_interval == SCAN_INTERVAL_ACTIVE
+
+    with patch(
+        "custom_components.candy.client.CandyClient.status",
+        side_effect=TimeoutError,
+    ):
+        # 1st timeout: retain last known status, switch to resting interval
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert coordinator.data.machine_state == MachineState.IDLE
+        assert coordinator.update_interval == SCAN_INTERVAL_RESTING
+
+        # 2nd timeout: retain last known status, stay on resting interval
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert coordinator.data.machine_state == MachineState.IDLE
+        assert coordinator.update_interval == SCAN_INTERVAL_RESTING
+
+        # 3rd timeout: threshold reached, infer OFF
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert coordinator.data.machine_state == MachineState.OFF
+        assert coordinator.update_interval == SCAN_INTERVAL_RESTING
+
+
+async def test_update_consecutive_timeouts_resets_on_success(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Successful poll resets consecutive timeout counter and restores active interval."""
+    entry = await init_integration(
+        hass, aioclient_mock, _STATUS_IDLE, statistics_response=_STATS_OK
+    )
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR]
+
+    with patch(
+        "custom_components.candy.client.CandyClient.status",
+        side_effect=TimeoutError,
+    ):
+        # 2 consecutive timeouts
+        for _ in range(2):
+            await coordinator.async_refresh()
+            await hass.async_block_till_done()
+
+    assert coordinator.data.machine_state == MachineState.IDLE
+    assert coordinator.update_interval == SCAN_INTERVAL_RESTING
+
+    # Successful poll restores active interval
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.data.machine_state == MachineState.IDLE
+    assert coordinator.update_interval == SCAN_INTERVAL_ACTIVE
 
 
 async def test_update_raises_update_failed_on_generic_exception(

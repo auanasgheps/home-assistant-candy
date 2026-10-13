@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-import datetime
+import datetime as dt
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -1014,7 +1014,7 @@ async def test_scheduled_start_shows_offset_timestamp(
         "number", "set_value", {"entity_id": delay_eid, "value": 60}, blocking=True
     )
 
-    fixed_now = datetime.datetime(2025, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
+    fixed_now = dt.datetime(2025, 1, 1, 12, 0, 0, tzinfo=dt.UTC)
     with patch("homeassistant.util.dt.now", return_value=fixed_now):
         hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR].async_set_updated_data(
             hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR].data
@@ -1032,7 +1032,7 @@ async def test_scheduled_finish_running(
 ):
     # RemTime=2700s → remaining_minutes=45
     entry = await _init_full_control(hass, aioclient_mock, _RUNNING_45_JSON)
-    fixed_now = datetime.datetime(2025, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
+    fixed_now = dt.datetime(2025, 1, 1, 12, 0, 0, tzinfo=dt.UTC)
     with patch("homeassistant.util.dt.now", return_value=fixed_now):
         hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR].async_set_updated_data(
             hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR].data
@@ -1061,7 +1061,7 @@ async def test_scheduled_finish_idle_with_delay_and_duration(
         "number", "set_value", {"entity_id": delay_eid, "value": 60}, blocking=True
     )
 
-    fixed_now = datetime.datetime(2025, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
+    fixed_now = dt.datetime(2025, 1, 1, 12, 0, 0, tzinfo=dt.UTC)
     with patch("homeassistant.util.dt.now", return_value=fixed_now):
         hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR].async_set_updated_data(
             hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR].data
@@ -4095,7 +4095,7 @@ async def test_scheduled_finish_idle_updates_on_dry_target_change(
         "number", "set_value", {"entity_id": delay_id, "value": 60}, blocking=True
     )
 
-    fixed_now = datetime.datetime(2025, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
+    fixed_now = dt.datetime(2025, 1, 1, 12, 0, 0, tzinfo=dt.UTC)
     with patch("homeassistant.util.dt.now", return_value=fixed_now):
         # 1. Washing mode: Cotton (120m) + Delay (60m) = 180m -> 15:00
         hass.data[DOMAIN][entry.entry_id][DATA_KEY_COORDINATOR].async_set_updated_data(
