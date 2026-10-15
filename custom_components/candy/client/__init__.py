@@ -133,6 +133,104 @@ class CandyClient:
     ):
         return await self.status()
 
+    async def _fetch_and_decode_endpoint(self, url: str) -> dict[str, Any]:
+        """Fetch an endpoint URL, decrypt if needed, and parse JSON payload."""
+        async with _LIMITER, self.session.get(url) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                raise ValueError(
+                    f"HTTP GET {url} failed with status {resp.status}: {text[:200]}"
+                )
+            if self.use_encryption:
+                resp_text = await resp.text()
+                resp_text = resp_text.strip().strip("\x00").strip()
+                if resp_text.startswith("{") and resp_text.endswith("}"):
+                    return _parse_json_safe(resp_text)
+                if self.encryption_key != "":
+                    decrypted_text = decrypt(
+                        self.encryption_key.encode(), bytes.fromhex(resp_text)
+                    )
+                else:
+                    decrypted_text = bytes.fromhex(resp_text)
+                return _parse_json_safe(decrypted_text)
+
+            text = await resp.text()
+            return _parse_json_safe(text)
+
+    async def fetch_raw_status(self) -> dict[str, Any]:
+        """Fetch raw JSON telemetry payload from /http-read.json."""
+        url = _status_url(self.device_ip, self.use_encryption)
+        return await self._fetch_and_decode_endpoint(url)
+
+    async def fetch_raw_config(self) -> dict[str, Any]:
+        """Fetch device configuration from /http-config.json."""
+        url = _config_url(self.device_ip, self.use_encryption)
+        return await self._fetch_and_decode_endpoint(url)
+
+    async def fetch_raw_statistics(self) -> dict[str, Any]:
+        """Fetch statistics counters handshake (prepareStatistics -> getStatistics)."""
+        prepare_url = _prepare_statistics_url(self.device_ip, self.use_encryption)
+        try:
+            async with _LIMITER, self.session.get(prepare_url) as resp:
+                await resp.read()
+        except Exception as err:
+            _LOGGER.debug(
+                "prepareStatistics handshake failed or not supported: %s", err
+            )
+
+        url = _statistics_url(self.device_ip, self.use_encryption)
+        return await self._fetch_and_decode_endpoint(url)
+
+    async def fetch_all_endpoints(self) -> dict[str, Any]:
+        """Fetch all supported device endpoints with timeout and error handling."""
+        endpoints: dict[str, Any] = {}
+
+        # 1. Telemetry status (/http-read.json)
+        try:
+            async with async_timeout.timeout(7):
+                telemetry = await self.fetch_raw_status()
+                endpoints["http-read.json"] = telemetry
+        except Exception as err:
+            endpoints["http-read.json"] = {
+                "error": f"Error fetching /http-read.json: {err!r}"
+            }
+            endpoints["http-config.json"] = {"status": "Skipped: device is unreachable"}
+            endpoints["http-getStatistics.json"] = {
+                "status": "Skipped: device is unreachable"
+            }
+            return endpoints
+
+        # 2. Device configuration (/http-config.json)
+        try:
+            async with async_timeout.timeout(5):
+                config_data = await self.fetch_raw_config()
+                endpoints["http-config.json"] = config_data
+        except Exception as err:
+            endpoints["http-config.json"] = {
+                "error": f"Error fetching /http-config.json: {err!r}"
+            }
+
+        # 3. Statistics counters (/http-getStatistics.json)
+        has_stats_support = any(
+            k in telemetry
+            for k in ("statusLavatrice", "statusWD", "statusWM", "statusTD")
+        )
+        if has_stats_support:
+            try:
+                async with async_timeout.timeout(7):
+                    stats_data = await self.fetch_raw_statistics()
+                    endpoints["http-getStatistics.json"] = stats_data
+            except Exception as err:
+                endpoints["http-getStatistics.json"] = {
+                    "error": f"Error fetching statistics: {err!r}"
+                }
+        else:
+            endpoints["http-getStatistics.json"] = {
+                "status": "Statistics counters not supported for this appliance family"
+            }
+
+        return endpoints
+
     async def status(
         self,
     ) -> (
@@ -142,43 +240,25 @@ class CandyClient:
         | OvenStatus
         | WineCoolerStatus
     ):
-        url = _status_url(self.device_ip, self.use_encryption)
-        async with _LIMITER, self.session.get(url) as resp:
-            if self.use_encryption:
-                resp_hex = (
-                    await resp.text()
-                )  # Response is hex encoded, either encrypted or not
-                resp_hex = resp_hex.strip().strip("\x00").strip()
-                if self.encryption_key != "":
-                    decrypted_text = decrypt(
-                        self.encryption_key.encode(), bytes.fromhex(resp_hex)
-                    )
-                else:
-                    # Response is just hex encoded without encryption (details in detect_encryption())
-                    decrypted_text = bytes.fromhex(resp_hex)
-                resp_json = _parse_json_safe(decrypted_text)
-            else:
-                text = await resp.text()
-                resp_json = _parse_json_safe(text)
+        resp_json = await self.fetch_raw_status()
+        _LOGGER.debug(resp_json)
 
-            _LOGGER.debug(resp_json)
+        if "statusTD" in resp_json:
+            status = TumbleDryerStatus.from_json(resp_json["statusTD"])
+        elif "statusLavatrice" in resp_json:
+            status = WashingMachineStatus.from_json(resp_json["statusLavatrice"])
+        elif "statusForno" in resp_json:
+            status = OvenStatus.from_json(resp_json["statusForno"])
+        elif "statusDWash" in resp_json:
+            status = DishwasherStatus.from_json(resp_json["statusDWash"])
+        elif "statusWCool" in resp_json:
+            status = WineCoolerStatus.from_json(resp_json["statusWCool"])
+        else:
+            raise Exception(
+                "Unable to detect machine type from API response", resp_json
+            )
 
-            if "statusTD" in resp_json:
-                status = TumbleDryerStatus.from_json(resp_json["statusTD"])
-            elif "statusLavatrice" in resp_json:
-                status = WashingMachineStatus.from_json(resp_json["statusLavatrice"])
-            elif "statusForno" in resp_json:
-                status = OvenStatus.from_json(resp_json["statusForno"])
-            elif "statusDWash" in resp_json:
-                status = DishwasherStatus.from_json(resp_json["statusDWash"])
-            elif "statusWCool" in resp_json:
-                status = WineCoolerStatus.from_json(resp_json["statusWCool"])
-            else:
-                raise Exception(
-                    "Unable to detect machine type from API response", resp_json
-                )
-
-            return status
+        return status
 
     async def send_command(self, query_string: str) -> None:
         """Send a write command to the device.
@@ -208,35 +288,16 @@ class CandyClient:
         return await self.fetch_statistics()
 
     async def fetch_statistics(self) -> WashingMachineStatistics:
-        prepare_url = _prepare_statistics_url(self.device_ip, self.use_encryption)
-        async with _LIMITER, self.session.get(prepare_url) as resp:
-            await resp.read()
+        resp_json = await self.fetch_raw_statistics()
+        _LOGGER.debug(resp_json)
 
-        url = _statistics_url(self.device_ip, self.use_encryption)
-        async with _LIMITER, self.session.get(url) as resp:
-            if self.use_encryption:
-                resp_hex = await resp.text()
-                resp_hex = resp_hex.strip().strip("\x00").strip()
-                if self.encryption_key != "":
-                    decrypted_text = decrypt(
-                        self.encryption_key.encode(), bytes.fromhex(resp_hex)
-                    )
-                else:
-                    decrypted_text = bytes.fromhex(resp_hex)
-                resp_json = _parse_json_safe(decrypted_text)
-            else:
-                text = await resp.text()
-                resp_json = _parse_json_safe(text)
+        if "statusCounters" not in resp_json:
+            raise Exception(
+                "Unable to parse statistics response: missing statusCounters key",
+                resp_json,
+            )
 
-            _LOGGER.debug(resp_json)
-
-            if "statusCounters" not in resp_json:
-                raise Exception(
-                    "Unable to parse statistics response: missing statusCounters key",
-                    resp_json,
-                )
-
-            return WashingMachineStatistics.from_json(resp_json["statusCounters"])
+        return WashingMachineStatistics.from_json(resp_json["statusCounters"])
 
     async def set_wine_cooler_light(
         self, turn_on: bool, current_status: WineCoolerStatus
@@ -323,6 +384,10 @@ async def detect_encryption(
 
 def _status_url(device_ip: str, use_encryption: bool) -> str:
     return f"http://{device_ip}/http-read.json?encrypted={1 if use_encryption else 0}"
+
+
+def _config_url(device_ip: str, use_encryption: bool) -> str:
+    return f"http://{device_ip}/http-config.json?encrypted={1 if use_encryption else 0}"
 
 
 def _write_url(device_ip: str, use_encryption: bool, data: str) -> str:
