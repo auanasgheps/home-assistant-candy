@@ -27,7 +27,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 
 from custom_components.candy import CONF_KEY_USE_ENCRYPTION, DOMAIN
 from custom_components.candy.client import parse_dryer_programs
-from custom_components.candy.client.model import TumbleDryerProgram
+from custom_components.candy.client.model import TumbleDryerProgram, TumbleDryerStatus
 from custom_components.candy.const import (
     CONF_KEY_INTERFACE_TYPE,
     CONF_KEY_IS_TUMBLE_DRYER,
@@ -43,6 +43,7 @@ from custom_components.candy.const import (
     UNIQUE_ID_TUMBLE_DRY_LEVEL_SELECT,
     UNIQUE_ID_TUMBLE_PAUSE_BUTTON,
     UNIQUE_ID_TUMBLE_PROGRAM_SELECT,
+    UNIQUE_ID_TUMBLE_REMAINING_TIME,
     UNIQUE_ID_TUMBLE_RESET_WARNINGS_BUTTON,
     UNIQUE_ID_TUMBLE_RESUME_BUTTON,
     UNIQUE_ID_TUMBLE_START_BUTTON,
@@ -541,3 +542,54 @@ async def test_dryer_remote_control_disabled_gating(
         state = hass.states.get(eid)
         assert state is not None
         assert state.state == "unavailable"
+
+
+# ===========================================================================
+# 8. Tumble Dryer Program Duration & Timed Dry Matrix
+# ===========================================================================
+
+
+async def test_dryer_program_duration_matrix(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Assert tumble dryer program catalog durations and timed dry options compute expected durations."""
+    catalog = _load_catalog_serial_35()
+    entry, programs = await _init_catalog_dryer(
+        hass, aioclient_mock, catalog, _IDLE_JSON
+    )
+    time_eid = _entity_id(hass, entry, "select", UNIQUE_ID_TUMBLE_TIME_SELECT)
+    prog_eid = _entity_id(hass, entry, "select", UNIQUE_ID_TUMBLE_PROGRAM_SELECT)
+
+    for p in programs:
+        await hass.services.async_call(
+            "select",
+            "select_option",
+            {"entity_id": prog_eid, "option": p.localized_name("en")},
+            blocking=True,
+        )
+
+        # 1. Base catalog duration must be positive and match catalog parameter
+        assert p.duration > 0, (
+            f"Program {p.name}: expected duration > 0, got {p.duration}"
+        )
+
+        # 2. Timed dry options selection
+        if p.set_time_level:
+            time_state = hass.states.get(time_eid)
+            assert time_state is not None
+            for opt in time_state.attributes.get("options", []):
+                if opt == "off":
+                    continue
+                expected_time_minutes = int(opt)
+                assert expected_time_minutes in (30, 45, 60, 90, 120)
+
+    # 3. Telemetry remaining time in running state
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    running_status = TumbleDryerStatus.from_json(json.loads(_RUNNING_JSON)["statusTD"])
+    coordinator.async_set_updated_data(running_status)
+    await hass.async_block_till_done()
+
+    rem_eid = _entity_id(hass, entry, "sensor", UNIQUE_ID_TUMBLE_REMAINING_TIME)
+    rem_state = hass.states.get(rem_eid)
+    assert rem_state is not None
+    assert rem_state.state == "120"

@@ -42,8 +42,11 @@ from custom_components.candy.const import (
     CONF_KEY_PROGRAMS,
     FLANGIA_PROGRAMS_TO_HIDE,
     MODE_FULL_CONTROL,
+    SOIL_LABELS,
+    STEAM_DURATION_OFFSETS,
     UNIQUE_ID_WASH_DELAY_NUMBER,
     UNIQUE_ID_WASH_DRY_SELECT,
+    UNIQUE_ID_WASH_ESTIMATED_DURATION,
     UNIQUE_ID_WASH_PAUSE_BUTTON,
     UNIQUE_ID_WASH_PROGRAM_SELECT,
     UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT,
@@ -53,6 +56,8 @@ from custom_components.candy.const import (
     UNIQUE_ID_WASH_START_BUTTON,
     UNIQUE_ID_WASH_STEAM_SWITCH,
     UNIQUE_ID_WASH_TEMP_SELECT,
+    WASH_OPTION_DURATION_DELTAS_REDUCED,
+    WASH_OPTION_DURATION_DELTAS_STANDARD,
     WASH_OPTIONS,
 )
 from custom_components.candy.helpers import is_dualtech
@@ -160,6 +165,41 @@ async def _select_wash_program(
         {"entity_id": prog_eid, "option": program.localized_name("en")},
         blocking=True,
     )
+
+
+def _calculate_expected_duration(
+    program: WashingMachineWashProgram,
+    soil_level: int,
+    steam_on: bool,
+    options_mask: int,
+) -> int | None:
+    if program.min_soil_level < program.max_soil_level:
+        base = program.duration_for_soil(soil_level)
+    else:
+        base = program.default_duration
+
+    if base <= 0:
+        return None
+
+    minutes = base
+    if steam_on and program.steam_type in STEAM_DURATION_OFFSETS:
+        minutes += STEAM_DURATION_OFFSETS[program.steam_type]
+
+    is_reduced = (
+        program.steam_type in ("S", "R")
+        or getattr(program, "dry_type", "") in ("S", "W")
+        or program.pr_code == 4
+    )
+    deltas = (
+        WASH_OPTION_DURATION_DELTAS_REDUCED
+        if is_reduced
+        else WASH_OPTION_DURATION_DELTAS_STANDARD
+    )
+    for bitmask, _, uid_suffix, _ in WASH_OPTIONS:
+        if (program.available_options & bitmask) and (options_mask & bitmask):
+            minutes += deltas.get(uid_suffix, 0)
+
+    return minutes
 
 
 # ===========================================================================
@@ -578,3 +618,129 @@ async def test_standalone_wash_options_and_steam_matrix(
             assert is_available == expected_available, (
                 f"Program {p.name} option {name}: expected {expected_available}, got {is_available}"
             )
+
+
+# ===========================================================================
+# 11. Estimated Duration Combinatorial Matrix for Standalone Washers
+# ===========================================================================
+
+
+async def test_standalone_washer_estimated_duration_matrix(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    """Assert estimated duration sensor computes exact times across all standalone washer catalogs (Serials 39, 41, 34)."""
+    for catalog_file in (
+        "catalog_serial_39_rapido_wm.json",
+        "catalog_serial_41_dualtech_wm.json",
+        "catalog_serial_34_bianca_wm.json",
+    ):
+        catalog = _load_catalog(catalog_file)
+        entry, programs = await _init_standalone_washer(hass, aioclient_mock, catalog)
+        dur_eid = _entity_id(hass, entry, "sensor", UNIQUE_ID_WASH_ESTIMATED_DURATION)
+        soil_eid = _entity_id(hass, entry, "select", UNIQUE_ID_WASH_SOIL_SELECT)
+        registry = er.async_get(hass)
+        steam_eid = registry.async_get_entity_id(
+            "switch", DOMAIN, UNIQUE_ID_WASH_STEAM_SWITCH.format(entry.entry_id)
+        )
+        interface_type = str(catalog.get("interface_type", ""))
+
+        seen_names: set[str] = set()
+        selectable = [p for p in programs if _is_selectable(p, interface_type)]
+        for p in selectable:
+            loc_name = p.localized_name("en")
+            if loc_name in seen_names:
+                continue
+            seen_names.add(loc_name)
+            await _select_wash_program(hass, entry, p)
+
+            # 1. Base duration
+            expected_base = _calculate_expected_duration(
+                p,
+                soil_level=p.default_soil_level,
+                steam_on=False,
+                options_mask=0,
+            )
+            dur_state = hass.states.get(dur_eid)
+            assert dur_state is not None
+            if expected_base is not None:
+                assert dur_state.state == str(expected_base), (
+                    f"{catalog_file} - Program {p.name}: Expected {expected_base}, got {dur_state.state}"
+                )
+            else:
+                assert dur_state.state in ("unknown", "unavailable")
+                continue
+
+            # 2. Soil levels if variable
+            if p.min_soil_level < p.max_soil_level:
+                for s in range(p.min_soil_level, p.max_soil_level + 1):
+                    soil_label = SOIL_LABELS.get(s)
+                    if soil_label:
+                        await hass.services.async_call(
+                            "select",
+                            "select_option",
+                            {"entity_id": soil_eid, "option": soil_label},
+                            blocking=True,
+                        )
+                        expected_soil = _calculate_expected_duration(
+                            p,
+                            soil_level=s,
+                            steam_on=False,
+                            options_mask=0,
+                        )
+                        dur_state = hass.states.get(dur_eid)
+                        assert dur_state is not None
+                        assert dur_state.state == str(expected_soil)
+                await hass.services.async_call(
+                    "select",
+                    "select_option",
+                    {
+                        "entity_id": soil_eid,
+                        "option": SOIL_LABELS[p.default_soil_level],
+                    },
+                    blocking=True,
+                )
+
+            # 3. Steam switch offset
+            if (
+                steam_eid is not None
+                and p.steam
+                and p.steam_type in STEAM_DURATION_OFFSETS
+            ):
+                await hass.services.async_call(
+                    "switch", "turn_on", {"entity_id": steam_eid}, blocking=True
+                )
+                expected_steam = _calculate_expected_duration(
+                    p,
+                    soil_level=p.default_soil_level,
+                    steam_on=True,
+                    options_mask=0,
+                )
+                dur_state = hass.states.get(dur_eid)
+                assert dur_state is not None
+                assert dur_state.state == str(expected_steam)
+                await hass.services.async_call(
+                    "switch", "turn_off", {"entity_id": steam_eid}, blocking=True
+                )
+
+            # 4. Wash options deltas
+            for bitmask, _, uid_suffix, _ in WASH_OPTIONS:
+                if p.available_options & bitmask:
+                    opt_eid = registry.async_get_entity_id(
+                        "switch", DOMAIN, f"{entry.entry_id}-{uid_suffix}"
+                    )
+                    if opt_eid:
+                        await hass.services.async_call(
+                            "switch", "turn_on", {"entity_id": opt_eid}, blocking=True
+                        )
+                        expected_opt = _calculate_expected_duration(
+                            p,
+                            soil_level=p.default_soil_level,
+                            steam_on=False,
+                            options_mask=bitmask,
+                        )
+                        dur_state = hass.states.get(dur_eid)
+                        assert dur_state is not None
+                        assert dur_state.state == str(expected_opt)
+                        await hass.services.async_call(
+                            "switch", "turn_off", {"entity_id": opt_eid}, blocking=True
+                        )

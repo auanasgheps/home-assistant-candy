@@ -82,6 +82,25 @@ SOIL_LABELS_REVERSE: dict[str, int] = {v: k for k, v in SOIL_LABELS.items()}
 # Additive minutes when steam (steam=5) is enabled, keyed by program steam_type.
 # Source: APK assets/assisted/full_remaining_time_value_v11.json, programType "Wash + Steam".
 STEAM_DURATION_OFFSETS: dict[str, int] = {"C": 37, "S": 29, "R": 35}
+
+# Additive minutes for extra wash options keyed by option uid_suffix.
+# Source: APK assets/assisted/full_remaining_time_value_v11.json.
+# Standard: Cottons / default (prewash +20, extra dose +20, rinse 1/2/3 +10/+20/+30).
+WASH_OPTION_DURATION_DELTAS_STANDARD: dict[str, int] = {
+    "wash_option_prewash": 20,
+    "wash_option_extra_dose": 20,
+    "wash_option_rinse_1": 10,
+    "wash_option_rinse_2": 20,
+    "wash_option_rinse_3": 30,
+}
+# Reduced: Synthetics / Delicates / Wool (steam_type in {"S", "R"}, dry_type in {"S", "W"}, pr_code == 4).
+WASH_OPTION_DURATION_DELTAS_REDUCED: dict[str, int] = {
+    "wash_option_prewash": 15,
+    "wash_option_extra_dose": 15,
+    "wash_option_rinse_1": 6,
+    "wash_option_rinse_2": 12,
+    "wash_option_rinse_3": 18,
+}
 UNIQUE_ID_WASH_ESTIMATED_DURATION = "{0}-wash_estimated_duration"
 UNIQUE_ID_WASH_SCHEDULED_START = "{0}-wash_scheduled_start"
 UNIQUE_ID_WASH_SCHEDULED_FINISH = "{0}-wash_scheduled_finish"
