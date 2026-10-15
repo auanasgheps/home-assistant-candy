@@ -409,10 +409,20 @@ class WashingMachineWashProgram:
                 return result if result > 0 else None
 
         raw_name: str = p.get("name", "")
-        for prefix in ("DUAL_WM_WD_PROGRAM_NAME_", "DUAL_WM_WD_"):
+        for prefix in (
+            "DUAL_WM_WD_PROGRAM_NAME_",
+            "DUAL_WM_WD_",
+            "NFC_PROGRAM_NAME_1D_",
+            "NFC_PROGRAM_NAME_2D_",
+            "NFC_PROGRAM_NAME_",
+            "WA_PROG_",
+            "NFC_CARE_",
+        ):
             if raw_name.startswith(prefix):
                 raw_name = raw_name[len(prefix) :]
                 break
+        if raw_name == "AUTO_CLEAN":
+            raw_name = "AUTOCLEAN"
 
         raw_program_type: str = params.get("program_type", "").upper()
         if "WASH_AND_DRY" in raw_name.upper() or "WASH_DRY" in raw_name.upper():

@@ -144,6 +144,9 @@ from .const import (
     UNIQUE_ID_WINE_COOLER_PROGRAM_DOWN,
     UNIQUE_ID_WINE_COOLER_TEMP,
     UNIQUE_ID_WINE_COOLER_TEMP_DOWN,
+    WASH_OPTION_DURATION_DELTAS_REDUCED,
+    WASH_OPTION_DURATION_DELTAS_STANDARD,
+    WASH_OPTIONS,
 )
 from .helpers import (
     cycles_remaining,
@@ -1200,6 +1203,8 @@ class CandyWashEstimatedDurationSensor(CandyBaseSensor):
             UNIQUE_ID_WASH_SOIL_SELECT.format(self.config_id),
             UNIQUE_ID_WASH_STEAM_SWITCH.format(self.config_id),
         }
+        for _, _, uid_suffix, _ in WASH_OPTIONS:
+            target_unique_ids.add(f"{self.config_id}-{uid_suffix}")
 
         @callback
         def _on_state_changed(event: Any) -> None:
@@ -1215,9 +1220,16 @@ class CandyWashEstimatedDurationSensor(CandyBaseSensor):
             self.hass.bus.async_listen(EVENT_STATE_CHANGED, _on_state_changed)
         )
 
-    def _steam_selected(self, registry) -> bool:
+    def _steam_selected(self, registry: er.EntityRegistry) -> bool:
         eid = registry.async_get_entity_id(
             "switch", DOMAIN, UNIQUE_ID_WASH_STEAM_SWITCH.format(self.config_id)
+        )
+        state = self.hass.states.get(eid) if eid else None
+        return state is not None and state.state == "on"
+
+    def _is_option_selected(self, registry: er.EntityRegistry, uid_suffix: str) -> bool:
+        eid = registry.async_get_entity_id(
+            "switch", DOMAIN, f"{self.config_id}-{uid_suffix}"
         )
         state = self.hass.states.get(eid) if eid else None
         return state is not None and state.state == "on"
@@ -1357,6 +1369,23 @@ class CandyWashEstimatedDurationSensor(CandyBaseSensor):
         if dry_target:
             minutes += DRY_TARGET_DURATIONS.get(dry_target, 0)
 
+        if minutes > 0 and not program.is_dry:
+            is_reduced = (
+                program.steam_type in ("S", "R")
+                or getattr(program, "dry_type", "") in ("S", "W")
+                or program.pr_code == 4
+            )
+            deltas = (
+                WASH_OPTION_DURATION_DELTAS_REDUCED
+                if is_reduced
+                else WASH_OPTION_DURATION_DELTAS_STANDARD
+            )
+            for bitmask, _, uid_suffix, _ in WASH_OPTIONS:
+                if (program.available_options & bitmask) and self._is_option_selected(
+                    registry, uid_suffix
+                ):
+                    minutes += deltas.get(uid_suffix, 0)
+
         return minutes if minutes > 0 else None
 
     @property
@@ -1476,6 +1505,8 @@ class CandyWashScheduledFinishSensor(CandyBaseSensor):
             UNIQUE_ID_WASH_STEAM_SWITCH.format(self.config_id),
             UNIQUE_ID_WASH_ESTIMATED_DURATION.format(self.config_id),
         }
+        for _, _, uid_suffix, _ in WASH_OPTIONS:
+            target_unique_ids.add(f"{self.config_id}-{uid_suffix}")
 
         @callback
         def _on_state_changed(event: Any) -> None:

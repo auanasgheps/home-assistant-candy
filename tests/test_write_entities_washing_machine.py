@@ -919,6 +919,70 @@ async def test_estimated_duration_steam_on_adds_offset_light_soil(
     assert state.state == "97"
 
 
+async def test_estimated_duration_prewash_adds_standard_delta(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    # Cotton steam_type=C, default soil=2 (medium=90). Prewash adds +20 -> 110 min.
+    entry = await _init_full_control_with_options(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+    prewash_eid = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_OPTION_PREWASH.format(entry.entry_id)
+    )
+    assert prewash_eid is not None
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": prewash_eid}, blocking=True
+    )
+    await hass.async_block_till_done()
+    state = _state(hass, entry, "sensor", UNIQUE_ID_WASH_ESTIMATED_DURATION)
+    assert state is not None
+    assert state.state == "110"
+
+
+async def test_estimated_duration_extra_rinse_adds_standard_delta(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    # Cotton steam_type=C, default soil=2 (medium=90). Extra rinse 1 adds +10 -> 100 min.
+    entry = await _init_full_control_with_options(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+    rinse1_eid = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_OPTION_RINSE_1.format(entry.entry_id)
+    )
+    assert rinse1_eid is not None
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": rinse1_eid}, blocking=True
+    )
+    await hass.async_block_till_done()
+    state = _state(hass, entry, "sensor", UNIQUE_ID_WASH_ESTIMATED_DURATION)
+    assert state is not None
+    assert state.state == "100"
+
+
+async def test_estimated_duration_prewash_and_rinse_combined(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+):
+    # Cotton steam_type=C, default soil=2 (medium=90) + Prewash (+20) + Rinse1 (+10) -> 120 min.
+    entry = await _init_full_control_with_options(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+    prewash_eid = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_OPTION_PREWASH.format(entry.entry_id)
+    )
+    rinse1_eid = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_OPTION_RINSE_1.format(entry.entry_id)
+    )
+    assert prewash_eid is not None
+    assert rinse1_eid is not None
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": prewash_eid}, blocking=True
+    )
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": rinse1_eid}, blocking=True
+    )
+    await hass.async_block_till_done()
+    state = _state(hass, entry, "sensor", UNIQUE_ID_WASH_ESTIMATED_DURATION)
+    assert state is not None
+    assert state.state == "120"
+
+
 async def test_estimated_duration_not_registered_in_read_only(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ):
