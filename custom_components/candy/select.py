@@ -71,7 +71,23 @@ from .helpers import (
 )
 
 _TEMP_STEPS = [0, 20, 30, 40, 60, 90]
-_SPIN_STEPS = [0, 400, 600, 800, 1000, 1200, 1400]
+# Confirmed via Simply-Fi APK CandyWasher.spinStepsForInterfaceType (CandyWasher.java)
+_SPIN_STEPS = [
+    0,
+    400,
+    500,
+    600,
+    700,
+    800,
+    900,
+    1000,
+    1100,
+    1200,
+    1300,
+    1400,
+    1500,
+    1600,
+]
 
 
 async def async_setup_entry(

@@ -614,6 +614,9 @@ class WashStartButton(CandyWashButtonBase):
         else:
             soil = program.default_soil_level
 
+        if soil == 9 or (program.max_soil_level > 0 and soil > program.max_soil_level):
+            soil = program.min_soil_level
+
         if program.is_dry:
             if dry == 0:
                 raise ValueError(
