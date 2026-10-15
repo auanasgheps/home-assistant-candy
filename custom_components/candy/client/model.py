@@ -378,11 +378,19 @@ class WashingMachineWashProgram:
     @classmethod
     def from_dict(cls, program_dict: dict) -> "WashingMachineWashProgram":
         """Parse a program entry from the Simply-Fi appliances JSON."""
-        p = program_dict["program"]
-        params = {
-            cp["command_parameter"]["name"]: cp["command_parameter"]["validation"]
-            for cp in p["command_parameters"]
-        }
+        p = program_dict.get("program", program_dict)
+        raw_params = p.get("command_parameters") or p.get("parameters") or []
+        params: dict[str, str] = {}
+        if isinstance(raw_params, dict):
+            params = {k: str(v) for k, v in raw_params.items()}
+        elif isinstance(raw_params, list):
+            for cp in raw_params:
+                if "command_parameter" in cp:
+                    params[cp["command_parameter"]["name"]] = str(
+                        cp["command_parameter"]["validation"]
+                    )
+                elif "name" in cp:
+                    params[cp["name"]] = str(cp["validation"])
 
         def _int(key: str, fallback: int) -> int:
             val = params.get(key, "")

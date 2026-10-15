@@ -386,3 +386,100 @@ async def test_special_program_recipe_id(hass, aioclient_mock):
     status = await client.status()
     assert isinstance(status, WashingMachineStatus)
     assert status.recipe_id == "D_33"
+
+
+async def test_fetch_raw_status(hass, aioclient_mock):
+    """Test fetch_raw_status returns raw unparsed telemetry dictionary."""
+    raw_payload = {"statusLavatrice": {"MachMd": "1", "PrPh": "0"}}
+    aioclient_mock.get(
+        f"http://{TEST_IP}/http-read.json",
+        json=raw_payload,
+    )
+    client = CandyClient(
+        async_get_clientsession(hass),
+        device_ip=TEST_IP,
+        encryption_key=TEST_ENCRYPTION_KEY_EMPTY,
+        use_encryption=False,
+    )
+    data = await client.fetch_raw_status()
+    assert data == raw_payload
+
+
+async def test_fetch_raw_config(hass, aioclient_mock):
+    """Test fetch_raw_config returns device configuration dictionary."""
+    config_payload = {"SSID": "HomeWiFi", "firmware": "1.0"}
+    aioclient_mock.get(
+        f"http://{TEST_IP}/http-config.json",
+        json=config_payload,
+    )
+    client = CandyClient(
+        async_get_clientsession(hass),
+        device_ip=TEST_IP,
+        encryption_key=TEST_ENCRYPTION_KEY_EMPTY,
+        use_encryption=False,
+    )
+    data = await client.fetch_raw_config()
+    assert data == config_payload
+
+
+async def test_fetch_raw_statistics(hass, aioclient_mock):
+    """Test fetch_raw_statistics returns raw statusCounters dictionary."""
+    stats_payload = {"statusCounters": {"Program1": "10", "Temp40": "20"}}
+    aioclient_mock.get(
+        f"http://{TEST_IP}/http-prepareStatistics.json", text='{"response":"OK"}'
+    )
+    aioclient_mock.get(
+        f"http://{TEST_IP}/http-getStatistics.json",
+        json=stats_payload,
+    )
+    client = CandyClient(
+        async_get_clientsession(hass),
+        device_ip=TEST_IP,
+        encryption_key=TEST_ENCRYPTION_KEY_EMPTY,
+        use_encryption=False,
+    )
+    data = await client.fetch_raw_statistics()
+    assert data == stats_payload
+
+
+async def test_fetch_all_endpoints_success(hass, aioclient_mock):
+    """Test fetch_all_endpoints aggregates telemetry, config, and statistics."""
+    telemetry = {"statusLavatrice": {"MachMd": "2"}}
+    config = {"SSID": "WiFi", "version": "1.0"}
+    stats = {"statusCounters": {"Program1": "5"}}
+
+    aioclient_mock.get(f"http://{TEST_IP}/http-read.json", json=telemetry)
+    aioclient_mock.get(f"http://{TEST_IP}/http-config.json", json=config)
+    aioclient_mock.get(
+        f"http://{TEST_IP}/http-prepareStatistics.json", text='{"response":"OK"}'
+    )
+    aioclient_mock.get(f"http://{TEST_IP}/http-getStatistics.json", json=stats)
+
+    client = CandyClient(
+        async_get_clientsession(hass),
+        device_ip=TEST_IP,
+        encryption_key=TEST_ENCRYPTION_KEY_EMPTY,
+        use_encryption=False,
+    )
+    endpoints = await client.fetch_all_endpoints()
+    assert endpoints["http-read.json"] == telemetry
+    assert endpoints["http-config.json"] == config
+    assert endpoints["http-getStatistics.json"] == stats
+
+
+async def test_fetch_all_endpoints_read_error(hass, aioclient_mock):
+    """Test fetch_all_endpoints handles unreachable device on initial read."""
+    aioclient_mock.get(f"http://{TEST_IP}/http-read.json", status=500)
+
+    client = CandyClient(
+        async_get_clientsession(hass),
+        device_ip=TEST_IP,
+        encryption_key=TEST_ENCRYPTION_KEY_EMPTY,
+        use_encryption=False,
+    )
+    endpoints = await client.fetch_all_endpoints()
+    assert "error" in endpoints["http-read.json"]
+    assert endpoints["http-config.json"] == {"status": "Skipped: device is unreachable"}
+    assert endpoints["http-getStatistics.json"] == {
+        "status": "Skipped: device is unreachable"
+    }
