@@ -76,7 +76,10 @@ class WashProgramState(StatusCode):
     DRYING = (6, "Drying")
     ERROR = (7, "Error")
     STEAM = (8, "Steam")
-    GOOD_NIGHT = (9, "Good Night rinse hold")  # Rinse hold with water in drum; resume with Write=1&RestartGN=1
+    GOOD_NIGHT = (
+        9,
+        "Good Night rinse hold",
+    )  # Rinse hold with water in drum; resume with Write=1&RestartGN=1
     SPIN = (10, "Spin")
 
 

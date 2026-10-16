@@ -111,6 +111,8 @@ _OFF_INFERRED_STATES = {
     MachineState.FINISHED1,
     MachineState.FINISHED2,
     MachineState.IDLE,
+    DishwasherState.IDLE,
+    OvenState.IDLE,
     WineCoolerState.OFF,
 }
 
