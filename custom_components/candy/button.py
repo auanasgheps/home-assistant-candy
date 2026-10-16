@@ -33,7 +33,7 @@ from .client import (
     parse_wash_programs,
     resolve_downloadable_programs,
 )
-from .client.model import MachineState
+from .client.model import MachineState, WashProgramState
 from .const import (
     CHECKUP_SCHEDULE_EVERY_CYCLE,
     CHECKUP_SCHEDULE_WEEKLY,
@@ -77,6 +77,7 @@ from .const import (
     UNIQUE_ID_TUMBLE_TIME_SELECT,
     UNIQUE_ID_WASH_DELAY_NUMBER,
     UNIQUE_ID_WASH_DRY_SELECT,
+    UNIQUE_ID_WASH_EXTRA_DOSE_SWITCH,
     UNIQUE_ID_WASH_FULL_CHECKUP_BUTTON,
     UNIQUE_ID_WASH_LIMESCALE_BUTTON,
     UNIQUE_ID_WASH_MAINT_FILTER_BUTTON,
@@ -86,6 +87,7 @@ from .const import (
     UNIQUE_ID_WASH_PAUSE_BUTTON,
     UNIQUE_ID_WASH_PROGRAM_SELECT,
     UNIQUE_ID_WASH_RESUME_BUTTON,
+    UNIQUE_ID_WASH_RESUME_GOOD_NIGHT,
     UNIQUE_ID_WASH_SOIL_SELECT,
     UNIQUE_ID_WASH_SPIN_SELECT,
     UNIQUE_ID_WASH_START_BUTTON,
@@ -169,6 +171,7 @@ async def async_setup_entry(
     buttons: list = [
         WashStartButton(coordinator, config_entry, client, programs, nfc_entries),
         WashStopButton(coordinator, config_entry, client),
+        WashGoodNightResumeButton(coordinator, config_entry, client),
     ]
     if supports_pause:
         buttons.append(WashPauseButton(coordinator, config_entry, client))
@@ -246,6 +249,7 @@ def _build_bianca_start_params(
     recipe_id: str | int,
     checkup: int,
     delay_minutes: int,
+    extra_dose: int,
 ) -> dict[str, str | int]:
     """Build URL parameters for starting a wash cycle on Bianca/Rapido platforms."""
     return {
@@ -263,7 +267,7 @@ def _build_bianca_start_params(
         "Lang": 0,
         "Stm": 1 if steam else 0,
         "Dry": dry,
-        "ED": 0,
+        "ED": extra_dose,
         "RecipeId": recipe_id,
         "StartCheckUp": checkup,
         "DispTestOn": 1,
@@ -540,6 +544,17 @@ class WashStartButton(CandyWashButtonBase):
                 nfc.spin_speed if nfc.spin_speed is not None else base.max_spin_speed
             )
             interface_type = self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+            extra_dose_entity_id = registry.async_get_entity_id(
+                "switch",
+                DOMAIN,
+                UNIQUE_ID_WASH_EXTRA_DOSE_SWITCH.format(self.config_id),
+            )
+            extra_dose_state = (
+                self.hass.states.get(extra_dose_entity_id)
+                if extra_dose_entity_id
+                else None
+            )
+            extra_dose = 1 if extra_dose_state and extra_dose_state.state == "on" else 0
             if is_dualtech(interface_type):
                 brand = self.config_entry.data.get(CONF_KEY_BRAND, "candy")
                 is_hoover = str(brand).lower() == "hoover"
@@ -573,6 +588,7 @@ class WashStartButton(CandyWashButtonBase):
                     nfc.recipe_id,
                     checkup,
                     delay,
+                    extra_dose,
                 )
             await self._send_command_and_refresh(urlencode(params, quote_via=quote))
             if checkup == 1:
@@ -649,6 +665,13 @@ class WashStartButton(CandyWashButtonBase):
 
         checkup = _should_send_checkup(self.config_entry, dt_util.utcnow())
         interface_type = self.config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        extra_dose_entity_id = registry.async_get_entity_id(
+            "switch", DOMAIN, UNIQUE_ID_WASH_EXTRA_DOSE_SWITCH.format(self.config_id)
+        )
+        extra_dose_state = (
+            self.hass.states.get(extra_dose_entity_id) if extra_dose_entity_id else None
+        )
+        extra_dose = 1 if extra_dose_state and extra_dose_state.state == "on" else 0
         if is_dualtech(interface_type):
             brand = self.config_entry.data.get(CONF_KEY_BRAND, "candy")
             is_hoover = str(brand).lower() == "hoover"
@@ -682,6 +705,7 @@ class WashStartButton(CandyWashButtonBase):
                 0,
                 checkup,
                 delay,
+                extra_dose,
             )
         await self._send_command_and_refresh(urlencode(params, quote_via=quote))
         if checkup == 1:
@@ -773,6 +797,26 @@ class WashResumeButton(CandyWashButtonBase):
 
     async def async_press(self) -> None:
         await self._send_command_and_refresh("Pa=0")
+
+
+class WashGoodNightResumeButton(CandyWashButtonBase):
+    _attr_has_entity_name = True
+    _attr_translation_key = "wash_resume_good_night"
+    _attr_icon = "mdi:weather-night"
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_RESUME_GOOD_NIGHT.format(self.config_id)
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        status = cast(WashingMachineStatus, self.coordinator.data)
+        return status.program_state == WashProgramState.GOOD_NIGHT
+
+    async def async_press(self) -> None:
+        await self._send_command_and_refresh("Write=1&RestartGN=1")
 
 
 class WashStopButton(CandyWashButtonBase):

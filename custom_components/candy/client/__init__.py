@@ -279,6 +279,24 @@ class CandyClient:
                     f"Write command failed (HTTP {resp.status}): {text[:200]}"
                 )
 
+    async def set_autodose(self, detergent_on: bool, softener_on: bool) -> None:
+        """Send command to configure auto-dose for detergent and softener."""
+        det_val = 1 if detergent_on else 0
+        soft_val = 1 if softener_on else 0
+        await self.send_command(f"Write=1&SetDet={det_val}&SetSoft={soft_val}")
+
+    async def set_water_hardness(self, hardness: int) -> None:
+        """Send command to configure water hardness level (1..3)."""
+        if hardness not in (1, 2, 3):
+            raise ValueError(
+                f"Invalid water hardness level: {hardness}. Must be 1 (Soft), 2 (Medium), or 3 (Hard)."
+            )
+        await self.send_command(f"SetHard={hardness}")
+
+    async def resume_good_night(self) -> None:
+        """Send command to release Good Night rinse hold and finish with spin."""
+        await self.send_command("Write=1&RestartGN=1")
+
     @backoff.on_exception(
         backoff.expo, aiohttp.ClientError, max_tries=3, logger=__name__
     )

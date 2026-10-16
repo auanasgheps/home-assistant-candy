@@ -5,6 +5,7 @@ from typing import cast
 from homeassistant.components.select import SelectEntity
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import DeviceInfo
@@ -61,12 +62,17 @@ from .const import (
     UNIQUE_ID_WASH_SOIL_SELECT,
     UNIQUE_ID_WASH_SPIN_SELECT,
     UNIQUE_ID_WASH_TEMP_SELECT,
+    UNIQUE_ID_WASH_WATER_HARDNESS,
+    WATER_HARDNESS_FROM_VALUE,
+    WATER_HARDNESS_OPTIONS,
+    WATER_HARDNESS_TO_VALUE,
 )
 from .helpers import (
     dryer_device_info,
     is_dualtech,
     is_washer_dryer,
     remote_control_enabled,
+    supports_autodose,
     wash_device_info,
 )
 
@@ -180,6 +186,10 @@ async def async_setup_entry(
     if dry_select is not None:
         dry_select.set_program_select(program_select)
         entities.append(dry_select)
+
+    interface_type = config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+    if supports_autodose(interface_type):
+        entities.append(CandyWashWaterHardnessSelect(coordinator, config_entry, client))
 
     async_add_entities(entities)
 
@@ -1245,3 +1255,47 @@ class CandyDryerProgramSelect(CoordinatorEntity, SelectEntity):
             self._level_select.update_for_program(match)
             self._time_select.update_for_program(match)
         self.async_write_ha_state()
+
+
+class CandyWashWaterHardnessSelect(CoordinatorEntity, SelectEntity):
+    _attr_has_entity_name = True
+    _attr_translation_key = "wash_water_hardness"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:water-opacity"
+    _attr_options = WATER_HARDNESS_OPTIONS
+
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        client: CandyClient,
+    ) -> None:
+        super().__init__(coordinator)
+        self.config_entry = config_entry
+        self.config_id = config_entry.entry_id
+        self._client = client
+        self._attr_unique_id = UNIQUE_ID_WASH_WATER_HARDNESS.format(self.config_id)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return wash_device_info(self.config_entry)
+
+    @property
+    def available(self) -> bool:
+        return super().available and remote_control_enabled(self.coordinator.data)
+
+    @property
+    def current_option(self) -> str | None:
+        if self.coordinator.data is None:
+            return None
+        status = cast(WashingMachineStatus, self.coordinator.data)
+        if status.water_hardness is None:
+            return None
+        return WATER_HARDNESS_FROM_VALUE.get(status.water_hardness)
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in WATER_HARDNESS_TO_VALUE:
+            raise ValueError(f"Invalid water hardness option: {option}")
+        level = WATER_HARDNESS_TO_VALUE[option]
+        await self._client.set_water_hardness(level)
+        await self.coordinator.async_request_refresh()

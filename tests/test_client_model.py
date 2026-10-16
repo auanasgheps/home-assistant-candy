@@ -11,6 +11,7 @@ from custom_components.candy.client.model import (
     WasherDryerDryTarget,
     WashingMachineStatus,
     WashingMachineWashProgram,
+    WashProgramState,
     load_downloadable_programs,
 )
 
@@ -677,3 +678,53 @@ def test_tumble_dryer_status_invalid_stato_td_raises() -> None:
     }
     with pytest.raises(ValueError, match="Unrecognized StatoTD code: 99"):
         TumbleDryerStatus.from_json(data)
+
+
+def test_washing_machine_status_autodose_and_good_night_fields() -> None:
+    data = {
+        "WiFiStatus": "1",
+        "MachMd": "1",
+        "Fill": "0",
+        "CodiceErrore": "0",
+        "Pr": "1",
+        "PrPh": "9",
+        "SLevel": "2",
+        "Temp": "40",
+        "SpinSp": "1000",
+        "Opt1": "0",
+        "Opt2": "0",
+        "Opt3": "0",
+        "Opt4": "0",
+        "Opt5": "0",
+        "Opt6": "0",
+        "Opt7": "0",
+        "Opt8": "0",
+        "Steam": "0",
+        "RemTime": "60",
+        "DelStVal": "0",
+        "DoorLStatus": "0",
+        "Det": "1",
+        "Soft": "0",
+        "DetWarn": "1",
+        "SoftWarn": "0",
+        "DetPreW": "0",
+        "SoftPreW": "1",
+        "DPrgCnt": "0",
+        "SPrgCnt": "15",
+        "WaterHard": "2",
+        "rED": "1",
+    }
+    status = WashingMachineStatus.from_json(data)
+    assert status.program_state.code == 9
+    assert status.program_state.label == "Good Night rinse hold"
+    assert status.program_state is WashProgramState.GOOD_NIGHT
+    assert status.detergent_on is True
+    assert status.softener_on is False
+    assert status.detergent_empty is True
+    assert status.softener_empty is False
+    assert status.detergent_reserve is False
+    assert status.softener_reserve is True
+    assert status.detergent_cycles_remaining == 0
+    assert status.softener_cycles_remaining == 15
+    assert status.water_hardness == 2
+    assert status.extra_dose_active is True

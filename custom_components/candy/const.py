@@ -259,6 +259,36 @@ UNIQUE_ID_WASH_OPTION_RINSE_1 = "{0}-wash_option_rinse_1"
 UNIQUE_ID_WASH_OPTION_RINSE_2 = "{0}-wash_option_rinse_2"
 UNIQUE_ID_WASH_OPTION_RINSE_3 = "{0}-wash_option_rinse_3"
 UNIQUE_ID_WASH_OPTION_ACQUAPLUS = "{0}-wash_option_acquaplus"
+UNIQUE_ID_WASH_RESUME_GOOD_NIGHT = "{0}-wash_resume_good_night"
+UNIQUE_ID_WASH_DETERGENT_EMPTY = "{0}-wash_detergent_empty"
+UNIQUE_ID_WASH_SOFTENER_EMPTY = "{0}-wash_softener_empty"
+UNIQUE_ID_WASH_DETERGENT_RESERVE = "{0}-wash_detergent_reserve"
+UNIQUE_ID_WASH_SOFTENER_RESERVE = "{0}-wash_softener_reserve"
+UNIQUE_ID_WASH_DETERGENT_CYCLES = "{0}-wash_detergent_cycles"
+UNIQUE_ID_WASH_SOFTENER_CYCLES = "{0}-wash_softener_cycles"
+UNIQUE_ID_WASH_DETERGENT_AUTODOSE = "{0}-wash_detergent_autodose"
+UNIQUE_ID_WASH_SOFTENER_AUTODOSE = "{0}-wash_softener_autodose"
+UNIQUE_ID_WASH_WATER_HARDNESS = "{0}-wash_water_hardness"
+UNIQUE_ID_WASH_EXTRA_DOSE_SWITCH = "{0}-wash_extra_dose_switch"
+
+WATER_HARDNESS_SOFT = "soft"
+WATER_HARDNESS_MEDIUM = "medium"
+WATER_HARDNESS_HARD = "hard"
+WATER_HARDNESS_OPTIONS = [
+    WATER_HARDNESS_SOFT,
+    WATER_HARDNESS_MEDIUM,
+    WATER_HARDNESS_HARD,
+]
+WATER_HARDNESS_FROM_VALUE: dict[int, str] = {
+    1: WATER_HARDNESS_SOFT,
+    2: WATER_HARDNESS_MEDIUM,
+    3: WATER_HARDNESS_HARD,
+}
+WATER_HARDNESS_TO_VALUE: dict[str, int] = {
+    WATER_HARDNESS_SOFT: 1,
+    WATER_HARDNESS_MEDIUM: 2,
+    WATER_HARDNESS_HARD: 3,
+}
 
 # (bitmask, translation_key, unique_id_suffix, english_name)
 WASH_OPTIONS: list[tuple[int, str, str, str]] = [
