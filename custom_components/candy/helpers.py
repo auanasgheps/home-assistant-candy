@@ -81,6 +81,13 @@ def supports_remote_pause(interface_type: str | None) -> bool:
     )
 
 
+def supports_autodose(interface_type: str | None) -> bool:
+    """Return True if the appliance interface supports autodose."""
+    if not interface_type:
+        return False
+    return "_AD" in interface_type.upper()
+
+
 def supports_scheduled_checkup(
     interface_type: str | None,
     is_tumble_dryer: bool,

@@ -196,6 +196,18 @@
       },
       "water_tank_full": {
         "name": "Water tank full"
+      },
+      "wash_detergent_empty": {
+        "name": "Detergent empty"
+      },
+      "wash_softener_empty": {
+        "name": "Softener empty"
+      },
+      "wash_detergent_reserve": {
+        "name": "Detergent low"
+      },
+      "wash_softener_reserve": {
+        "name": "Softener low"
       }
     },
     "sensor": {
@@ -370,6 +382,12 @@
       },
       "wash_cycle_capacity": {
         "name": "Max load capacity"
+      },
+      "wash_detergent_cycles": {
+        "name": "Detergent remaining cycles"
+      },
+      "wash_softener_cycles": {
+        "name": "Softener remaining cycles"
       }
     },
     "light": {
@@ -438,6 +456,14 @@
           "90": "90 minutes",
           "120": "120 minutes"
         }
+      },
+      "wash_water_hardness": {
+        "name": "Water hardness",
+        "state": {
+          "soft": "Soft",
+          "medium": "Medium",
+          "hard": "Hard"
+        }
       }
     },
     "number": {
@@ -478,6 +504,15 @@
       },
       "wash_option_acquaplus": {
         "name": "AquaPlus"
+      },
+      "wash_detergent_autodose": {
+        "name": "Auto-dose detergent"
+      },
+      "wash_softener_autodose": {
+        "name": "Auto-dose softener"
+      },
+      "wash_extra_dose": {
+        "name": "Extra dose"
       }
     },
     "button": {
@@ -489,6 +524,9 @@
       },
       "wash_resume_button": {
         "name": "Resume wash"
+      },
+      "wash_resume_good_night": {
+        "name": "Resume Good Night"
       },
       "wash_stop_button": {
         "name": "Stop wash"

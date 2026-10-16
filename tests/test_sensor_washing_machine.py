@@ -1,11 +1,14 @@
-"""Tests for various sensors."""
-
+import json
 from unittest.mock import patch
 
 from homeassistant.components.sensor import SensorExtraStoredData
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.core import HomeAssistant, State
-from homeassistant.helpers import device_registry, entity_registry
+from homeassistant.helpers import (
+    device_registry,
+    entity_registry,
+    entity_registry as er,
+)
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     load_fixture,
@@ -22,6 +25,7 @@ from custom_components.candy.client.model import DownloadableProgram
 from custom_components.candy.const import (
     CONF_KEY_BRAND,
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
+    CONF_KEY_INTERFACE_TYPE,
     CONF_KEY_IS_WASHER_DRYER,
     CONF_KEY_IS_WASHING_MACHINE,
     CONF_KEY_MAINTENANCE_ENABLED,
@@ -33,8 +37,10 @@ from custom_components.candy.const import (
     DATA_KEY_COORDINATOR,
     DATA_KEY_STATS_COORDINATOR,
     DOMAIN,
+    UNIQUE_ID_WASH_DETERGENT_CYCLES,
     UNIQUE_ID_WASH_LIQUID_DETERGENT,
     UNIQUE_ID_WASH_POWDER_DETERGENT,
+    UNIQUE_ID_WASH_SOFTENER_CYCLES,
 )
 
 from .common import TEST_IP, init_integration
@@ -1266,3 +1272,40 @@ async def test_wash_program_sensor_one_fi_extra(
     state = hass.states.get("sensor.wash_program")
     assert state is not None
     assert state.state == "One-Fi Extra"
+
+
+async def test_autodose_cycles_sensors(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    raw_status = load_fixture("washing_machine/idle.json")
+    data = json.loads(raw_status)
+    data["statusLavatrice"]["DPrgCnt"] = "25"
+    data["statusLavatrice"]["SPrgCnt"] = "18"
+    status_with_autodose = json.dumps(data)
+
+    entry = await init_integration(
+        hass,
+        aioclient_mock,
+        status_with_autodose,
+        statistics_response='{"statusCounters": {"Program1": "10"}}',
+        extra_config_data={CONF_KEY_INTERFACE_TYPE: "red_devil_axi_ad"},
+    )
+
+    registry = er.async_get(hass)
+    det_cycles_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, UNIQUE_ID_WASH_DETERGENT_CYCLES.format(entry.entry_id)
+    )
+    soft_cycles_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, UNIQUE_ID_WASH_SOFTENER_CYCLES.format(entry.entry_id)
+    )
+
+    assert det_cycles_id is not None
+    assert soft_cycles_id is not None
+
+    det_state = hass.states.get(det_cycles_id)
+    assert det_state is not None
+    assert det_state.state == "25"
+
+    soft_state = hass.states.get(soft_cycles_id)
+    assert soft_state is not None
+    assert soft_state.state == "18"

@@ -57,6 +57,7 @@ from .const import (
     CONF_KEY_CHECKUP_LAST_RESULT,
     CONF_KEY_DEVICE_MODEL,
     CONF_KEY_DOWNLOADABLE_PROGRAMS,
+    CONF_KEY_INTERFACE_TYPE,
     CONF_KEY_MAC_ADDRESS,
     CONF_KEY_MAINTENANCE_ENABLED,
     CONF_KEY_MAINTENANCE_FILTER_ENABLED,
@@ -108,6 +109,7 @@ from .const import (
     UNIQUE_ID_WASH_CYCLE_STATUS,
     UNIQUE_ID_WASH_DELAY,
     UNIQUE_ID_WASH_DELAY_NUMBER,
+    UNIQUE_ID_WASH_DETERGENT_CYCLES,
     UNIQUE_ID_WASH_DRY_SELECT,
     UNIQUE_ID_WASH_DRY_TARGET,
     UNIQUE_ID_WASH_ERROR,
@@ -129,6 +131,7 @@ from .const import (
     UNIQUE_ID_WASH_REMAINING_TIME,
     UNIQUE_ID_WASH_SCHEDULED_FINISH,
     UNIQUE_ID_WASH_SCHEDULED_START,
+    UNIQUE_ID_WASH_SOFTENER_CYCLES,
     UNIQUE_ID_WASH_SOIL_LEVEL,
     UNIQUE_ID_WASH_SOIL_SELECT,
     UNIQUE_ID_WASH_SPIN_SPEED,
@@ -152,6 +155,7 @@ from .helpers import (
     cycles_remaining,
     get_dryer_error_notification_strings,
     is_washer_dryer,
+    supports_autodose,
     wash_device_name,
 )
 
@@ -227,6 +231,15 @@ async def async_setup_entry(
         entities.append(CandyWashScheduledFinishSensor(coordinator, config_entry))
         if programs:
             entities.append(CandyWashScheduledStartSensor(coordinator, config_entry))
+        interface_type = config_entry.data.get(CONF_KEY_INTERFACE_TYPE, "")
+        if supports_autodose(interface_type) or _was_registered(
+            UNIQUE_ID_WASH_DETERGENT_CYCLES
+        ):
+            entities.append(CandyWashDetergentCyclesSensor(coordinator, config_entry))
+        if supports_autodose(interface_type) or _was_registered(
+            UNIQUE_ID_WASH_SOFTENER_CYCLES
+        ):
+            entities.append(CandyWashSoftenerCyclesSensor(coordinator, config_entry))
         if config_entry.data.get(CONF_KEY_MODE) == MODE_FULL_CONTROL:
             if config_entry.data.get(CONF_KEY_CHECKUP_ENABLED):
                 entities.append(CandyWashCheckUpResultSensor(coordinator, config_entry))
@@ -873,6 +886,62 @@ class CandyWashSoilLevelSensor(CandyBaseSensor):
     @property
     def icon(self) -> str:
         return "mdi:water-opacity"
+
+
+class CandyWashDetergentCyclesSensor(CandyBaseSensor):
+    """Remaining wash cycles on reserve detergent."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "wash_detergent_cycles"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = "cycles"
+    _attr_icon = "mdi:counter"
+
+    def device_name(self) -> str:
+        return wash_device_name(self.config_entry)
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_DETERGENT_CYCLES.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        if self.coordinator.data is None:
+            return None
+        return cast(
+            WashingMachineStatus, self.coordinator.data
+        ).detergent_cycles_remaining
+
+
+class CandyWashSoftenerCyclesSensor(CandyBaseSensor):
+    """Remaining wash cycles on reserve softener."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "wash_softener_cycles"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = "cycles"
+    _attr_icon = "mdi:counter"
+
+    def device_name(self) -> str:
+        return wash_device_name(self.config_entry)
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_WASH_SOFTENER_CYCLES.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        if self.coordinator.data is None:
+            return None
+        return cast(
+            WashingMachineStatus, self.coordinator.data
+        ).softener_cycles_remaining
 
 
 class CandyWashCheckUpResultSensor(CandyBaseSensor, RestoreSensor):

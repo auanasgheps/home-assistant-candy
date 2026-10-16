@@ -65,7 +65,7 @@ Full functionality has been tested on several physical appliances. See the table
 | Appliance | Interface / Family | Tested | Notes |
 |---|---|---|---|
 | Washing Machine | Candy RapidÓ (`RAPIDO`, `RAPIDO_4DIG_STM_NEL`) | Yes | Reference hardware (`RO41274DWMSE/1-S`).|
-| Washer Dryer | Hoover AXI (`red_devil_axi*`, `hwash700`) | Yes | Reference hardware (`AWDPD4138LHR/1`). |
+| Washing Machine / Washer Dryer | Hoover AXI (`red_devil_axi*`, `hwash700`) | Yes | Reference hardware (`AWMPD 410LH8/1-S` and `AWDPD4138LHR/1`). |
 | Tumble Dryer | DualTech (`TD_DIGIT_*`, `TD_LED_*`, `3D_DUAL`) | Yes | Reference hardware (`GVS H9A2TCE-80`). Supports start/pause/resume/stop, dryness levels, timed drying, filter/tank warnings, and self check-up. |
 | Washing Machine / Washer Dryer | DualTech (`3D_DUAL`, `4D_DUAL`, `DUALTECH`) | Yes | Tested on `3D_DUAL` hardware. Remote pause and stats counters are unsupported by hardware. |
 | Washer Dryer | Candy RapidÓ (`ROW` series) | No | Shares RapidÓ protocol with generic washer-dryer engine. Untested on physical hardware. |

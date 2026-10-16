@@ -55,6 +55,16 @@ def _make_wm_status(state: MachineState) -> WashingMachineStatus:
         soil_level=None,
         recipe_id=None,
         dry_target=None,
+        detergent_on=None,
+        softener_on=None,
+        detergent_empty=None,
+        softener_empty=None,
+        detergent_reserve=None,
+        softener_reserve=None,
+        detergent_cycles_remaining=None,
+        softener_cycles_remaining=None,
+        water_hardness=None,
+        extra_dose_active=None,
     )
 
 

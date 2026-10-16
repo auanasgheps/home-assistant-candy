@@ -76,7 +76,7 @@ class WashProgramState(StatusCode):
     DRYING = (6, "Drying")
     ERROR = (7, "Error")
     STEAM = (8, "Steam")
-    GOOD_NIGHT = (9, "Spin - Good Night")  # TODO: GN pause?
+    GOOD_NIGHT = (9, "Good Night rinse hold")  # Rinse hold with water in drum; resume with Write=1&RestartGN=1
     SPIN = (10, "Spin")
 
 
@@ -121,6 +121,17 @@ class WashingMachineStatus:
     soil_level: int | None  # SLevel — 0–4 soil level setting
     recipe_id: str | None  # RecipeId — downloadable program (e.g. "D_33")
     dry_target: WasherDryerDryTarget | None
+    # Auto-dose fields (_ad models)
+    detergent_on: bool | None
+    softener_on: bool | None
+    detergent_empty: bool | None
+    softener_empty: bool | None
+    detergent_reserve: bool | None
+    softener_reserve: bool | None
+    detergent_cycles_remaining: int | None
+    softener_cycles_remaining: int | None
+    water_hardness: int | None
+    extra_dose_active: bool | None
 
     @classmethod
     def from_json(cls, json):
@@ -155,6 +166,36 @@ class WashingMachineStatus:
             else None,
             dry_target=WasherDryerDryTarget.from_code(int(json["DryT"]))
             if "DryT" in json
+            else None,
+            detergent_on=json["Det"] == "1"
+            if "Det" in json and json["Det"] != ""
+            else None,
+            softener_on=json["Soft"] == "1"
+            if "Soft" in json and json["Soft"] != ""
+            else None,
+            detergent_empty=json["DetWarn"] == "1"
+            if "DetWarn" in json and json["DetWarn"] != ""
+            else None,
+            softener_empty=json["SoftWarn"] == "1"
+            if "SoftWarn" in json and json["SoftWarn"] != ""
+            else None,
+            detergent_reserve=json["DetPreW"] == "1"
+            if "DetPreW" in json and json["DetPreW"] != ""
+            else None,
+            softener_reserve=json["SoftPreW"] == "1"
+            if "SoftPreW" in json and json["SoftPreW"] != ""
+            else None,
+            detergent_cycles_remaining=int(json["DPrgCnt"])
+            if "DPrgCnt" in json and str(json["DPrgCnt"]).isdigit()
+            else None,
+            softener_cycles_remaining=int(json["SPrgCnt"])
+            if "SPrgCnt" in json and str(json["SPrgCnt"]).isdigit()
+            else None,
+            water_hardness=int(json["WaterHard"])
+            if "WaterHard" in json and str(json["WaterHard"]).isdigit()
+            else None,
+            extra_dose_active=json["rED"] == "1"
+            if "rED" in json and json["rED"] != ""
             else None,
         )
 

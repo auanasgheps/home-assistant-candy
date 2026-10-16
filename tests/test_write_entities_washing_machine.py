@@ -51,8 +51,10 @@ from custom_components.candy.const import (
     PROGRAM_TYPE_WASH_AND_DRY,
     PROGRAM_TYPE_WASHING,
     UNIQUE_ID_WASH_DELAY_NUMBER,
+    UNIQUE_ID_WASH_DETERGENT_AUTODOSE,
     UNIQUE_ID_WASH_DRY_SELECT,
     UNIQUE_ID_WASH_ESTIMATED_DURATION,
+    UNIQUE_ID_WASH_EXTRA_DOSE_SWITCH,
     UNIQUE_ID_WASH_FULL_CHECKUP_BUTTON,
     UNIQUE_ID_WASH_LIMESCALE_BUTTON,
     UNIQUE_ID_WASH_MAINT_FILTER_BUTTON,
@@ -68,14 +70,18 @@ from custom_components.candy.const import (
     UNIQUE_ID_WASH_PROGRAM_SELECT,
     UNIQUE_ID_WASH_PROGRAM_TYPE_SELECT,
     UNIQUE_ID_WASH_RESUME_BUTTON,
+    UNIQUE_ID_WASH_RESUME_GOOD_NIGHT,
     UNIQUE_ID_WASH_SCHEDULED_FINISH,
     UNIQUE_ID_WASH_SCHEDULED_START,
+    UNIQUE_ID_WASH_SOFTENER_AUTODOSE,
     UNIQUE_ID_WASH_SOIL_SELECT,
     UNIQUE_ID_WASH_SPIN_SELECT,
     UNIQUE_ID_WASH_START_BUTTON,
     UNIQUE_ID_WASH_STEAM_SWITCH,
     UNIQUE_ID_WASH_STOP_BUTTON,
     UNIQUE_ID_WASH_TEMP_SELECT,
+    UNIQUE_ID_WASH_WATER_HARDNESS,
+    WATER_HARDNESS_OPTIONS,
 )
 from custom_components.candy.select import CandyWashProgramDescriptionSensor
 
@@ -308,6 +314,33 @@ async def _init_full_control(
             CONF_KEY_MODE: MODE_FULL_CONTROL,
             CONF_KEY_PROGRAMS: _PROGRAMS,
         },
+    )
+    aioclient_mock.get(f"http://{TEST_IP}/http-read.json?encrypted=0", text=status_json)
+    _add_stats_mocks(aioclient_mock)
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def _init_full_control_custom(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    status_json: str,
+    extra_data: dict,
+) -> MockConfigEntry:
+    data = {
+        CONF_IP_ADDRESS: TEST_IP,
+        CONF_KEY_USE_ENCRYPTION: False,
+        CONF_PASSWORD: "",
+        CONF_KEY_MODE: MODE_FULL_CONTROL,
+        CONF_KEY_PROGRAMS: _PROGRAMS,
+    }
+    data.update(extra_data)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="test-full-control",
+        data=data,
     )
     aioclient_mock.get(f"http://{TEST_IP}/http-read.json?encrypted=0", text=status_json)
     _add_stats_mocks(aioclient_mock)
@@ -4509,3 +4542,177 @@ async def test_sub_selects_and_switch_disambiguate_programs_by_program_code(
     await hass.async_block_till_done()
 
     assert steam_entity._active_program().pr_code == 75
+
+
+# ---------------------------------------------------------------------------
+# Good Night Resume button
+# ---------------------------------------------------------------------------
+
+
+async def test_good_night_resume_button_when_rinse_hold(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    status_dict = json.loads(_RUNNING_JSON)
+    status_dict["statusLavatrice"]["PrPh"] = "9"
+    gn_json = json.dumps(status_dict)
+
+    entry = await _init_full_control(hass, aioclient_mock, gn_json)
+    state = _state(hass, entry, "button", UNIQUE_ID_WASH_RESUME_GOOD_NIGHT)
+    assert state is not None
+    assert state.state != "unavailable"
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_RESUME_GOOD_NIGHT.format(entry.entry_id)
+    )
+    assert entity_id is not None
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": entity_id}, blocking=True
+        )
+
+    mock_send.assert_called_once_with("Write=1&RestartGN=1")
+
+
+async def test_good_night_resume_button_unavailable_when_not_in_rinse_hold(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    entry = await _init_full_control(hass, aioclient_mock, _RUNNING_JSON)
+    state = _state(hass, entry, "button", UNIQUE_ID_WASH_RESUME_GOOD_NIGHT)
+    assert state is not None
+    assert state.state == "unavailable"
+
+
+# ---------------------------------------------------------------------------
+# Water Hardness select
+# ---------------------------------------------------------------------------
+
+
+async def test_water_hardness_select(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    extra = {CONF_KEY_INTERFACE_TYPE: "red_devil_axi_ad"}
+    entry = await _init_full_control_custom(hass, aioclient_mock, _IDLE_JSON, extra)
+
+    state = _state(hass, entry, "select", UNIQUE_ID_WASH_WATER_HARDNESS)
+    assert state is not None
+    assert state.attributes["options"] == WATER_HARDNESS_OPTIONS
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_WATER_HARDNESS.format(entry.entry_id)
+    )
+    assert entity_id is not None
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "select",
+            "select_option",
+            {"entity_id": entity_id, "option": "hard"},
+            blocking=True,
+        )
+
+    mock_send.assert_called_once_with("SetHard=3")
+
+
+# ---------------------------------------------------------------------------
+# Auto-dose switches
+# ---------------------------------------------------------------------------
+
+
+async def test_autodose_switches(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    raw_status = json.loads(_IDLE_JSON)
+    raw_status["statusLavatrice"]["Det"] = "0"
+    raw_status["statusLavatrice"]["Soft"] = "1"
+    status_str = json.dumps(raw_status)
+
+    extra = {CONF_KEY_INTERFACE_TYPE: "red_devil_axi_ad"}
+    entry = await _init_full_control_custom(hass, aioclient_mock, status_str, extra)
+
+    registry = er.async_get(hass)
+    det_id = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_DETERGENT_AUTODOSE.format(entry.entry_id)
+    )
+    soft_id = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_SOFTENER_AUTODOSE.format(entry.entry_id)
+    )
+    assert det_id is not None
+    assert soft_id is not None
+
+    det_state = hass.states.get(det_id)
+    soft_state = hass.states.get(soft_id)
+    assert det_state is not None and det_state.state == "off"
+    assert soft_state is not None and soft_state.state == "on"
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "switch", "turn_on", {"entity_id": det_id}, blocking=True
+        )
+
+    mock_send.assert_called_once_with("Write=1&SetDet=1&SetSoft=1")
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "switch", "turn_off", {"entity_id": soft_id}, blocking=True
+        )
+
+    mock_send.assert_called_once_with("Write=1&SetDet=0&SetSoft=0")
+
+
+# ---------------------------------------------------------------------------
+# Extra Dose switch and start cycle parameter
+# ---------------------------------------------------------------------------
+
+
+async def test_extra_dose_switch_and_start_cycle(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    extra = {
+        CONF_KEY_INTERFACE_TYPE: "red_devil_axi_ad",
+        CONF_KEY_PROGRAMS: _PROGRAMS_WITH_OPTIONS,
+    }
+    entry = await _init_full_control_custom(hass, aioclient_mock, _IDLE_JSON, extra)
+
+    registry = er.async_get(hass)
+    ed_id = registry.async_get_entity_id(
+        "switch", DOMAIN, UNIQUE_ID_WASH_EXTRA_DOSE_SWITCH.format(entry.entry_id)
+    )
+    start_id = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    assert ed_id is not None
+    assert start_id is not None
+
+    assert hass.states.get(ed_id).state == "off"
+
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": ed_id}, blocking=True
+    )
+    assert hass.states.get(ed_id).state == "on"
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_id}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    query: str = mock_send.call_args[0][0]
+    assert "ED=1" in query
