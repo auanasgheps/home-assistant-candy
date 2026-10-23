@@ -99,6 +99,7 @@ from .const import (
     UNIQUE_ID_OVEN_TEMP,
     UNIQUE_ID_TUMBLE_CHECKUP_STATE,
     UNIQUE_ID_TUMBLE_CYCLE_STATUS,
+    UNIQUE_ID_TUMBLE_DELAY,
     UNIQUE_ID_TUMBLE_DRY_LEVEL,
     UNIQUE_ID_TUMBLE_DRYER,
     UNIQUE_ID_TUMBLE_ERROR,
@@ -274,6 +275,7 @@ async def async_setup_entry(
                 CandyTumbleDryLevelSensor(coordinator, config_entry),
                 CandyTumbleErrorCodeSensor(coordinator, config_entry),
                 CandyTumbleCheckUpStateSensor(coordinator, config_entry),
+                CandyTumbleDelaySensor(coordinator, config_entry),
             ]
         )
     elif isinstance(coordinator.data, OvenStatus):
@@ -404,7 +406,7 @@ class CandyWashingMachineSensor(CandyBaseSensor):
     def extra_state_attributes(self) -> Mapping[str, Any]:
         status = cast(WashingMachineStatus, self.coordinator.data)
 
-        attributes = {
+        attributes: dict[str, Any] = {
             "program": status.program,
             "temperature": status.temp,
             "spin_speed": status.spin_speed,
@@ -1828,7 +1830,7 @@ class CandyTumbleDryerSensor(CandyBaseSensor):
     def extra_state_attributes(self) -> Mapping[str, Any]:
         status = cast(TumbleDryerStatus, self.coordinator.data)
 
-        attributes = {
+        attributes: dict[str, Any] = {
             "program": status.program,
             "remaining_minutes": status.remaining_minutes,
             "remote_control": status.remote_control,
@@ -1839,6 +1841,13 @@ class CandyTumbleDryerSensor(CandyBaseSensor):
             "water_tank_full": status.water_tank_full,
             "door_closed": status.door_closed,
         }
+
+        if status.delay_value is not None:
+            attributes["delay_value"] = status.delay_value
+        if status.time is not None:
+            attributes["time"] = status.time
+        if status.recipe_id is not None and status.recipe_id not in ("0", "NULL", ""):
+            attributes["recipe_id"] = status.recipe_id
 
         return attributes
 
@@ -2048,6 +2057,32 @@ class CandyTumbleCheckUpStateSensor(CandyBaseSensor):
     @property
     def icon(self) -> str:
         return "mdi:wrench-outline"
+
+
+class CandyTumbleDelaySensor(CandyBaseSensor):
+    """Delay start value set on the tumble dryer."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "tumble_delay"
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_icon = "mdi:timer-sand"
+
+    def device_name(self) -> str:
+        return DEVICE_NAME_TUMBLE_DRYER
+
+    def suggested_area(self) -> str:
+        return SUGGESTED_AREA_BATHROOM
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_DELAY.format(self.config_id)
+
+    @property
+    def native_value(self) -> StateType:
+        if self.coordinator.data is None:
+            return None
+        return cast(TumbleDryerStatus, self.coordinator.data).delay_value
 
 
 class CandyOvenSensor(CandyBaseSensor):

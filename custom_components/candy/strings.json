@@ -388,6 +388,9 @@
       },
       "wash_softener_cycles": {
         "name": "Softener remaining cycles"
+      },
+      "tumble_delay": {
+        "name": "Dryer delay start"
       }
     },
     "light": {
@@ -463,6 +466,15 @@
           "soft": "Soft",
           "medium": "Medium",
           "hard": "Hard"
+        }
+      },
+      "dryer_rapid_select": {
+        "name": "Rapid dry",
+        "state": {
+          "off": "Off",
+          "30": "30 minutes",
+          "45": "45 minutes",
+          "59": "59 minutes"
         }
       }
     },

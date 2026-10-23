@@ -63,6 +63,7 @@ from .const import (
     MODE_FULL_CONTROL,
     NOTIF_ID_FULL_CHECKUP,
     NOTIF_ID_LIMESCALE,
+    RAPID_LEVEL_TO_VALUE,
     SOIL_LABELS_REVERSE,
     UNIQUE_ID_TUMBLE_ANTI_CREASE_BUTTON,
     UNIQUE_ID_TUMBLE_CHECKUP_BUTTON,
@@ -70,6 +71,7 @@ from .const import (
     UNIQUE_ID_TUMBLE_DRY_LEVEL_SELECT,
     UNIQUE_ID_TUMBLE_PAUSE_BUTTON,
     UNIQUE_ID_TUMBLE_PROGRAM_SELECT,
+    UNIQUE_ID_TUMBLE_RAPID_SELECT,
     UNIQUE_ID_TUMBLE_RESET_WARNINGS_BUTTON,
     UNIQUE_ID_TUMBLE_RESUME_BUTTON,
     UNIQUE_ID_TUMBLE_START_BUTTON,
@@ -1079,6 +1081,7 @@ class CandyDryerStartButton(CandyDryerButtonBase):
         program_name = _get_select_state(UNIQUE_ID_TUMBLE_PROGRAM_SELECT)
         dry_level_option = _get_select_state(UNIQUE_ID_TUMBLE_DRY_LEVEL_SELECT)
         time_option = _get_select_state(UNIQUE_ID_TUMBLE_TIME_SELECT)
+        rapid_option = _get_select_state(UNIQUE_ID_TUMBLE_RAPID_SELECT)
         delay_minutes = int(_get_number_state(UNIQUE_ID_TUMBLE_DELAY_NUMBER))
 
         lang = self.config_entry.data.get(
@@ -1114,7 +1117,20 @@ class CandyDryerStartButton(CandyDryerButtonBase):
                 program.default_time_level if program.default_time_level > 0 else 30
             )
 
-        if selected_time is not None:
+        rapid_level = (
+            RAPID_LEVEL_TO_VALUE.get(rapid_option or "", 0) if program.set_rapido else 0
+        )
+
+        if rapid_level > 0:
+            if delay_minutes > 0:
+                params = builder.build_rapid_delay_start(
+                    program.selector_position, rapid_level, delay_minutes
+                )
+            else:
+                params = builder.build_rapid_start(
+                    program.selector_position, rapid_level
+                )
+        elif selected_time is not None:
             if delay_minutes > 0:
                 params = builder.build_timed_delay_start(
                     program.selector_position, selected_time, delay_minutes

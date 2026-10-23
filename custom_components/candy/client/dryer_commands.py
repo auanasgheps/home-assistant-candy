@@ -27,6 +27,12 @@ class DryerCommandBuilder(ABC):
         """Build parameters to start a rapid drying cycle."""
 
     @abstractmethod
+    def build_rapid_delay_start(
+        self, selector_position: int, rapid_level: int, delay_minutes: int
+    ) -> dict[str, str | int]:
+        """Build parameters to schedule a delayed start for a rapid cycle."""
+
+    @abstractmethod
     def build_delay_start(
         self, selector_position: int, dry_level: int, delay_minutes: int
     ) -> dict[str, str | int]:
@@ -104,6 +110,19 @@ class DualTechDryerCommandBuilder(DryerCommandBuilder):
             "PrNm": selector_position,
             "Rapido": rapid_level,
             "StSt": 1,
+        }
+
+    def build_rapid_delay_start(
+        self, selector_position: int, rapid_level: int, delay_minutes: int
+    ) -> dict[str, str | int]:
+        return {
+            "Write": 1,
+            "Pa": 0,
+            "Sel": 0,
+            "PrNm": selector_position,
+            "Rapido": rapid_level,
+            "DelMd": 1,
+            "DelVl": delay_minutes,
         }
 
     def build_delay_start(

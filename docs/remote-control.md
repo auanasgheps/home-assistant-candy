@@ -93,6 +93,8 @@ Washer-dryers combine standard washing controls with dedicated drying management
 
 - **Drying Programs:** Select from your dryer's full range of localized cycles.
 - **Target Dry Level vs. Timed Drying:** Choose between sensor-based dryness targets (*Iron Dry*, *Hang Dry*, *Store Dry*, *Bone Dry*) or set a fixed timed drying duration (e.g., 30, 45, 60, 90, or 120 minutes).
+- **Rapid Dry Option:** On programs that support rapid cycles (e.g. Whites, Mix & Dry, Synthetics), quickly select a rapid dry duration (30, 45, or 59 minutes).
+- **Delay Start & Countdown Tracking:** Schedule delays in 1-hour increments (up to 24 hours) and monitor the active countdown in real time via the dedicated **Dryer delay start** sensor.
 - **Anti-Crease Tumbling:** After drying completes, the dryer gently tumbles intermittently to prevent creases until unloaded. You can stop this at any time by pressing **Cancel Anti-Crease**.
 - **Door Safety:** Cycles cannot be started while the door is open.
 

@@ -30,6 +30,8 @@ async def test_main_sensor_idle(
         "need_clean_filter": False,
         "water_tank_full": False,
         "door_closed": True,
+        "delay_value": 0,
+        "time": 0,
         "friendly_name": "Tumble dryer",
         "icon": "mdi:tumble-dryer",
     }
@@ -71,6 +73,8 @@ async def test_main_sensor_running(
         "need_clean_filter": False,
         "water_tank_full": False,
         "door_closed": True,
+        "delay_value": 0,
+        "time": 0,
         "friendly_name": "Tumble dryer",
         "icon": "mdi:tumble-dryer",
     }

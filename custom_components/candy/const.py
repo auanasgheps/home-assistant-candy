@@ -309,6 +309,7 @@ UNIQUE_ID_TUMBLE_REMAINING_TIME = "{0}-tumble_remaining_time"
 UNIQUE_ID_TUMBLE_DRY_LEVEL = "{0}-tumble_dry_level"
 UNIQUE_ID_TUMBLE_ERROR = "{0}-tumble_error"
 UNIQUE_ID_TUMBLE_CHECKUP_STATE = "{0}-tumble_checkup_state"
+UNIQUE_ID_TUMBLE_DELAY = "{0}-tumble_delay"
 
 UNIQUE_ID_TUMBLE_REMOTE_CONTROL = "{0}-tumble_remote_control"
 UNIQUE_ID_TUMBLE_DOOR = "{0}-tumble_door"
@@ -318,6 +319,7 @@ UNIQUE_ID_TUMBLE_WATER_TANK = "{0}-tumble_water_tank"
 UNIQUE_ID_TUMBLE_PROGRAM_SELECT = "{0}-tumble_program_select"
 UNIQUE_ID_TUMBLE_DRY_LEVEL_SELECT = "{0}-tumble_dry_level_select"
 UNIQUE_ID_TUMBLE_TIME_SELECT = "{0}-tumble_time_select"
+UNIQUE_ID_TUMBLE_RAPID_SELECT = "{0}-tumble_rapid_select"
 UNIQUE_ID_TUMBLE_DELAY_NUMBER = "{0}-tumble_delay_number"
 UNIQUE_ID_TUMBLE_START_BUTTON = "{0}-tumble_start_button"
 UNIQUE_ID_TUMBLE_STOP_BUTTON = "{0}-tumble_stop_button"
@@ -338,6 +340,15 @@ DRY_LEVEL_OPTIONS: list[str] = [
     DRY_LEVEL_STORE,
     DRY_LEVEL_BONE,
 ]
+
+# Rapid dry levels confirmed via CandyTumbleDryerCommand.java (classes4.dex): 1=30m, 2=45m, 3=59m
+RAPID_LEVEL_TO_VALUE: dict[str, int] = {
+    "off": 0,
+    "30": 1,
+    "45": 2,
+    "59": 3,
+}
+RAPID_LEVEL_FROM_VALUE: dict[int, str] = {v: k for k, v in RAPID_LEVEL_TO_VALUE.items()}
 
 DRY_LEVEL_TO_VALUE: dict[str, int] = {
     DRY_LEVEL_IRON: 1,

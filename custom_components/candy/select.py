@@ -50,9 +50,11 @@ from .const import (
     PROGRAM_TYPE_WASH_AND_DRY,
     PROGRAM_TYPE_WASHING,
     PROGRAM_TYPES,
+    RAPID_LEVEL_TO_VALUE,
     SOIL_LABELS,
     UNIQUE_ID_TUMBLE_DRY_LEVEL_SELECT,
     UNIQUE_ID_TUMBLE_PROGRAM_SELECT,
+    UNIQUE_ID_TUMBLE_RAPID_SELECT,
     UNIQUE_ID_TUMBLE_TIME_SELECT,
     UNIQUE_ID_WASH_DRY_SELECT,
     UNIQUE_ID_WASH_NFC_SWITCH,
@@ -120,6 +122,9 @@ async def async_setup_entry(
         time_select = CandyDryerTimeSelect(
             coordinator, config_entry, dryer_client, dryer_programs
         )
+        rapid_select = CandyDryerRapidSelect(
+            coordinator, config_entry, dryer_client, dryer_programs
+        )
         dryer_program_select = CandyDryerProgramSelect(
             coordinator,
             config_entry,
@@ -127,8 +132,11 @@ async def async_setup_entry(
             dryer_programs,
             level_select,
             time_select,
+            rapid_select,
         )
-        async_add_entities([dryer_program_select, level_select, time_select])
+        async_add_entities(
+            [dryer_program_select, level_select, time_select, rapid_select]
+        )
         return
 
     if not isinstance(coordinator.data, WashingMachineStatus):
@@ -1153,6 +1161,95 @@ class CandyDryerTimeSelect(CoordinatorEntity, SelectEntity):
         self.async_write_ha_state()
 
 
+class CandyDryerRapidSelect(CoordinatorEntity, SelectEntity):
+    _attr_has_entity_name = True
+    _attr_translation_key = "dryer_rapid_select"
+    _attr_icon = "mdi:lightning-bolt-outline"
+
+    _RAPID_OPTIONS = ["off", "30", "45", "59"]
+
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        client: CandyClient,
+        programs: list[TumbleDryerProgram],
+    ) -> None:
+        super().__init__(coordinator)
+        self.config_entry = config_entry
+        self.config_id = config_entry.entry_id
+        self._client = client
+        self._programs = programs
+        self._selected_program: TumbleDryerProgram = programs[0]
+        self._current_option: str | None = (
+            "off" if self._selected_program.set_rapido else None
+        )
+
+    def _machine_is_idle(self) -> bool:
+        status = self.coordinator.data
+        if not isinstance(status, TumbleDryerStatus):
+            return False
+        return (
+            status.machine_state
+            in (
+                MachineState.IDLE,
+                MachineState.FINISHED1,
+                MachineState.FINISHED2,
+            )
+            and status.remote_control
+        )
+
+    @property
+    def unique_id(self) -> str:
+        return UNIQUE_ID_TUMBLE_RAPID_SELECT.format(self.config_id)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return dryer_device_info(self.config_entry)
+
+    @property
+    def available(self) -> bool:
+        return (
+            super().available
+            and self._machine_is_idle()
+            and self._selected_program.set_rapido
+        )
+
+    @property
+    def options(self) -> list[str]:
+        if not self._selected_program.set_rapido:
+            return []
+        return self._RAPID_OPTIONS
+
+    @property
+    def current_option(self) -> str | None:
+        if self._current_option in self.options:
+            return self._current_option
+        opts = self.options
+        return opts[0] if opts else None
+
+    @property
+    def selected_rapid_level(self) -> int:
+        opt = self.current_option
+        if opt is None or opt == "off":
+            return 0
+        return RAPID_LEVEL_TO_VALUE.get(opt, 0)
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in self.options:
+            raise ValueError(f"Invalid rapid dry option: {option}")
+        self._current_option = option
+        self.async_write_ha_state()
+
+    def update_for_program(self, program: TumbleDryerProgram) -> None:
+        self._selected_program = program
+        if not program.set_rapido:
+            self._current_option = None
+        else:
+            self._current_option = "off"
+        self.async_write_ha_state()
+
+
 class CandyDryerProgramSelect(CoordinatorEntity, SelectEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "dryer_program_select"
@@ -1166,6 +1263,7 @@ class CandyDryerProgramSelect(CoordinatorEntity, SelectEntity):
         programs: list[TumbleDryerProgram],
         level_select: CandyDryerLevelSelect,
         time_select: CandyDryerTimeSelect,
+        rapid_select: CandyDryerRapidSelect,
     ) -> None:
         super().__init__(coordinator)
         self.config_entry = config_entry
@@ -1174,6 +1272,7 @@ class CandyDryerProgramSelect(CoordinatorEntity, SelectEntity):
         self._programs = programs
         self._level_select = level_select
         self._time_select = time_select
+        self._rapid_select = rapid_select
         lang = config_entry.data.get(CONF_KEY_PROGRAM_LANGUAGE, "en")
         self._current_option: str = programs[0].localized_name(lang)
 
@@ -1254,6 +1353,7 @@ class CandyDryerProgramSelect(CoordinatorEntity, SelectEntity):
         if match is not None:
             self._level_select.update_for_program(match)
             self._time_select.update_for_program(match)
+            self._rapid_select.update_for_program(match)
         self.async_write_ha_state()
 
 
