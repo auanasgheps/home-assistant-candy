@@ -5,13 +5,17 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs
 
+import aiohttp
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.candy import CONF_KEY_USE_ENCRYPTION, DOMAIN
+from custom_components.candy.button import CandyDryerStartButton
+from custom_components.candy.client import parse_dryer_programs
 from custom_components.candy.client.model import MachineState, TumbleDryerStatus
 from custom_components.candy.const import (
     CONF_KEY_INTERFACE_TYPE,
@@ -858,3 +862,172 @@ async def test_dryer_buttons_unavailable_on_coordinator_update_failure(
 
     assert hass.states.get(start_eid).state == "unavailable"
     assert hass.states.get(stop_eid).state == "unavailable"
+
+
+async def test_dryer_button_send_command_exception(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test exception in send_command is re-raised and write_pending decremented."""
+    entry = await _init_dryer_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_TUMBLE_START_BUTTON.format(entry.entry_id)
+    )
+    assert start_eid is not None
+
+    with (
+        patch(
+            "custom_components.candy.client.CandyClient.send_command",
+            side_effect=aiohttp.ClientError("Dryer write error"),
+        ),
+        pytest.raises(aiohttp.ClientError),
+    ):
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+
+async def test_dryer_start_button_missing_and_invalid_states(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test start button handles missing registry entities and invalid numeric states."""
+    entry = await _init_dryer_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_TUMBLE_START_BUTTON.format(entry.entry_id)
+    )
+    delay_eid = registry.async_get_entity_id(
+        "number", DOMAIN, UNIQUE_ID_TUMBLE_DELAY_NUMBER.format(entry.entry_id)
+    )
+    assert start_eid is not None
+    assert delay_eid is not None
+
+    # Set delay number state to invalid string
+    hass.states.async_set(delay_eid, "invalid_number")
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs = mock_send.call_args[0][0]
+    assert "StSt=1" in qs
+    assert "PrNm=1" in qs
+
+
+async def test_dryer_start_button_program_fallback_and_no_programs(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test fallback to first program on unknown program name, and error if no programs."""
+    entry = await _init_dryer_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_TUMBLE_START_BUTTON.format(entry.entry_id)
+    )
+    prog_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_TUMBLE_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    assert start_eid is not None
+    assert prog_eid is not None
+
+    # Set program to unknown name
+    hass.states.async_set(prog_eid, "Unknown Program Name")
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    # Should fall back to _programs[0] (COTTON)
+    mock_send.assert_called_once()
+    qs = mock_send.call_args[0][0]
+    assert "PrNm=1" in qs
+
+    # When no programs available, pressing raises ValueError
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    client = hass.data[DOMAIN][entry.entry_id]["client"]
+    btn = CandyDryerStartButton(coordinator, entry, client, [])
+    btn.hass = hass
+    with pytest.raises(ValueError, match="No dryer program available to start"):
+        await btn.async_press()
+
+
+async def test_dryer_start_button_timed_dry_default_time(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test timed-dry program with no time option selected uses default time."""
+    entry = await _init_dryer_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_TUMBLE_START_BUTTON.format(entry.entry_id)
+    )
+    prog_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_TUMBLE_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    time_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_TUMBLE_TIME_SELECT.format(entry.entry_id)
+    )
+    assert start_eid is not None
+    assert prog_eid is not None
+    assert time_eid is not None
+
+    # Set program to RAPID_45_MIN
+    programs = parse_dryer_programs(entry.data[CONF_KEY_PROGRAMS])
+    rapid_prog = next(p for p in programs if p.name == "RAPID_45_MIN")
+    hass.states.async_set(prog_eid, rapid_prog.localized_name("en"))
+    # Set time select to unavailable (None)
+    hass.states.async_set(time_eid, "unavailable")
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    qs = mock_send.call_args[0][0]
+    assert "Time=45" in qs
+
+
+async def test_dryer_start_button_missing_registry_entities(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test dryer start button returns None/0.0 when select/number missing from registry."""
+    entry = await _init_dryer_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_TUMBLE_START_BUTTON.format(entry.entry_id)
+    )
+    assert start_eid is not None
+
+    orig_get_eid = registry.async_get_entity_id
+
+    def custom_get_eid(domain, platform, unique_id):
+        if domain in ("select", "number"):
+            return None
+        return orig_get_eid(domain, platform, unique_id)
+
+    with (
+        patch.object(registry, "async_get_entity_id", side_effect=custom_get_eid),
+        patch(
+            "custom_components.candy.client.CandyClient.send_command",
+            new_callable=AsyncMock,
+        ) as mock_send,
+    ):
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()

@@ -1,8 +1,18 @@
 """Tests for tumble dryer binary sensors."""
 
+from unittest.mock import MagicMock
+
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import load_fixture
+from pytest_homeassistant_custom_component.common import MockConfigEntry, load_fixture
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
+
+from custom_components.candy.binary_sensor import (
+    CandyTumbleCleanFilterBinarySensor,
+    CandyTumbleDoorBinarySensor,
+    CandyTumbleRemoteControlBinarySensor,
+    CandyTumbleWaterTankBinarySensor,
+)
+from custom_components.candy.const import DOMAIN
 
 from .common import init_integration
 
@@ -63,3 +73,20 @@ async def test_tumble_dryer_binary_sensors_problem_state(
     tank_state = hass.states.get("binary_sensor.tumble_dryer_water_tank_full")
     assert tank_state
     assert tank_state.state == "on"
+
+
+async def test_tumble_dryer_binary_sensors_null_coordinator_data() -> None:
+    """Test tumble dryer binary sensors return None when coordinator data is None."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    config_entry = MockConfigEntry(domain=DOMAIN, entry_id="test_dryer_entry", data={})
+
+    sensors = [
+        CandyTumbleRemoteControlBinarySensor(coordinator, config_entry),
+        CandyTumbleDoorBinarySensor(coordinator, config_entry),
+        CandyTumbleCleanFilterBinarySensor(coordinator, config_entry),
+        CandyTumbleWaterTankBinarySensor(coordinator, config_entry),
+    ]
+
+    for sensor in sensors:
+        assert sensor.is_on is None

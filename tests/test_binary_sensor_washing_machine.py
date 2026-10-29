@@ -1,10 +1,18 @@
 import json
+from unittest.mock import MagicMock
 
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import load_fixture
+from pytest_homeassistant_custom_component.common import MockConfigEntry, load_fixture
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.candy.const import CONF_KEY_INTERFACE_TYPE
+from custom_components.candy.binary_sensor import (
+    CandyWashDetergentEmptyBinarySensor,
+    CandyWashDetergentReserveBinarySensor,
+    CandyWashRemoteControlBinarySensor,
+    CandyWashSoftenerEmptyBinarySensor,
+    CandyWashSoftenerReserveBinarySensor,
+)
+from custom_components.candy.const import CONF_KEY_INTERFACE_TYPE, DOMAIN
 
 from .common import init_integration
 
@@ -85,3 +93,21 @@ async def test_autodose_binary_sensors_not_created_when_not_supported(
 
     assert hass.states.get("binary_sensor.washing_machine_detergent_empty") is None
     assert hass.states.get("binary_sensor.washing_machine_softener_empty") is None
+
+
+async def test_washing_machine_binary_sensors_null_coordinator_data() -> None:
+    """Test washing machine binary sensors return None when coordinator data is None."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    config_entry = MockConfigEntry(domain=DOMAIN, entry_id="test_wm_entry", data={})
+
+    sensors = [
+        CandyWashRemoteControlBinarySensor(coordinator, config_entry),
+        CandyWashDetergentEmptyBinarySensor(coordinator, config_entry),
+        CandyWashSoftenerEmptyBinarySensor(coordinator, config_entry),
+        CandyWashDetergentReserveBinarySensor(coordinator, config_entry),
+        CandyWashSoftenerReserveBinarySensor(coordinator, config_entry),
+    ]
+
+    for sensor in sensors:
+        assert sensor.is_on is None

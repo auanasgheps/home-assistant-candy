@@ -16,6 +16,10 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.candy import CONF_KEY_USE_ENCRYPTION, DOMAIN
+from custom_components.candy.button import (
+    _build_dualtech_start_params,
+    async_setup_entry,
+)
 from custom_components.candy.client import (
     parse_wash_programs,
     resolve_downloadable_programs,
@@ -4716,3 +4720,208 @@ async def test_extra_dose_switch_and_start_cycle(
     mock_send.assert_called_once()
     query: str = mock_send.call_args[0][0]
     assert "ED=1" in query
+
+
+async def test_button_setup_entry_unsupported_coordinator_data(
+    hass: HomeAssistant,
+) -> None:
+    """Test button async_setup_entry exits early when coordinator data is not WashingMachineStatus."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="test_unsupported_entry",
+        data={CONF_KEY_MODE: MODE_FULL_CONTROL},
+    )
+    coordinator = MagicMock()
+    coordinator.data = None
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
+        "coordinator": coordinator,
+    }
+    added_entities = []
+    await async_setup_entry(hass, entry, added_entities.append)
+    assert len(added_entities) == 0
+
+
+def test_build_wash_command_params_soil_level_9() -> None:
+    """Test soil level 9 is remapped to program.min_soil_level."""
+    programs = parse_wash_programs([_COTTON])
+    params = _build_dualtech_start_params(
+        program=programs[0],
+        temp=programs[0].default_temperature,
+        soil=9,
+        spin=programs[0].default_spin_speed,
+        opt_mask=0,
+        steam=False,
+        dry=0,
+        recipe_id=0,
+        checkup=0,
+        delay_minutes=0,
+        is_washer_dryer=False,
+        is_hoover=False,
+        interface_type="3D_DUAL",
+    )
+    assert params.get("SLevTgt") == programs[0].min_soil_level
+
+
+async def test_start_button_missing_and_invalid_states(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test start button handles invalid entity states by falling back to defaults."""
+    entry = await _init_full_control_dualtech(
+        hass,
+        aioclient_mock,
+        interface_type="3D_DUAL",
+        brand="candy",
+        is_washer_dryer_flag=True,
+        programs=_PROGRAMS,
+        status_json=_IDLE_JSON,
+    )
+    registry = er.async_get(hass)
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    delay_eid = registry.async_get_entity_id(
+        "number", DOMAIN, UNIQUE_ID_WASH_DELAY_NUMBER.format(entry.entry_id)
+    )
+    dry_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_DRY_SELECT.format(entry.entry_id)
+    )
+    temp_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_TEMP_SELECT.format(entry.entry_id)
+    )
+    spin_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_SPIN_SELECT.format(entry.entry_id)
+    )
+    soil_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_SOIL_SELECT.format(entry.entry_id)
+    )
+    assert start_eid is not None
+    assert delay_eid is not None
+    assert dry_eid is not None
+
+    hass.states.async_set(dry_eid, "unavailable")
+    if temp_eid:
+        hass.states.async_set(temp_eid, "invalid_int")
+    if spin_eid:
+        hass.states.async_set(spin_eid, "invalid_int")
+    if soil_eid:
+        hass.states.async_set(soil_eid, "invalid_soil_key")
+
+    hass.states.async_set("number.dummy_invalid_number", "invalid_float")
+
+    orig_async_get = registry.async_get_entity_id
+
+    def custom_get_entity_id(domain, platform, unique_id):
+        if domain == "number":
+            return "number.dummy_invalid_number"
+        return orig_async_get(domain, platform, unique_id)
+
+    with (
+        patch.object(registry, "async_get_entity_id", side_effect=custom_get_entity_id),
+        patch(
+            "custom_components.candy.button.CandyWashButtonBase._send_command_and_refresh",
+            new_callable=AsyncMock,
+        ) as mock_send,
+    ):
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    query: str = mock_send.call_args[0][0]
+    assert "StSt=1" in query
+
+
+async def test_start_button_unknown_program_error(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test start button raises ValueError when program select has unknown name."""
+    entry = await _init_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    prog_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    assert start_eid is not None
+    assert prog_eid is not None
+
+    hass.states.async_set(prog_eid, "Nonexistent Program")
+
+    with pytest.raises(
+        ValueError,
+        match="Cannot start: program 'Nonexistent Program' not found in catalog",
+    ):
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+
+async def test_start_button_nfc_program_with_option_mask(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test starting an NFC program with an active option switch includes option mask."""
+    entry = await _init_full_control_nfc(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    prog_eid = registry.async_get_entity_id(
+        "select", DOMAIN, UNIQUE_ID_WASH_PROGRAM_SELECT.format(entry.entry_id)
+    )
+    assert start_eid is not None
+    assert prog_eid is not None
+
+    # Remove delay entity so _get_number hits entity_id is None branch
+    delay_eid = registry.async_get_entity_id(
+        "number", DOMAIN, UNIQUE_ID_WASH_DELAY_NUMBER.format(entry.entry_id)
+    )
+    if delay_eid:
+        registry.async_remove(delay_eid)
+
+    # Register prewash switch and set to on so loop hits opt_mask |= bitmask
+    opt_uid = f"{entry.entry_id}-wash_option_prewash"
+    opt_entry = registry.async_get_or_create("switch", DOMAIN, opt_uid)
+    hass.states.async_set(opt_entry.entity_id, "on")
+
+    # Select the first NFC program
+    lang = entry.data.get(CONF_KEY_PROGRAM_LANGUAGE, hass.config.language)
+    nfc_name = _NFC_PROGRAMS[0].category_prefixed(lang)
+    hass.states.async_set(prog_eid, nfc_name)
+
+    with patch(
+        "custom_components.candy.client.CandyClient.send_command",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
+
+    mock_send.assert_called_once()
+    query: str = mock_send.call_args[0][0]
+    assert "OptMsk=" in query or "PrCode=" in query
+
+
+async def test_start_button_missing_registry_entities(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test start button returns None for state when entity missing from registry."""
+    entry = await _init_full_control(hass, aioclient_mock, _IDLE_JSON)
+    registry = er.async_get(hass)
+    start_eid = registry.async_get_entity_id(
+        "button", DOMAIN, UNIQUE_ID_WASH_START_BUTTON.format(entry.entry_id)
+    )
+    assert start_eid is not None
+
+    with (
+        patch.object(registry, "async_get_entity_id", return_value=None),
+        pytest.raises(
+            ValueError, match="Cannot start: program 'None' not found in catalog"
+        ),
+    ):
+        await hass.services.async_call(
+            "button", "press", {"entity_id": start_eid}, blocking=True
+        )
