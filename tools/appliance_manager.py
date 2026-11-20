@@ -8,6 +8,7 @@ Confirmed against decompiled APK bytecode:
 - ConnectionManager.java (configureAppliance, createNewApplianceWithSerial)
 - CandySecurityUtility.java (calculateEncriptionKeyForConf, xorEncrypt/Decrypt)
 - EnrollApplianceBLECommand.java (BLE GATT enrollment framing)
+- BLEManager.java (GATT service, MAC read 0xC300, config write 0xC302)
 - NFCUtility.java (CRC16 ISO 13239 implementation)
 - APIAccessor.java (deleteAppliance, cloud endpoints)
 """
@@ -15,9 +16,11 @@ Confirmed against decompiled APK bytecode:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import base64
 import getpass
 import hashlib
+import http.client
 import json
 import logging
 from pathlib import Path
@@ -41,11 +44,14 @@ DEFAULT_USER_AGENT: str = "hOn/3 CFNetwork/1240.0.4 Darwin/20.6.0"
 DEFAULT_SOFTAP_IP: str = "192.168.0.1"
 DEFAULT_SOFTAP_PORT: int = 80
 
-# BLE GATT UUIDs (Confirmed in EnrollApplianceBLECommand / CandyEnrollmentService)
+# BLE GATT UUIDs (Confirmed in EnrollApplianceBLECommand / BLEManager.java)
 BLE_SERVICE_UUID: str = "0000a002-0000-1000-8000-00805f9b34fb"
 BLE_CHAR_READ_MAC: str = "0000c300-0000-1000-8000-00805f9b34fb"
 BLE_CHAR_NOTIFY_STATUS: str = "0000c301-0000-1000-8000-00805f9b34fb"
 BLE_CHAR_WRITE_CONFIG: str = "0000c302-0000-1000-8000-00805f9b34fb"
+
+# BLE Manufacturer IDs (Espressif 0x02E5, Candy 0x0545, Hoover 0xCA00)
+BLE_MANUFACTURER_IDS: tuple[int, int, int] = (741, 1349, 51712)
 
 # BLE Packet Magic Byte and Action Code
 BLE_MAGIC_BYTE: int = 0xA5
@@ -212,6 +218,33 @@ def build_ble_enrollment_packet(
     packet.append(crc & 0xFF)
 
     return bytes(packet)
+
+
+def extract_json_from_response(raw_text: str) -> dict[str, Any]:
+    """Isolate and parse JSON object from raw or decrypted text, handling nulls and padding."""
+    clean_text = raw_text.strip().strip("\x00").strip()
+    start = clean_text.find("{")
+    end = clean_text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        candidate = clean_text[start : end + 1]
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+    try:
+        parsed = json.loads(clean_text)
+        if isinstance(parsed, dict):
+            return parsed
+        raise SoftAPConfigError(
+            f"Expected JSON object in response, got: {type(parsed).__name__}"
+        )
+    except Exception as exc:
+        raise SoftAPConfigError(
+            f"Failed to parse JSON response '{clean_text[:120]}': {exc}"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -386,6 +419,7 @@ def provision_softap(
     port: int,
     softap_ssid: str,
     is_bianca_axi: bool,
+    use_encryption: bool,
     target_ssid: str,
     target_password: str,
     security_mode: int,
@@ -396,33 +430,44 @@ def provision_softap(
 
     Confirmed via ConnectionManager.configureAppliance / configureApplianceEncrypted.
     """
-    # 1. Clean SSIDs and derive temporary SoftAP XOR key
-    cleaned_softap_ssid = clean_ssid(softap_ssid, not is_bianca_axi)
-    if is_bianca_axi:
-        softap_xor_key = derive_softap_key_for_bianca_axi(cleaned_softap_ssid)
-    else:
-        softap_xor_key = derive_softap_key_for_standard(cleaned_softap_ssid)
-
-    # 2. Format configuration query string in exact key order
     params_str = (
         f"NTW_MODE={security_mode}&SSID={target_ssid}&PASSWORD={target_password}&ENCRYPT_KEY={encryption_key}"
     )
 
-    # 3. Encrypt payload with temporary SoftAP key
-    encrypted_data = xor_encrypt_hex(params_str, softap_xor_key)
-    request_url = (
-        f"http://{softap_ip}:{port}/http-config.json?encrypted=1&data={encrypted_data}"
-    )
+    if use_encryption:
+        cleaned_softap_ssid = clean_ssid(softap_ssid, not is_bianca_axi)
+        if is_bianca_axi:
+            softap_xor_key = derive_softap_key_for_bianca_axi(cleaned_softap_ssid)
+        else:
+            softap_xor_key = derive_softap_key_for_standard(cleaned_softap_ssid)
 
-    # 4. Dispatch HTTP GET request
+        encrypted_data = xor_encrypt_hex(params_str, softap_xor_key)
+        request_url = (
+            f"http://{softap_ip}:{port}/http-config.json?encrypted=1&data={encrypted_data}"
+        )
+    else:
+        request_url = f"http://{softap_ip}:{port}/http-config.json?encrypted=0&{params_str}"
+
     req = urllib.request.Request(
         request_url,
         headers={"User-Agent": DEFAULT_USER_AGENT},
         method="GET",
     )
+
     try:
         with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
             raw_response = resp.read().decode("utf-8", errors="replace").strip()
+    except (http.client.RemoteDisconnected, ConnectionResetError) as exc:
+        LOGGER.warning(
+            "Appliance closed socket immediately (%s). "
+            "This indicates the Wi-Fi module accepted configuration and is restarting in Station Mode.",
+            exc,
+        )
+        return {
+            "response": "SUCCESS",
+            "rebooted": True,
+            "note": "Appliance terminated connection to associate with home Wi-Fi",
+        }
     except urllib.error.HTTPError as err:
         err_body = err.read().decode("utf-8", errors="replace")
         raise SoftAPConfigError(
@@ -431,21 +476,16 @@ def provision_softap(
     except Exception as exc:
         raise SoftAPConfigError(f"SoftAP network communication error: {exc}") from exc
 
-    # 5. Decrypt response using the NEWLY PROVISIONED encryption key
-    # (Appliance immediately activates the new key upon receiving http-config.json)
-    try:
-        decrypted_response = xor_decrypt_hex(raw_response, encryption_key)
-        parsed_json = json.loads(decrypted_response)
-    except Exception as exc:
-        # Fall back to checking if response was returned in plaintext
+    # Parse response (encrypted or plaintext)
+    if use_encryption:
         try:
-            parsed_json = json.loads(raw_response)
+            decrypted_response = xor_decrypt_hex(raw_response, encryption_key)
+            parsed_json = extract_json_from_response(decrypted_response)
         except Exception:
-            raise SoftAPConfigError(
-                f"Failed to decrypt/parse SoftAP response '{raw_response}': {exc}"
-            ) from exc
+            parsed_json = extract_json_from_response(raw_response)
+    else:
+        parsed_json = extract_json_from_response(raw_response)
 
-    # 6. Validate response
     status_response = parsed_json.get("response", "")
     if str(status_response).lower() != "success":
         raise SoftAPConfigError(
@@ -460,6 +500,32 @@ def provision_softap(
 # ---------------------------------------------------------------------------
 
 
+async def scan_for_candy_ble_devices(timeout_seconds: float) -> list[tuple[str, str]]:
+    """Scan for nearby Candy/Hoover appliances in BLE pairing mode."""
+    try:
+        import bleak
+    except ImportError as err:
+        raise BLEConfigError(
+            "The 'bleak' package is required for Bluetooth Low Energy scanning. "
+            "Install it via: pip install bleak"
+        ) from err
+
+    devices = await bleak.BleakScanner.discover(timeout=timeout_seconds, return_adv=True)
+    results: list[tuple[str, str]] = []
+    for dev, adv in devices.values():
+        name = adv.local_name or dev.name or ""
+        service_uuids = [str(u).lower() for u in adv.service_uuids]
+        is_candy = (
+            BLE_SERVICE_UUID.lower() in service_uuids
+            or name.lower().startswith(("candy", "hoover"))
+            or any(mfg in adv.manufacturer_data for mfg in BLE_MANUFACTURER_IDS)
+        )
+        if is_candy:
+            results.append((dev.address, name or "Candy Appliance"))
+
+    return results
+
+
 async def provision_ble(
     device_address: str,
     target_ssid: str,
@@ -467,10 +533,10 @@ async def provision_ble(
     security_mode: int,
     encryption_key: str,
     timeout_seconds: float,
-) -> bool:
+) -> dict[str, Any]:
     """Push target Wi-Fi credentials to a BLE-enabled appliance (RapidÓ, Bianca, AXI).
 
-    Confirmed via EnrollApplianceBLECommand.java and wire_protocol.md.
+    Confirmed via EnrollApplianceBLECommand.java, BLEManager.java, and wire_protocol.md.
     """
     try:
         import bleak
@@ -489,11 +555,27 @@ async def provision_ble(
         if not client.is_connected:
             raise BLEConfigError(f"Failed to connect to BLE device at {device_address}")
 
-        LOGGER.info("Connected. Writing Wi-Fi credentials to characteristic %s...", BLE_CHAR_WRITE_CONFIG)
+        # Read MAC address from 0xC300 if characteristic exists
+        mac_address_str = ""
+        try:
+            raw_mac = await client.read_gatt_char(BLE_CHAR_READ_MAC)
+            if len(raw_mac) == 6:
+                mac_address_str = ":".join(f"{b:02x}" for b in raw_mac)
+        except Exception as exc:
+            LOGGER.debug("Could not read MAC address via BLE 0xC300: %s", exc)
+
+        LOGGER.info(
+            "Connected. Writing Wi-Fi credentials to characteristic %s...",
+            BLE_CHAR_WRITE_CONFIG,
+        )
         await client.write_gatt_char(BLE_CHAR_WRITE_CONFIG, packet, response=True)
         LOGGER.info("BLE configuration packet written successfully.")
 
-    return True
+    return {
+        "response": "SUCCESS",
+        "device_address": device_address,
+        "mac_address": mac_address_str,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -561,13 +643,17 @@ def handle_cloud_remove(args: argparse.Namespace) -> None:
 
 def handle_provision_softap(args: argparse.Namespace) -> None:
     """Handle 'provision-softap' CLI command."""
+    target_password = args.target_password or getpass.getpass("Target Wi-Fi Password: ").strip()
     key = args.key or generate_random_key(16)
+    use_encryption = not args.unencrypted
+
     print("=" * 60)
     print("Candy Simply-Fi SoftAP Wi-Fi Provisioning")
     print("=" * 60)
     print(f"SoftAP Gateway IP:   {args.softap_ip}:{args.port}")
     print(f"SoftAP SSID:         {args.softap_ssid}")
     print(f"Target Wi-Fi SSID:   {args.target_ssid}")
+    print(f"Encrypted Mode:      {'Yes' if use_encryption else 'No (Plaintext)'}")
     print(f"Security Mode:       {args.security}")
     print(f"New Encryption Key:  {key}")
     print("=" * 60)
@@ -578,8 +664,9 @@ def handle_provision_softap(args: argparse.Namespace) -> None:
         args.port,
         args.softap_ssid,
         args.bianca_axi,
+        use_encryption,
         args.target_ssid,
-        args.target_password,
+        target_password,
         args.security,
         key,
         args.timeout,
@@ -589,6 +676,56 @@ def handle_provision_softap(args: argparse.Namespace) -> None:
     print("\nNext steps:")
     print("1. Reconnect your computer/phone to your home Wi-Fi network.")
     print(f"2. Add or update the appliance in Home Assistant using key: {key}")
+
+
+def handle_provision_ble(args: argparse.Namespace) -> None:
+    """Handle 'provision-ble' CLI command."""
+    target_password = args.target_password or getpass.getpass("Target Wi-Fi Password: ").strip()
+    key = args.key or generate_random_key(16)
+
+    device_address = args.device_address
+    if not device_address:
+        print("No device address specified. Scanning for nearby Candy/Hoover appliances...")
+        discovered = asyncio.run(scan_for_candy_ble_devices(args.timeout))
+        if not discovered:
+            print("No Candy/Hoover BLE appliances found in pairing mode.", file=sys.stderr)
+            return
+
+        print(f"\nFound {len(discovered)} appliance(s):")
+        for idx, (addr, name) in enumerate(discovered, start=1):
+            print(f"  [{idx}] {name} ({addr})")
+
+        choice = input("Select appliance number [1]: ").strip() or "1"
+        try:
+            device_address = discovered[int(choice) - 1][0]
+        except (ValueError, IndexError):
+            print("Invalid selection, aborting.", file=sys.stderr)
+            return
+
+    print("=" * 60)
+    print("Candy Simply-Fi Bluetooth Low Energy (BLE) Provisioning")
+    print("=" * 60)
+    print(f"Target BLE Device:   {device_address}")
+    print(f"Target Wi-Fi SSID:   {args.target_ssid}")
+    print(f"Security Mode:       {args.security}")
+    print(f"New Encryption Key:  {key}")
+    print("=" * 60)
+
+    print("Connecting and transmitting configuration frame...")
+    result = asyncio.run(
+        provision_ble(
+            device_address,
+            args.target_ssid,
+            target_password,
+            args.security,
+            key,
+            args.timeout,
+        )
+    )
+    print("\nSUCCESS! Appliance configured over BLE.")
+    if result.get("mac_address"):
+        print(f"Recovered Wi-Fi MAC Address: {result['mac_address']}")
+    print(f"Home Assistant Setup Key:    {key}")
 
 
 def handle_wizard(args: argparse.Namespace) -> None:
@@ -614,9 +751,12 @@ def handle_wizard(args: argparse.Namespace) -> None:
     target_pass = getpass.getpass("Enter your home Wi-Fi password: ").strip()
     key = generate_random_key(16)
 
+    mac_from_ble = ""
     if choice == "1":
         softap_ssid = input("Enter the appliance SoftAP SSID (e.g. Candy_Lavatrice_...): ").strip()
         is_bianca = input("Is this a Bianca or AXI model? [y/N]: ").strip().lower() == "y"
+        unencrypted = input("Use unencrypted configuration? (Rare, only older models) [y/N]: ").strip().lower() == "y"
+
         print(f"\nConnecting via SoftAP ({DEFAULT_SOFTAP_IP})...")
         print("Ensure this computer is currently connected to the appliance's Wi-Fi network!")
         input("Press Enter when connected to the appliance SoftAP...")
@@ -627,6 +767,7 @@ def handle_wizard(args: argparse.Namespace) -> None:
                 DEFAULT_SOFTAP_PORT,
                 softap_ssid,
                 is_bianca,
+                not unencrypted,
                 target_ssid,
                 target_pass,
                 SECURITY_MODE_WPA_WPA2,
@@ -639,10 +780,27 @@ def handle_wizard(args: argparse.Namespace) -> None:
             print(f"\nProvisioning failed: {exc}", file=sys.stderr)
             return
     elif choice == "2":
-        dev_addr = input("Enter BLE MAC Address or UUID: ").strip()
-        import asyncio
+        print("\nScanning for nearby Candy/Hoover appliances over BLE...")
         try:
-            asyncio.run(
+            discovered = asyncio.run(scan_for_candy_ble_devices(args.timeout))
+        except Exception as exc:
+            print(f"BLE Scan error: {exc}", file=sys.stderr)
+            discovered = []
+
+        if discovered:
+            print(f"Discovered {len(discovered)} appliance(s):")
+            for idx, (addr, name) in enumerate(discovered, start=1):
+                print(f"  [{idx}] {name} ({addr})")
+            sel = input("Select appliance number [1] (or type address): ").strip() or "1"
+            if sel.isdigit() and 1 <= int(sel) <= len(discovered):
+                dev_addr = discovered[int(sel) - 1][0]
+            else:
+                dev_addr = sel
+        else:
+            dev_addr = input("No appliances found in scan. Enter BLE MAC/UUID manually: ").strip()
+
+        try:
+            ble_result = asyncio.run(
                 provision_ble(
                     dev_addr,
                     target_ssid,
@@ -653,6 +811,9 @@ def handle_wizard(args: argparse.Namespace) -> None:
                 )
             )
             print("\nBLE PROVISIONING SUCCESSFUL!")
+            mac_from_ble = ble_result.get("mac_address", "")
+            if mac_from_ble:
+                print(f"Appliance Wi-Fi MAC Address: {mac_from_ble}")
             print(f"Appliance configured with XOR Key: {key}")
         except Exception as exc:
             print(f"\nBLE Provisioning failed: {exc}", file=sys.stderr)
@@ -667,7 +828,7 @@ def handle_wizard(args: argparse.Namespace) -> None:
         email = input("Simply-Fi Email: ").strip()
         passwd = getpass.getpass("Simply-Fi Password: ").strip()
         serial = input("Appliance 16-digit Serial Number: ").strip()
-        mac = input("Appliance Wi-Fi MAC Address: ").strip()
+        mac = mac_from_ble or input("Appliance Wi-Fi MAC Address: ").strip()
         try:
             tokens = cloud_authenticate(email, passwd, args.timeout)
             cloud_add_appliance(
@@ -709,14 +870,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     # cloud-list
     p_clist = subparsers.add_parser("cloud-list", help="List appliances on Simply-Fi cloud account")
-    p_clist.add_argument("--email", help="Account email")
-    p_clist.add_argument("--password", help="Account password")
+    p_clist.add_argument("--email", help="Account email (prompted if omitted)")
+    p_clist.add_argument("--password", help="Account password (prompted if omitted)")
     p_clist.set_defaults(func=handle_cloud_list)
 
     # cloud-add
     p_cadd = subparsers.add_parser("cloud-add", help="Register an appliance on Simply-Fi cloud")
-    p_cadd.add_argument("--email", help="Account email")
-    p_cadd.add_argument("--password", help="Account password")
+    p_cadd.add_argument("--email", help="Account email (prompted if omitted)")
+    p_cadd.add_argument("--password", help="Account password (prompted if omitted)")
     p_cadd.add_argument("--serial", required=True, help="16-digit serial number")
     p_cadd.add_argument("--mac", required=True, help="Wi-Fi MAC address")
     p_cadd.add_argument("--key", required=True, help="16-character encryption key")
@@ -727,8 +888,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     # cloud-remove
     p_crem = subparsers.add_parser("cloud-remove", help="Remove an appliance from Simply-Fi cloud")
-    p_crem.add_argument("--email", help="Account email")
-    p_crem.add_argument("--password", help="Account password")
+    p_crem.add_argument("--email", help="Account email (prompted if omitted)")
+    p_crem.add_argument("--password", help="Account password (prompted if omitted)")
     p_crem.add_argument("--id", required=True, help="Appliance ID in cloud catalog")
     p_crem.set_defaults(func=handle_cloud_remove)
 
@@ -738,11 +899,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_softap.add_argument("--port", type=int, default=DEFAULT_SOFTAP_PORT, help=f"SoftAP port (default: {DEFAULT_SOFTAP_PORT})")
     p_softap.add_argument("--softap-ssid", required=True, help="Appliance SoftAP SSID (e.g. Candy_Lavatrice_...)")
     p_softap.add_argument("--target-ssid", required=True, help="Target home Wi-Fi SSID")
-    p_softap.add_argument("--target-password", required=True, help="Target home Wi-Fi password")
+    p_softap.add_argument("--target-password", help="Target home Wi-Fi password (prompted if omitted)")
     p_softap.add_argument("--security", type=int, default=SECURITY_MODE_WPA_WPA2, help="Security mode (default: 3)")
     p_softap.add_argument("--key", help="16-character encryption key (auto-generated if omitted)")
     p_softap.add_argument("--bianca-axi", action="store_true", help="Set if appliance is Bianca or AXI model")
+    p_softap.add_argument("--unencrypted", action="store_true", help="Send configuration in plaintext without XOR encryption")
     p_softap.set_defaults(func=handle_provision_softap)
+
+    # provision-ble
+    p_ble = subparsers.add_parser("provision-ble", help="Push Wi-Fi credentials via Bluetooth Low Energy")
+    p_ble.add_argument("--device-address", help="BLE MAC address or UUID (auto-discovered if omitted)")
+    p_ble.add_argument("--target-ssid", required=True, help="Target home Wi-Fi SSID")
+    p_ble.add_argument("--target-password", help="Target home Wi-Fi password (prompted if omitted)")
+    p_ble.add_argument("--security", type=int, default=SECURITY_MODE_WPA_WPA2, help="Security mode (default: 3)")
+    p_ble.add_argument("--key", help="16-character encryption key (auto-generated if omitted)")
+    p_ble.set_defaults(func=handle_provision_ble)
 
     # wizard
     p_wiz = subparsers.add_parser("wizard", help="Interactive step-by-step guided provisioning wizard")

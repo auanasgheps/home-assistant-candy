@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -112,6 +113,13 @@ def test_build_ble_enrollment_packet() -> None:
     assert packet_crc == computed_crc
 
 
+def test_extract_json_from_response_with_padding() -> None:
+    """Test extracting JSON from response with trailing null bytes and extra data."""
+    raw = ' \x00 {"response":"SUCCESS"} \x00\x00\x00extra_garbage'
+    parsed = mgr.extract_json_from_response(raw)
+    assert parsed.get("response") == "SUCCESS"
+
+
 def test_cloud_authenticate_success() -> None:
     """Test cloud authentication via CIAM PKCE flow."""
     mock_auth_resp = {"session_id": "test_session_123"}
@@ -177,7 +185,6 @@ def test_cloud_add_appliance() -> None:
         )
         assert result["appliance"]["id"] == 201
         assert mock_req.call_count == 1
-        # Verify payload contains stripped mac
         call_args = mock_req.call_args[0]
         data_sent = json.loads(call_args[3].decode("utf-8"))
         assert data_sent["appliance"]["mac_address"] == "aabbccddeeff"
@@ -196,14 +203,13 @@ def test_cloud_delete_appliance() -> None:
         assert success is True
 
 
-def test_provision_softap_success() -> None:
+def test_provision_softap_encrypted_success() -> None:
     """Test SoftAP provisioning success path with encrypted roundtrip."""
     new_key = "NEWKEY1234567890"
     softap_ssid = "Candy_Lavatrice_4455"
     target_ssid = "MyHomeWiFi"
     target_pass = "MySecret123"
 
-    # Simulate appliance response: {"response": "SUCCESS"} encrypted with new_key
     response_json = '{"response":"SUCCESS"}'
     encrypted_resp_hex = mgr.xor_encrypt_hex(response_json, new_key)
 
@@ -217,6 +223,7 @@ def test_provision_softap_success() -> None:
             80,
             softap_ssid,
             False,
+            True,
             target_ssid,
             target_pass,
             3,
@@ -225,6 +232,53 @@ def test_provision_softap_success() -> None:
         )
         assert result.get("response") == "SUCCESS"
         assert mock_url.call_count == 1
+
+
+def test_provision_softap_unencrypted_success() -> None:
+    """Test SoftAP provisioning in plaintext unencrypted mode."""
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = b'{"response":"SUCCESS"}'
+
+    with patch("urllib.request.urlopen") as mock_url:
+        mock_url.return_value.__enter__.return_value = mock_resp
+        result = mgr.provision_softap(
+            "192.168.0.1",
+            80,
+            "Candy_Lavatrice_4455",
+            False,
+            False,
+            "MyHomeWiFi",
+            "MySecret123",
+            3,
+            "KEY1234567890123",
+            5.0,
+        )
+        assert result.get("response") == "SUCCESS"
+        # Verify query string had encrypted=0
+        req = mock_url.call_args[0][0]
+        assert "encrypted=0" in req.full_url
+
+
+def test_provision_softap_reboot_disconnect_handled() -> None:
+    """Test SoftAP socket disconnect on firmware reboot is handled gracefully."""
+    with patch(
+        "urllib.request.urlopen",
+        side_effect=http.client.RemoteDisconnected("Remote end closed connection"),
+    ):
+        result = mgr.provision_softap(
+            "192.168.0.1",
+            80,
+            "Candy_Lavatrice_4455",
+            False,
+            True,
+            "MyHomeWiFi",
+            "MySecret123",
+            3,
+            "KEY1234567890123",
+            5.0,
+        )
+        assert result.get("response") == "SUCCESS"
+        assert result.get("rebooted") is True
 
 
 def test_provision_softap_rejected_raises_error() -> None:
@@ -246,9 +300,105 @@ def test_provision_softap_rejected_raises_error() -> None:
             80,
             "Candy_Lavatrice_4455",
             False,
+            True,
             "MyHomeWiFi",
             "MySecret123",
             3,
             new_key,
             5.0,
         )
+
+
+@pytest.mark.asyncio
+async def test_provision_ble_success() -> None:
+    """Test BLE provisioning with MAC reading and packet dispatch."""
+    mock_client = AsyncMock()
+    mock_client.is_connected = True
+    mock_client.read_gatt_char.return_value = bytes(
+        [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]
+    )
+
+    mock_bleak = MagicMock()
+    mock_bleak.BleakClient.return_value.__aenter__.return_value = mock_client
+
+    with patch.dict(sys.modules, {"bleak": mock_bleak}):
+        result = await mgr.provision_ble(
+            "11:22:33:44:55:66",
+            "MyHomeWiFi",
+            "SecretPass",
+            3,
+            "KEY1234567890123",
+            10.0,
+        )
+        assert result.get("response") == "SUCCESS"
+        assert result.get("mac_address") == "aa:bb:cc:dd:ee:ff"
+        assert mock_client.write_gatt_char.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_scan_for_candy_ble_devices() -> None:
+    """Test BLE scanning filtering for Candy/Hoover appliances."""
+    dev1 = MagicMock(address="11:22:33:44:55:66", name="Candy_Washer")
+    adv1 = MagicMock(
+        local_name="Candy_Washer",
+        service_uuids=[mgr.BLE_SERVICE_UUID],
+        manufacturer_data={741: b"\x01"},
+    )
+
+    dev2 = MagicMock(address="AA:BB:CC:DD:EE:FF", name="OtherDevice")
+    adv2 = MagicMock(
+        local_name="OtherDevice",
+        service_uuids=["0000180d-0000-1000-8000-00805f9b34fb"],
+        manufacturer_data={},
+    )
+
+    mock_bleak = MagicMock()
+    mock_bleak.BleakScanner.discover = AsyncMock(
+        return_value={
+            "dev1": (dev1, adv1),
+            "dev2": (dev2, adv2),
+        }
+    )
+
+    with patch.dict(sys.modules, {"bleak": mock_bleak}):
+        found = await mgr.scan_for_candy_ble_devices(5.0)
+        assert len(found) == 1
+        assert found[0][0] == "11:22:33:44:55:66"
+        assert "Candy" in found[0][1]
+
+
+def test_parser_has_provision_ble_command() -> None:
+    """Test build_parser includes provision-ble subcommand and flags."""
+    parser = mgr.build_parser()
+    args = parser.parse_args(
+        [
+            "provision-ble",
+            "--device-address",
+            "AA:BB:CC:DD:EE:FF",
+            "--target-ssid",
+            "HomeWiFi",
+            "--target-password",
+            "SecretPass",
+        ]
+    )
+    assert args.command == "provision-ble"
+    assert args.device_address == "AA:BB:CC:DD:EE:FF"
+    assert args.target_ssid == "HomeWiFi"
+    assert args.target_password == "SecretPass"
+
+
+def test_parser_softap_unencrypted_flag() -> None:
+    """Test build_parser includes --unencrypted flag for provision-softap."""
+    parser = mgr.build_parser()
+    args = parser.parse_args(
+        [
+            "provision-softap",
+            "--softap-ssid",
+            "Candy_Washer_1234",
+            "--target-ssid",
+            "HomeWiFi",
+            "--unencrypted",
+        ]
+    )
+    assert args.command == "provision-softap"
+    assert args.unencrypted is True
