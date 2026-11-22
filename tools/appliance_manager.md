@@ -98,7 +98,7 @@ python tools/appliance_manager.py provision-ble \
 ---
 
 ### 4.3 `cloud-list`
-Queries your Simply-Fi cloud account via CIAM PKCE authentication and lists all registered appliances with their IDs, MAC addresses, types, and model codes.
+Queries your Simply-Fi cloud account via CIAM PKCE authentication and lists all registered appliances with their IDs, MAC addresses, types, local encryption keys, and model codes.
 
 ```bash
 python tools/appliance_manager.py cloud-list \
@@ -110,7 +110,7 @@ python tools/appliance_manager.py cloud-list \
 ---
 
 ### 4.4 `cloud-add`
-Manually registers or re-links an appliance in your Simply-Fi cloud account so official apps stay synchronized with your local encryption key.
+Manually registers or re-links an appliance in your Simply-Fi cloud account so official apps stay synchronized with your local encryption key. All inputs are strictly validated (serial must be 16 digits, key must be 16 alphanumeric characters, MAC must be 12 hex digits).
 
 ```bash
 python tools/appliance_manager.py cloud-add \
@@ -125,11 +125,12 @@ python tools/appliance_manager.py cloud-add \
 ---
 
 ### 4.5 `cloud-remove`
-Deletes and unlinks an appliance from your Simply-Fi cloud account by its cloud database ID.
+Deletes and unlinks an appliance from your Simply-Fi cloud account by its cloud database ID. Prompts for confirmation by default before performing permanent cloud removal.
 
 ```bash
 python tools/appliance_manager.py cloud-remove \
-  --id "123456"
+  --id "123456" \
+  [--yes]
 ```
 
 ---

@@ -123,10 +123,58 @@ def clean_ssid(ssid_input: str, replace_spaces: bool) -> str:
 
     Confirmed via CandyStringUtility.cleanSSID in decompiled APK.
     """
-    stripped = ssid_input.replace('"', "")
+    stripped = ssid_input.strip().replace('"', "")
     if replace_spaces:
         return stripped.replace(" ", "$")
     return stripped
+
+
+def validate_encryption_key(key: str) -> str:
+    """Validate that the encryption key is exactly 16 alphanumeric characters.
+
+    Confirmed via CandySecurityUtility.calculateEncriptionKey.
+    """
+    cleaned = key.strip()
+    if len(cleaned) != 16 or not cleaned.isalnum():
+        raise ValueError(
+            f"Encryption key must be exactly 16 alphanumeric characters, got: '{cleaned}' ({len(cleaned)} chars)"
+        )
+    return cleaned
+
+
+def validate_serial(serial: str) -> str:
+    """Validate that the appliance serial code is exactly 16 digits.
+
+    Confirmed via ConnectionManager.createNewApplianceWithSerial (sixteen_digits_code).
+    """
+    cleaned = serial.strip().replace("-", "").replace(" ", "")
+    if len(cleaned) != 16 or not cleaned.isdigit():
+        raise ValueError(
+            f"Appliance serial must be exactly 16 numeric digits, got: '{cleaned}' ({len(cleaned)} digits)"
+        )
+    return cleaned
+
+
+def validate_mac(mac: str) -> str:
+    """Validate that the appliance MAC address is a valid 6-byte hex sequence.
+
+    Returns the cleaned 12-character lowercase hex string.
+    """
+    cleaned = mac.strip().replace(":", "").replace("-", "").lower()
+    if len(cleaned) != 12 or not all(c in string.hexdigits for c in cleaned):
+        raise ValueError(
+            f"Appliance MAC address must be 12 hexadecimal characters, got: '{mac}'"
+        )
+    return cleaned
+
+
+def validate_security_mode(mode: int) -> int:
+    """Validate the Wi-Fi security mode is one of the supported values."""
+    if mode not in (SECURITY_MODE_OPEN, SECURITY_MODE_WEP, SECURITY_MODE_WPA_WPA2):
+        raise ValueError(
+            f"Security mode must be 0 (Open), 2 (WEP), or 3 (WPA/WPA2), got: {mode}"
+        )
+    return mode
 
 
 def derive_softap_key_for_bianca_axi(clean_ssid_str: str) -> str:
@@ -272,17 +320,23 @@ def cloud_http_request(
     timeout_seconds: float,
 ) -> Any:
     """Execute HTTP request against cloud APIs with explicit parameters and error handling."""
-    req_headers = {"User-Agent": DEFAULT_USER_AGENT}
+    req_headers = {
+        "User-Agent": DEFAULT_USER_AGENT,
+        "Accept": "application/json",
+    }
     if headers is not None:
         req_headers.update(headers)
 
     req = urllib.request.Request(url, data=data, headers=req_headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
+            body = resp.read().decode("utf-8", errors="replace").strip()
             if not body:
                 return {}
-            return json.loads(body)
+            try:
+                return json.loads(body)
+            except json.JSONDecodeError:
+                return {"raw": body}
     except urllib.error.HTTPError as err:
         err_body = err.read().decode("utf-8", errors="replace")
         raise CloudApiError(
@@ -324,18 +378,22 @@ def cloud_authenticate(email: str, password: str, timeout_seconds: float) -> dic
 
     return {
         "id_token": str(tokens["id_token"]),
+        "cognito-token": str(tokens.get("cognito_token", "")),
         "cognito_token": str(tokens.get("cognito_token", "")),
     }
 
 
 def cloud_build_headers(tokens: dict[str, str]) -> dict[str, str]:
     """Build standard authorization headers for Simply-Fi API."""
+    cognito_token = tokens.get("cognito_token") or tokens.get("cognito-token", "")
     return {
         "id-token": tokens["id_token"],
-        "cognito-token": tokens["cognito_token"],
+        "cognito-token": cognito_token,
         "Authorization": f"Bearer {tokens['id_token']}",
         "Salesforce-Auth": "1",
         "Content-Type": "application/json;charset=UTF-8",
+        "Accept": "application/json",
+        "User-Agent": DEFAULT_USER_AGENT,
     }
 
 
@@ -363,19 +421,23 @@ def cloud_add_appliance(
 
     Confirmed via ConnectionManager.createNewApplianceWithSerial.
     """
+    clean_serial = validate_serial(serial)
+    clean_key = validate_encryption_key(encryption_key)
+    clean_mac = validate_mac(mac_address)
+    validate_security_mode(security_mode)
+
     url = f"{SIMPLY_FI_BASE_URL}/api/v1/appliances.json"
     headers = cloud_build_headers(tokens)
 
-    clean_mac = mac_address.replace(":", "").replace("-", "").lower()
     appliance_data: dict[str, Any] = {
-        "sixteen_digits_code": serial,
-        "encryption_key": encryption_key,
+        "sixteen_digits_code": clean_serial,
+        "encryption_key": clean_key,
         "ssid_name": ssid,
         "mac_address": clean_mac,
         "ssid_security": str(security_mode),
     }
     if purchase_date is not None:
-        appliance_data["purchase_date"] = purchase_date
+        appliance_data["purchase_date"] = purchase_date.strip()
 
     payload = json.dumps({"appliance": appliance_data}).encode("utf-8")
     resp = cloud_http_request(url, "POST", headers, payload, timeout_seconds)
@@ -391,22 +453,11 @@ def cloud_delete_appliance(
 
     Confirmed via APIAccessor.deleteAppliance (/api/v1/appliances/{id}).
     """
-    url = f"{SIMPLY_FI_BASE_URL}/api/v1/appliances/{appliance_id}"
+    clean_id = str(appliance_id).strip()
+    url = f"{SIMPLY_FI_BASE_URL}/api/v1/appliances/{clean_id}"
     headers = cloud_build_headers(tokens)
-
-    req = urllib.request.Request(url, headers=headers, method="DELETE")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
-            return resp.status in (200, 204)
-    except urllib.error.HTTPError as err:
-        err_body = err.read().decode("utf-8", errors="replace")
-        raise CloudApiError(
-            f"Failed to delete appliance {appliance_id} (HTTP {err.code}): {err_body[:300]}"
-        ) from err
-    except Exception as exc:
-        raise CloudApiError(
-            f"Network error deleting appliance {appliance_id}: {exc}"
-        ) from exc
+    cloud_http_request(url, "DELETE", headers, None, timeout_seconds)
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -430,8 +481,17 @@ def provision_softap(
 
     Confirmed via ConnectionManager.configureAppliance / configureApplianceEncrypted.
     """
+    clean_key = validate_encryption_key(encryption_key)
+    validate_security_mode(security_mode)
+
+    params_dict = {
+        "NTW_MODE": str(security_mode),
+        "SSID": target_ssid,
+        "PASSWORD": target_password,
+        "ENCRYPT_KEY": clean_key,
+    }
     params_str = (
-        f"NTW_MODE={security_mode}&SSID={target_ssid}&PASSWORD={target_password}&ENCRYPT_KEY={encryption_key}"
+        f"NTW_MODE={security_mode}&SSID={target_ssid}&PASSWORD={target_password}&ENCRYPT_KEY={clean_key}"
     )
 
     if use_encryption:
@@ -446,7 +506,8 @@ def provision_softap(
             f"http://{softap_ip}:{port}/http-config.json?encrypted=1&data={encrypted_data}"
         )
     else:
-        request_url = f"http://{softap_ip}:{port}/http-config.json?encrypted=0&{params_str}"
+        query_string = urllib.parse.urlencode(params_dict, quote_via=urllib.parse.quote)
+        request_url = f"http://{softap_ip}:{port}/http-config.json?encrypted=0&{query_string}"
 
     req = urllib.request.Request(
         request_url,
@@ -473,13 +534,35 @@ def provision_softap(
         raise SoftAPConfigError(
             f"SoftAP provisioning failed (HTTP {err.code}): {err_body[:300]}"
         ) from err
+    except urllib.error.URLError as err:
+        reason = getattr(err, "reason", None)
+        err_str = str(err).lower()
+        if (
+            isinstance(
+                reason,
+                (ConnectionResetError, http.client.RemoteDisconnected, http.client.BadStatusLine),
+            )
+            or "connection reset" in err_str
+            or "remote end closed" in err_str
+        ):
+            LOGGER.warning(
+                "Appliance closed connection during reboot (%s). "
+                "This indicates the Wi-Fi module accepted configuration and is restarting in Station Mode.",
+                err,
+            )
+            return {
+                "response": "SUCCESS",
+                "rebooted": True,
+                "note": "Appliance terminated connection to associate with home Wi-Fi",
+            }
+        raise SoftAPConfigError(f"SoftAP network communication error: {err}") from err
     except Exception as exc:
         raise SoftAPConfigError(f"SoftAP network communication error: {exc}") from exc
 
     # Parse response (encrypted or plaintext)
     if use_encryption:
         try:
-            decrypted_response = xor_decrypt_hex(raw_response, encryption_key)
+            decrypted_response = xor_decrypt_hex(raw_response, clean_key)
             parsed_json = extract_json_from_response(decrypted_response)
         except Exception:
             parsed_json = extract_json_from_response(raw_response)
@@ -538,6 +621,9 @@ async def provision_ble(
 
     Confirmed via EnrollApplianceBLECommand.java, BLEManager.java, and wire_protocol.md.
     """
+    clean_key = validate_encryption_key(encryption_key)
+    validate_security_mode(security_mode)
+
     try:
         import bleak
     except ImportError as err:
@@ -547,7 +633,7 @@ async def provision_ble(
         ) from err
 
     packet = build_ble_enrollment_packet(
-        target_ssid, target_password, security_mode, encryption_key
+        target_ssid, target_password, security_mode, clean_key
     )
 
     LOGGER.info("Connecting to BLE appliance at %s...", device_address)
@@ -594,20 +680,30 @@ def handle_cloud_list(args: argparse.Namespace) -> None:
     appliances = cloud_list_appliances(tokens, args.timeout)
 
     print(f"\nFound {len(appliances)} appliance(s):")
-    print(f"{'ID':<8} | {'MAC':<18} | {'Type':<14} | {'InterfaceType':<18} | {'Model'}")
-    print("-" * 80)
+    print(f"{'ID':<8} | {'MAC':<18} | {'Type':<14} | {'Key':<18} | {'InterfaceType':<22} | {'Model'}")
+    print("-" * 95)
     for entry in appliances:
         app = entry.get("appliance", entry)
         app_id = str(app.get("id", ""))
         mac = str(app.get("mac_address", ""))
         atype = str(app.get("appliance_type", ""))
-        itype = str(app.get("interface_type", ""))
+        itype = str(
+            app.get("interface_type")
+            or app.get("additional_info", {}).get("interface_type")
+            or ""
+        )
+        key = str(app.get("encryption_key", ""))
         model = str(app.get("appliance_model", ""))
-        print(f"{app_id:<8} | {mac:<18} | {atype:<14} | {itype:<18} | {model}")
+        print(f"{app_id:<8} | {mac:<18} | {atype:<14} | {key:<18} | {itype:<22} | {model}")
 
 
 def handle_cloud_add(args: argparse.Namespace) -> None:
     """Handle 'cloud-add' CLI command."""
+    validate_serial(args.serial)
+    validate_encryption_key(args.key)
+    validate_mac(args.mac)
+    validate_security_mode(args.security)
+
     email = args.email or input("Simply-Fi Email: ").strip()
     password = args.password or getpass.getpass("Simply-Fi Password: ").strip()
 
@@ -629,6 +725,18 @@ def handle_cloud_add(args: argparse.Namespace) -> None:
 
 def handle_cloud_remove(args: argparse.Namespace) -> None:
     """Handle 'cloud-remove' CLI command."""
+    if not getattr(args, "yes", False):
+        confirm = (
+            input(
+                f"Are you sure you want to delete appliance ID {args.id} from Simply-Fi cloud? [y/N]: "
+            )
+            .strip()
+            .lower()
+        )
+        if confirm != "y":
+            print("Deletion cancelled.")
+            return
+
     email = args.email or input("Simply-Fi Email: ").strip()
     password = args.password or getpass.getpass("Simply-Fi Password: ").strip()
 
@@ -644,7 +752,9 @@ def handle_cloud_remove(args: argparse.Namespace) -> None:
 def handle_provision_softap(args: argparse.Namespace) -> None:
     """Handle 'provision-softap' CLI command."""
     target_password = args.target_password or getpass.getpass("Target Wi-Fi Password: ").strip()
-    key = args.key or generate_random_key(16)
+    raw_key = args.key or generate_random_key(16)
+    key = validate_encryption_key(raw_key)
+    validate_security_mode(args.security)
     use_encryption = not args.unencrypted
 
     print("=" * 60)
@@ -681,12 +791,19 @@ def handle_provision_softap(args: argparse.Namespace) -> None:
 def handle_provision_ble(args: argparse.Namespace) -> None:
     """Handle 'provision-ble' CLI command."""
     target_password = args.target_password or getpass.getpass("Target Wi-Fi Password: ").strip()
-    key = args.key or generate_random_key(16)
+    raw_key = args.key or generate_random_key(16)
+    key = validate_encryption_key(raw_key)
+    validate_security_mode(args.security)
 
     device_address = args.device_address
     if not device_address:
         print("No device address specified. Scanning for nearby Candy/Hoover appliances...")
-        discovered = asyncio.run(scan_for_candy_ble_devices(args.timeout))
+        try:
+            discovered = asyncio.run(scan_for_candy_ble_devices(args.timeout))
+        except BLEConfigError as err:
+            print(f"BLE Scan error: {err}", file=sys.stderr)
+            return
+
         if not discovered:
             print("No Candy/Hoover BLE appliances found in pairing mode.", file=sys.stderr)
             return
@@ -891,6 +1008,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_crem.add_argument("--email", help="Account email (prompted if omitted)")
     p_crem.add_argument("--password", help="Account password (prompted if omitted)")
     p_crem.add_argument("--id", required=True, help="Appliance ID in cloud catalog")
+    p_crem.add_argument("-y", "--yes", action="store_true", help="Skip confirmation prompt")
     p_crem.set_defaults(func=handle_cloud_remove)
 
     # provision-softap
@@ -926,7 +1044,17 @@ def main() -> None:
     """Main CLI execution."""
     parser = build_parser()
     args = parser.parse_args()
-    args.func(args)
+    try:
+        args.func(args)
+    except ProvisioningError as exc:
+        print(f"\nError: {exc}", file=sys.stderr)
+        sys.exit(1)
+    except ValueError as exc:
+        print(f"\nValidation Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user.", file=sys.stderr)
+        sys.exit(130)
 
 
 if __name__ == "__main__":
